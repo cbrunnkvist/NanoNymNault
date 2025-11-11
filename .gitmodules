@@ -1,0 +1,9 @@
+[submodule "references/Nault"]
+	path = references/Nault
+	url = https://github.com/Nault/Nault.git
+[submodule "references/ndk"]
+	path = references/ndk
+	url = https://github.com/nostr-dev-kit/ndk.git
+[submodule "references/nostr-tools"]
+	path = references/nostr-tools
+	url = https://github.com/nbd-wtf/nostr-tools.git
