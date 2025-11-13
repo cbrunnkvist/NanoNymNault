@@ -123,22 +123,19 @@ export class NostrNotificationService {
         receiverPublicHex,
       );
 
-      // Publish to all relays
-      const publishResults = await Promise.allSettled(
-        this.defaultRelays.map((relay) => this.pool.publish([relay], giftWrap)),
-      );
-
-      // Track which relays accepted the event
+      // Publish to all relays (using Promise.all with try-catch for ES2017 compatibility)
       const acceptedRelays: string[] = [];
-      publishResults.forEach((result, index) => {
-        const relayUrl = this.defaultRelays[index];
-        if (result.status === "fulfilled") {
-          acceptedRelays.push(relayUrl);
-          this.updateRelayStatus(relayUrl, true);
-        } else {
-          this.updateRelayStatus(relayUrl, false, result.reason);
-        }
-      });
+      await Promise.all(
+        this.defaultRelays.map(async (relay) => {
+          try {
+            await this.pool.publish([relay], giftWrap);
+            acceptedRelays.push(relay);
+            this.updateRelayStatus(relay, true);
+          } catch (error) {
+            this.updateRelayStatus(relay, false, error);
+          }
+        }),
+      );
 
       return acceptedRelays;
     } catch (error) {

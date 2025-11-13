@@ -1,11 +1,12 @@
-import { Injectable } from '@angular/core';
-import * as blake from 'blakejs';
-import {BigNumber} from 'bignumber.js';
-import * as nanocurrency from 'nanocurrency';
+import { Injectable } from "@angular/core";
+import * as blake from "blakejs";
+import { BigNumber } from "bignumber.js";
+import * as nanocurrency from "nanocurrency";
 
-const nacl = window['nacl'];
-const STATE_BLOCK_PREAMBLE = '0000000000000000000000000000000000000000000000000000000000000006';
-const pbkdf2_1 = require('pbkdf2');
+const nacl = window["nacl"];
+const STATE_BLOCK_PREAMBLE =
+  "0000000000000000000000000000000000000000000000000000000000000006";
+const pbkdf2_1 = require("pbkdf2");
 
 export interface StateBlock {
   account: string;
@@ -17,13 +18,16 @@ export interface StateBlock {
   work: string;
 }
 
-export enum TxType {'send', 'receive', 'open', 'change'}
+export enum TxType {
+  "send",
+  "receive",
+  "open",
+  "change",
+}
 
 @Injectable()
 export class UtilService {
-
-  constructor() {
-  }
+  constructor() {}
 
   hex = {
     toUint4: hexToUint4,
@@ -85,17 +89,15 @@ export class UtilService {
   array = {
     shuffle: shuffle,
     findWithAttr: findWithAttr,
-    equalArrays: equalArrays
+    equalArrays: equalArrays,
   };
-
 }
-
-
 
 /** Hex Functions **/
 function hexToUint4(hexValue) {
   const uint4 = new Uint8Array(hexValue.length);
-  for (let i = 0; i < hexValue.length; i++) uint4[i] = parseInt(hexValue.substr(i, 1), 16);
+  for (let i = 0; i < hexValue.length; i++)
+    uint4[i] = parseInt(hexValue.substr(i, 1), 16);
 
   return uint4;
 }
@@ -103,7 +105,8 @@ function hexToUint8(hexValue) {
   // eslint-disable-next-line no-bitwise
   const length = (hexValue.length / 2) | 0;
   const uint8 = new Uint8Array(length);
-  for (let i = 0; i < length; i++) uint8[i] = parseInt(hexValue.substr(i * 2, 2), 16);
+  for (let i = 0; i < length; i++)
+    uint8[i] = parseInt(hexValue.substr(i * 2, 2), 16);
 
   return uint8;
 }
@@ -114,28 +117,28 @@ function isHex(h) {
   return re.test(h);
 }
 
-
 /** Uint4 Functions **/
 function uint4ToUint8(uintValue) {
   const length = uintValue.length / 2;
   const uint8 = new Uint8Array(length);
-  for (let i = 0; i < length; i++)	uint8[i] = uintValue[i * 2] * 16 + uintValue[i * 2 + 1];
+  for (let i = 0; i < length; i++)
+    uint8[i] = uintValue[i * 2] * 16 + uintValue[i * 2 + 1];
 
   return uint8;
 }
 
 /* eslint-disable no-bitwise */
 function uint4ToUint5(uintValue) {
-  const length = uintValue.length / 5 * 4;
+  const length = (uintValue.length / 5) * 4;
   const uint5 = new Uint8Array(length);
   for (let i = 1; i <= length; i++) {
     const n = i - 1;
     const m = i % 4;
-    const z = n + ((i - m) / 4);
+    const z = n + (i - m) / 4;
     const right = uintValue[z] << m;
     let left;
-    if (((length - i) % 4) === 0)	left = uintValue[z - 1] << 4;
-    else	left = uintValue[z + 1] >> (4 - m);
+    if ((length - i) % 4 === 0) left = uintValue[z - 1] << 4;
+    else left = uintValue[z + 1] >> (4 - m);
     uint5[n] = (left + right) % 32;
   }
   return uint5;
@@ -143,29 +146,29 @@ function uint4ToUint5(uintValue) {
 /* eslint-enable no-bitwise */
 
 function uint4ToHex(uint4) {
-  let hex = '';
-  for (let i = 0; i < uint4.length; i++) hex += uint4[i].toString(16).toUpperCase();
+  let hex = "";
+  for (let i = 0; i < uint4.length; i++)
+    hex += uint4[i].toString(16).toUpperCase();
   return hex;
 }
 
-
 /** Uint5 Functions **/
 function uint5ToString(uint5) {
-  const letter_list = '13456789abcdefghijkmnopqrstuwxyz'.split('');
-  let string = '';
-  for (let i = 0; i < uint5.length; i++)	string += letter_list[uint5[i]];
+  const letter_list = "13456789abcdefghijkmnopqrstuwxyz".split("");
+  let string = "";
+  for (let i = 0; i < uint5.length; i++) string += letter_list[uint5[i]];
 
   return string;
 }
 
 /* eslint-disable no-bitwise */
 function uint5ToUint4(uint5) {
-  const length = uint5.length / 4 * 5;
+  const length = (uint5.length / 4) * 5;
   const uint4 = new Uint8Array(length);
   for (let i = 1; i <= length; i++) {
     const n = i - 1;
     const m = i % 5;
-    const z = n - ((i - m) / 5);
+    const z = n - (i - m) / 5;
     const right = uint5[z - 1] << (5 - m);
     const left = uint5[z] >> m;
     uint4[n] = (left + right) % 16;
@@ -174,28 +177,27 @@ function uint5ToUint4(uint5) {
 }
 /* eslint-enable no-bitwise */
 
-
 /** Uint8 Functions **/
 function uint8ToHex(uintValue) {
-  let hex = '';
+  let hex = "";
   let aux;
   for (let i = 0; i < uintValue.length; i++) {
     aux = uintValue[i].toString(16).toUpperCase();
     if (aux.length === 1) {
-      aux = '0' + aux;
+      aux = "0" + aux;
     }
     hex += aux;
-    aux = '';
+    aux = "";
   }
 
-  return(hex);
+  return hex;
 }
 
 /* eslint-disable no-bitwise */
 function uint8ToUint4(uintValue) {
   const uint4 = new Uint8Array(uintValue.length * 2);
   for (let i = 0; i < uintValue.length; i++) {
-    uint4[i * 2] = uintValue[i] / 16 | 0;
+    uint4[i * 2] = (uintValue[i] / 16) | 0;
     uint4[i * 2 + 1] = uintValue[i] % 16;
   }
 
@@ -203,11 +205,15 @@ function uint8ToUint4(uintValue) {
 }
 /* eslint-enable no-bitwise */
 
-
 /** Dec Functions **/
 function decToHex(decValue, bytes = null) {
   // eslint-disable-next-line prefer-const
-  let dec = decValue.toString().split(''), sum = [], hex = '', hexArray = [], i, s;
+  let dec = decValue.toString().split(""),
+    sum = [],
+    hex = "",
+    hexArray = [],
+    i,
+    s;
   while (dec.length) {
     s = 1 * dec.shift();
     for (i = 0; s || i < sum.length; i++) {
@@ -220,16 +226,16 @@ function decToHex(decValue, bytes = null) {
     hexArray.push(sum.pop().toString(16));
   }
 
-  hex = hexArray.join('');
+  hex = hexArray.join("");
 
   if (hex.length % 2 !== 0) {
-    hex = '0' + hex;
+    hex = "0" + hex;
   }
 
   if (bytes > hex.length / 2) {
     const diff = bytes - hex.length / 2;
     for (let j = 0; j < diff; j++) {
-      hex = '00' + hex;
+      hex = "00" + hex;
     }
   }
 
@@ -245,31 +251,31 @@ function bigAdd(input, value) {
 
 /** String Functions **/
 function stringToUint5(string) {
-  const letter_list = '13456789abcdefghijkmnopqrstuwxyz'.split('');
+  const letter_list = "13456789abcdefghijkmnopqrstuwxyz".split("");
   const length = string.length;
-  const string_array = string.split('');
+  const string_array = string.split("");
   const uint5 = new Uint8Array(length);
-  for (let i = 0; i < length; i++)	uint5[i] = letter_list.indexOf(string_array[i]);
+  for (let i = 0; i < length; i++)
+    uint5[i] = letter_list.indexOf(string_array[i]);
   return uint5;
 }
 
 function isNumeric(val) {
   // numerics and last character is not a dot and number of dots is 0 or 1
-  const isnum = /^-?\d*\.?\d*$/.test(val) && val !== '';
-  return isnum && String(val).slice(-1) !== '.';
+  const isnum = /^-?\d*\.?\d*$/.test(val) && val !== "";
+  return isnum && String(val).slice(-1) !== ".";
 }
 
-function mnemonicToSeedSync(mnemonic, password= null) {
+function mnemonicToSeedSync(mnemonic, password = null) {
   // const mnemonicBuffer = Buffer.from((mnemonic || '').normalize('NFKD'), 'utf8');
   // const saltBuffer = Buffer.from(this.salt((password || '').normalize('NFKD')), 'utf8');
   // Using textencoder here instead ensures it returns an Uint8Array when using the desktop app
   // and not a Buffer object that messes up the bip39 seed
   const enc = new TextEncoder();
   const mnemonicBuffer = enc.encode(mnemonic);
-  const saltBuffer = enc.encode('mnemonic' + (password || ''));
-  return pbkdf2_1.pbkdf2Sync(mnemonicBuffer, saltBuffer, 2048, 64, 'sha512');
+  const saltBuffer = enc.encode("mnemonic" + (password || ""));
+  return pbkdf2_1.pbkdf2Sync(mnemonicBuffer, saltBuffer, 2048, 64, "sha512");
 }
-
 
 /** Account Functions **/
 function generateAccountSecretKeyBytes(seedBytes, accountIndex) {
@@ -290,14 +296,20 @@ function getAccountChecksum(pubkey) {
 }
 
 function generateAccountKeyPair(accountSecretKeyBytes, expanded = false) {
-  return nacl.sign.keyPair.fromSecretKey(accountSecretKeyBytes, expanded);
+  return nacl.sign.keyPair.fromSecretKey(accountSecretKeyBytes);
 }
 
-function getPublicAccountID(accountPublicKeyBytes, prefix = 'nano') {
+function getPublicAccountID(accountPublicKeyBytes, prefix = "nano") {
   const accountHex = util.uint8.toHex(accountPublicKeyBytes);
   const keyBytes = util.uint4.toUint8(util.hex.toUint4(accountHex)); // For some reason here we go from u, to hex, to 4, to 8??
-  const checksum = util.uint5.toString(util.uint4.toUint5(util.uint8.toUint4(blake.blake2b(keyBytes, null, 5).reverse())));
-  const account = util.uint5.toString(util.uint4.toUint5(util.hex.toUint4(`0${accountHex}`)));
+  const checksum = util.uint5.toString(
+    util.uint4.toUint5(
+      util.uint8.toUint4(blake.blake2b(keyBytes, null, 5).reverse()),
+    ),
+  );
+  const account = util.uint5.toString(
+    util.uint4.toUint5(util.hex.toUint4(`0${accountHex}`)),
+  );
 
   return `${prefix}_${account}${checksum}`;
 }
@@ -310,8 +322,12 @@ function isValidAccount(account: string): boolean {
 function isValidNanoAmount(val: string) {
   // numerics and last character is not a dot and number of dots is 0 or 1
   const isnum = /^-?\d*\.?\d*$/.test(val);
-  if (isnum && String(val).slice(-1) !== '.') {
-    if (val !== '' && mnanoToRaw(val).gte(1) && nanocurrency.checkAmount(mnanoToRaw(val).toString(10))) {
+  if (isnum && String(val).slice(-1) !== ".") {
+    if (
+      val !== "" &&
+      mnanoToRaw(val).gte(1) &&
+      nanocurrency.checkAmount(mnanoToRaw(val).toString(10))
+    ) {
       return true;
     } else {
       return false;
@@ -330,25 +346,31 @@ function getAccountPublicKey(account) {
   if (!isValidAccount(account)) {
     throw new Error(`Invalid nano account`);
   }
-  const account_crop = account.length === 64 ? account.substring(4, 64) : account.substring(5, 65);
+  const account_crop =
+    account.length === 64 ? account.substring(4, 64) : account.substring(5, 65);
   const isValid = /^[13456789abcdefghijkmnopqrstuwxyz]+$/.test(account_crop);
   if (!isValid) throw new Error(`Invalid nano account`);
 
-  const key_uint4 = array_crop(uint5ToUint4(stringToUint5(account_crop.substring(0, 52))));
-  const hash_uint4 = uint5ToUint4(stringToUint5(account_crop.substring(52, 60)));
+  const key_uint4 = array_crop(
+    uint5ToUint4(stringToUint5(account_crop.substring(0, 52))),
+  );
+  const hash_uint4 = uint5ToUint4(
+    stringToUint5(account_crop.substring(52, 60)),
+  );
   const key_array = uint4ToUint8(key_uint4);
   const blake_hash = blake.blake2b(key_array, null, 5).reverse();
 
-  if (!equalArrays(hash_uint4, uint8ToUint4(blake_hash))) throw new Error(`Incorrect checksum`);
+  if (!equalArrays(hash_uint4, uint8ToUint4(blake_hash)))
+    throw new Error(`Incorrect checksum`);
 
   return uint4ToHex(key_uint4);
 }
 
-function setPrefix(account, prefix = 'xrb') {
-  if (prefix === 'nano') {
-    return account.replace('xrb_', 'nano_');
+function setPrefix(account, prefix = "xrb") {
+  if (prefix === "nano") {
+    return account.replace("xrb_", "nano_");
   } else {
-    return account.replace('nano_', 'xrb_');
+    return account.replace("nano_", "xrb_");
   }
 }
 
@@ -357,7 +379,7 @@ function setPrefix(account, prefix = 'xrb') {
  */
 const mnano = 1000000000000000000000000000000;
 const knano = 1000000000000000000000000000;
-const nano  = 1000000000000000000000000;
+const nano = 1000000000000000000000000;
 function mnanoToRaw(value) {
   return new BigNumber(value).times(mnano);
 }
@@ -401,7 +423,11 @@ function isValidWork(val: string) {
 }
 
 function validateWork(blockHash: string, threshold: string, work: string) {
-  return nanocurrency.validateWork({blockHash: blockHash, threshold: threshold, work: work});
+  return nanocurrency.validateWork({
+    blockHash: blockHash,
+    threshold: threshold,
+    work: work,
+  });
 }
 
 function hashStateBlock(block: StateBlock) {
@@ -410,12 +436,15 @@ function hashStateBlock(block: StateBlock) {
     throw new Error(`Negative or NaN balance`);
   }
   let balancePadded = balance.toString(16);
-  while (balancePadded.length < 32) balancePadded = '0' + balancePadded; // Left pad with 0's
+  while (balancePadded.length < 32) balancePadded = "0" + balancePadded; // Left pad with 0's
   const context = blake.blake2bInit(32, null);
   blake.blake2bUpdate(context, hexToUint8(STATE_BLOCK_PREAMBLE));
   blake.blake2bUpdate(context, hexToUint8(getAccountPublicKey(block.account)));
   blake.blake2bUpdate(context, hexToUint8(block.previous));
-  blake.blake2bUpdate(context, hexToUint8(getAccountPublicKey(block.representative)));
+  blake.blake2bUpdate(
+    context,
+    hexToUint8(getAccountPublicKey(block.representative)),
+  );
   blake.blake2bUpdate(context, hexToUint8(balancePadded));
   blake.blake2bUpdate(context, hexToUint8(block.link));
   return blake.blake2bFinal(context);
@@ -426,7 +455,9 @@ export function difficultyFromMultiplier(multiplier, base_difficulty) {
   const big64 = new BigNumber(2).pow(64);
   const big_multiplier = new BigNumber(multiplier);
   const big_base = new BigNumber(base_difficulty, 16);
-  return big64.minus((big64.minus(big_base).dividedToIntegerBy(big_multiplier))).toString(16);
+  return big64
+    .minus(big64.minus(big_base).dividedToIntegerBy(big_multiplier))
+    .toString(16);
 }
 
 // Determine new multiplier from base difficulty (hexadecimal string) and target difficulty (hexadecimal string). Returns Number
@@ -439,11 +470,12 @@ export function multiplierFromDifficulty(difficulty, base_difficulty) {
 
 // shuffle any array
 function shuffle(array) {
-  let currentIndex = array.length, temporaryValue, randomIndex;
+  let currentIndex = array.length,
+    temporaryValue,
+    randomIndex;
 
   // While there remain elements to shuffle...
   while (0 !== currentIndex) {
-
     // Pick a remaining element...
     randomIndex = Math.floor(Math.random() * currentIndex);
     currentIndex -= 1;
@@ -457,7 +489,7 @@ function shuffle(array) {
   return array;
 }
 
-function array_crop (array) {
+function array_crop(array) {
   const length = array.length - 1;
   const cropped_array = new Uint8Array(length);
   for (let i = 0; i < length; i++) {
@@ -466,12 +498,12 @@ function array_crop (array) {
   return cropped_array;
 }
 
-function equalArrays (array1, array2) {
+function equalArrays(array1, array2) {
   if (array1.length !== array2.length) {
     return false;
   }
   for (let i = 0; i < array1.length; i++) {
-    if (array1[i] !== array2[i])	return false;
+    if (array1[i] !== array2[i]) return false;
   }
   return true;
 }
@@ -479,9 +511,9 @@ function equalArrays (array1, array2) {
 // find the position in an array given an attribute and value
 function findWithAttr(array, attr, value) {
   for (let i = 0; i < array.length; i += 1) {
-      if (array[i][attr] === value) {
-          return i;
-      }
+    if (array[i][attr] === value) {
+      return i;
+    }
   }
   return -1;
 }
@@ -551,6 +583,6 @@ const util = {
   array: {
     shuffle: shuffle,
     findWithAttr: findWithAttr,
-    equalArrays: equalArrays
-  }
+    equalArrays: equalArrays,
+  },
 };
