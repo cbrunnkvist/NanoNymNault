@@ -36,10 +36,21 @@ Nault's test suite exists but provides minimal coverage. Tests are primarily "sm
 ## Current Issues
 
 ### Unit Tests
-**Problem:** TypeScript compilation error - spec files not included in tsconfig  
-**Root Cause:** `src/tsconfig.spec.json` has incorrect relative paths in `include` pattern  
-**Impact:** `npm test` fails immediately  
-**Fix Required:** Update include paths or create proper test configuration
+**Problem 1:** TypeScript compilation error - spec files not included in tsconfig  
+**Root Cause:** `src/tsconfig.spec.json` had incorrect relative paths in `include` pattern  
+**Status:** ✅ FIXED - Changed `"src/**/*.spec.ts"` to `"**/*.spec.ts"`  
+
+**Problem 2:** TypeScript compilation errors in pipe tests  
+**Root Cause:** Pipe tests instantiate classes without required dependencies (e.g., `new AccountPipe()` without UtilService)  
+**Impact:** Tests fail compilation  
+**Status:** Not fixed - low value to fix given shallow test coverage  
+
+**Problem 3:** Chrome/Chromium not installed  
+**Root Cause:** Karma configured to use Chrome browser for test execution  
+**Impact:** Cannot run browser-based tests  
+**Status:** Not fixed - browser tests skipped (decision: focus on NanoNymNault development)  
+
+**Decision:** Skip fixing Nault's existing test suite. Low ROI given shallow coverage. Focus effort on writing proper tests for NanoNymNault features.
 
 ### E2E Tests
 **Problem:** Missing `e2e/tsconfig.e2e.json` referenced by protractor.conf.js  
