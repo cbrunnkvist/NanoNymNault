@@ -1,5 +1,7 @@
-.form-select-source, .form-input-destination, .form-select-destination {
-	max-width: 800px;
+.form-select-source,
+.form-input-destination,
+.form-select-destination {
+  max-width: 800px;
 }
 
 .max-amt-button {
@@ -8,7 +10,7 @@
 }
 
 .form-amount {
-	max-width: 450px;
+  max-width: 450px;
 }
 
 .amount-raw-extra {
@@ -26,7 +28,7 @@
 }
 
 .block-amount-primary {
-  font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+  font-family: "Montserrat", Arial, Helvetica, sans-serif;
   line-height: 1;
   margin-top: 4px;
 }
@@ -49,7 +51,7 @@
 .block-balance .balance-amount-primary .amount-integer,
 .block-balance .balance-amount-primary .amount-fractional,
 .block-balance .balance-amount-primary .currency-name {
-  font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+  font-family: "Montserrat", Arial, Helvetica, sans-serif;
   font-size: 16px;
 }
 
@@ -87,4 +89,14 @@
 }
 .send-types-tab-active {
   border-color: transparent;
+}
+
+/* NanoNym badge styling */
+.account-label.nanonym {
+  background-color: #7c3aed;
+  color: white;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-size: 0.85em;
+  font-weight: 500;
 }

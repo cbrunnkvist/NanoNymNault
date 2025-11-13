@@ -76,6 +76,12 @@
                     <span class="account-label alias uk-margin-small-top">{{ addressAliasMatch }}</span>
                   </div>
                 </div>
+
+                <div class="uk-form-controls" *ngIf="isNanoNymAddress && toAccountStatus === 2">
+                  <div class="uk-inline uk-width-auto">
+                    <span class="account-label nanonym uk-margin-small-top" uk-tooltip title="Privacy-preserving NanoNym address">🔒 NanoNym</span>
+                  </div>
+                </div>
               </div>
 
               <div class="uk-margin" *ngIf="( sendDestinationType === 'own-address' )">

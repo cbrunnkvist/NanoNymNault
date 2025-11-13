@@ -1,83 +1,96 @@
-import { Component, OnInit } from '@angular/core';
-import BigNumber from 'bignumber.js';
-import {AddressBookService} from '../../services/address-book.service';
-import {BehaviorSubject} from 'rxjs';
-import {WalletService} from '../../services/wallet.service';
-import {NotificationService} from '../../services/notification.service';
-import {ApiService} from '../../services/api.service';
-import {UtilService} from '../../services/util.service';
-import {WorkPoolService} from '../../services/work-pool.service';
-import {AppSettingsService} from '../../services/app-settings.service';
-import {ActivatedRoute} from '@angular/router';
-import {PriceService} from '../../services/price.service';
-import {NanoBlockService} from '../../services/nano-block.service';
-import { QrModalService } from '../../services/qr-modal.service';
-import { environment } from 'environments/environment';
-import { TranslocoService } from '@ngneat/transloco';
-import { HttpClient } from '@angular/common/http';
-import * as nanocurrency from 'nanocurrency';
+import { Component, OnInit } from "@angular/core";
+import BigNumber from "bignumber.js";
+import { AddressBookService } from "../../services/address-book.service";
+import { BehaviorSubject } from "rxjs";
+import { WalletService } from "../../services/wallet.service";
+import { NotificationService } from "../../services/notification.service";
+import { ApiService } from "../../services/api.service";
+import { UtilService } from "../../services/util.service";
+import { WorkPoolService } from "../../services/work-pool.service";
+import { AppSettingsService } from "../../services/app-settings.service";
+import { ActivatedRoute } from "@angular/router";
+import { PriceService } from "../../services/price.service";
+import { NanoBlockService } from "../../services/nano-block.service";
+import { QrModalService } from "../../services/qr-modal.service";
+import { environment } from "environments/environment";
+import { TranslocoService } from "@ngneat/transloco";
+import { HttpClient } from "@angular/common/http";
+import * as nanocurrency from "nanocurrency";
+import { NanoNymCryptoService } from "../../services/nanonym-crypto.service";
+import { NostrNotificationService } from "../../services/nostr-notification.service";
 
-const nacl = window['nacl'];
+const nacl = window["nacl"];
 
 @Component({
-  selector: 'app-send',
-  templateUrl: './send.component.html',
-  styleUrls: ['./send.component.css']
+  selector: "app-send",
+  templateUrl: "./send.component.html",
+  styleUrls: ["./send.component.css"],
 })
 export class SendComponent implements OnInit {
   nano = 1000000000000000000000000;
 
-  activePanel = 'send';
-  sendDestinationType = 'external-address';
+  activePanel = "send";
+  sendDestinationType = "external-address";
 
   accounts = this.walletService.wallet.accounts;
 
   ALIAS_LOOKUP_DEFAULT_STATE = {
-    fullText: '',
-    name: '',
-    domain: '',
-  }
+    fullText: "",
+    name: "",
+    domain: "",
+  };
 
   aliasLookup = {
     ...this.ALIAS_LOOKUP_DEFAULT_STATE,
-  }
+  };
   aliasLookupInProgress = {
     ...this.ALIAS_LOOKUP_DEFAULT_STATE,
-  }
+  };
   aliasLookupLatestSuccessful = {
     ...this.ALIAS_LOOKUP_DEFAULT_STATE,
-    address: '',
-  }
+    address: "",
+  };
   aliasResults$ = new BehaviorSubject([]);
   addressBookResults$ = new BehaviorSubject([]);
   isDestinationAccountAlias = false;
   showAddressBook = false;
-  addressBookMatch = '';
-  addressAliasMatch = '';
+  addressBookMatch = "";
+  addressAliasMatch = "";
 
   amounts = [
-    { name: 'XNO', shortName: 'XNO', value: 'mnano' },
-    { name: 'knano', shortName: 'knano', value: 'knano' },
-    { name: 'nano', shortName: 'nano', value: 'nano' },
+    { name: "XNO", shortName: "XNO", value: "mnano" },
+    { name: "knano", shortName: "knano", value: "knano" },
+    { name: "nano", shortName: "nano", value: "nano" },
   ];
   selectedAmount = this.amounts[0];
 
   amount = null;
   amountExtraRaw = new BigNumber(0);
-  amountFiat: number|null = null;
+  amountFiat: number | null = null;
   rawAmount: BigNumber = new BigNumber(0);
   fromAccount: any = {};
-  fromAccountID: any = '';
-  fromAddressBook = '';
+  fromAccountID: any = "";
+  fromAddressBook = "";
   toAccount: any = false;
-  toAccountID = '';
-  toOwnAccountID: any = '';
-  toAddressBook = '';
+  toAccountID = "";
+  toOwnAccountID: any = "";
+  toAddressBook = "";
   toAccountStatus = null;
   amountStatus = null;
   preparingTransaction = false;
   confirmingTransaction = false;
   selAccountInit = false;
+
+  // NanoNym-specific state
+  isNanoNymAddress = false;
+  nanoNymParsedKeys: {
+    version: number;
+    spendPublic: Uint8Array;
+    viewPublic: Uint8Array;
+    nostrPublic: Uint8Array;
+  } | null = null;
+  stealthAddress = "";
+  ephemeralPublicKey: Uint8Array | null = null;
 
   constructor(
     private route: ActivatedRoute,
@@ -92,7 +105,10 @@ export class SendComponent implements OnInit {
     private util: UtilService,
     private qrModalService: QrModalService,
     private http: HttpClient,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    private nanoNymCrypto: NanoNymCryptoService,
+    public nostrService: NostrNotificationService,
+  ) {}
 
   async ngOnInit() {
     const params = this.route.snapshot.queryParams;
@@ -102,11 +118,11 @@ export class SendComponent implements OnInit {
     this.addressBookService.loadAddressBook();
 
     // Set default From account
-    this.fromAccountID = this.accounts.length ? this.accounts[0].id : '';
+    this.fromAccountID = this.accounts.length ? this.accounts[0].id : "";
 
     // Update selected account if changed in the sidebar
-    this.walletService.wallet.selectedAccount$.subscribe(async acc => {
-      if (this.activePanel !== 'send') {
+    this.walletService.wallet.selectedAccount$.subscribe(async (acc) => {
+      if (this.activePanel !== "send") {
         // Transaction details already finalized
         return;
       }
@@ -122,7 +138,7 @@ export class SendComponent implements OnInit {
     });
 
     // Update the account if query params changes. For example donation button while active on this page
-    this.route.queryParams.subscribe(queries => {
+    this.route.queryParams.subscribe((queries) => {
       this.updateQueries(queries);
     });
 
@@ -136,20 +152,16 @@ export class SendComponent implements OnInit {
   }
 
   updateQueries(params) {
-    if ( params && params.amount && !isNaN(params.amount) ) {
-      const amountAsRaw =
-        new BigNumber(
-          this.util.nano.mnanoToRaw(
-            new BigNumber(params.amount)
-          )
-        );
+    if (params && params.amount && !isNaN(params.amount)) {
+      const amountAsRaw = new BigNumber(
+        this.util.nano.mnanoToRaw(new BigNumber(params.amount)),
+      );
 
       this.amountExtraRaw = amountAsRaw.mod(this.nano).floor();
 
-      this.amount =
-        this.util.nano.rawToMnano(
-          amountAsRaw.minus(this.amountExtraRaw)
-        ).toNumber();
+      this.amount = this.util.nano
+        .rawToMnano(amountAsRaw.minus(this.amountExtraRaw))
+        .toNumber();
 
       this.syncFiatPrice();
     }
@@ -158,7 +170,7 @@ export class SendComponent implements OnInit {
       this.toAccountID = params.to;
       this.offerLookupIfDestinationIsAlias();
       this.validateDestination();
-      this.sendDestinationType = 'external-address';
+      this.sendDestinationType = "external-address";
     }
   }
 
@@ -186,18 +198,26 @@ export class SendComponent implements OnInit {
       this.amountFiat = null;
       return;
     }
-    const rawAmount = this.getAmountBaseValue(this.amount || 0).plus(this.amountExtraRaw);
+    const rawAmount = this.getAmountBaseValue(this.amount || 0).plus(
+      this.amountExtraRaw,
+    );
     if (rawAmount.lte(0)) {
       this.amountFiat = null;
       return;
     }
 
     // This is getting hacky, but if their currency is bitcoin, use 6 decimals, if it is not, use 2
-    const precision = this.settings.settings.displayCurrency === 'BTC' ? 1000000 : 100;
+    const precision =
+      this.settings.settings.displayCurrency === "BTC" ? 1000000 : 100;
 
     // Determine fiat value of the amount
-    const fiatAmount = this.util.nano.rawToMnano(rawAmount).times(this.price.price.lastPrice)
-      .times(precision).floor().div(precision).toNumber();
+    const fiatAmount = this.util.nano
+      .rawToMnano(rawAmount)
+      .times(this.price.price.lastPrice)
+      .times(precision)
+      .floor()
+      .div(precision)
+      .toNumber();
 
     this.amountFiat = fiatAmount;
   }
@@ -205,25 +225,29 @@ export class SendComponent implements OnInit {
   // An update to the fiat amount, sync the nano value based on currently selected denomination
   syncNanoPrice() {
     if (!this.amountFiat) {
-      this.amount = '';
+      this.amount = "";
       return;
     }
     if (!this.util.string.isNumeric(this.amountFiat)) return;
-    const rawAmount = this.util.nano.mnanoToRaw(new BigNumber(this.amountFiat).div(this.price.price.lastPrice));
+    const rawAmount = this.util.nano.mnanoToRaw(
+      new BigNumber(this.amountFiat).div(this.price.price.lastPrice),
+    );
     const nanoVal = this.util.nano.rawToNano(rawAmount).floor();
-    const nanoAmount = this.getAmountValueFromBase(this.util.nano.nanoToRaw(nanoVal));
+    const nanoAmount = this.getAmountValueFromBase(
+      this.util.nano.nanoToRaw(nanoVal),
+    );
 
     this.amount = nanoAmount.toNumber();
   }
 
   onDestinationAddressInput() {
-    this.addressAliasMatch = '';
-    this.addressBookMatch = '';
+    this.addressAliasMatch = "";
+    this.addressBookMatch = "";
 
     this.offerLookupIfDestinationIsAlias();
     this.searchAddressBook();
 
-    const destinationAddress = this.toAccountID || '';
+    const destinationAddress = this.toAccountID || "";
 
     const nanoURIScheme = /^nano:.+$/g;
     const isNanoURI = nanoURIScheme.test(destinationAddress);
@@ -232,54 +256,48 @@ export class SendComponent implements OnInit {
       const url = new URL(destinationAddress);
 
       if (this.util.account.isValidAccount(url.pathname)) {
-        const amountAsRaw = url.searchParams.get('amount');
+        const amountAsRaw = url.searchParams.get("amount");
 
-        const amountAsXNO = (
-            amountAsRaw
-          ? nanocurrency.convert(
-              amountAsRaw, {
+        const amountAsXNO = amountAsRaw
+          ? nanocurrency
+              .convert(amountAsRaw, {
                 from: nanocurrency.Unit.raw,
-                to: nanocurrency.Unit.NANO
-              }
-            ).toString()
-          : null
-        );
+                to: nanocurrency.Unit.NANO,
+              })
+              .toString()
+          : null;
 
-        setTimeout(
-          () => {
-            this.updateQueries({
-              to: url.pathname,
-              amount: amountAsXNO,
-            });
-          },
-          10
-        );
+        setTimeout(() => {
+          this.updateQueries({
+            to: url.pathname,
+            amount: amountAsXNO,
+          });
+        }, 10);
       }
     }
   }
 
   searchAddressBook() {
     this.showAddressBook = true;
-    const search = this.toAccountID || '';
+    const search = this.toAccountID || "";
     const addressBook = this.addressBookService.addressBook;
 
     const matches = addressBook
-      .filter(a => a.name.toLowerCase().indexOf(search.toLowerCase()) !== -1)
+      .filter((a) => a.name.toLowerCase().indexOf(search.toLowerCase()) !== -1)
       .slice(0, 5);
 
     this.addressBookResults$.next(matches);
   }
 
   offerLookupIfDestinationIsAlias() {
-    const destinationAddress = this.toAccountID || '';
+    const destinationAddress = this.toAccountID || "";
 
-    const mayBeAnAlias = (
-        ( destinationAddress.startsWith('@') === true )
-      && ( destinationAddress.includes('.') === true )
-      && ( destinationAddress.endsWith('.') === false )
-      && ( destinationAddress.includes('/') === false )
-      && ( destinationAddress.includes('?') === false )
-    );
+    const mayBeAnAlias =
+      destinationAddress.startsWith("@") === true &&
+      destinationAddress.includes(".") === true &&
+      destinationAddress.endsWith(".") === false &&
+      destinationAddress.includes("/") === false &&
+      destinationAddress.includes("?") === false;
 
     if (mayBeAnAlias === false) {
       this.isDestinationAccountAlias = false;
@@ -287,27 +305,27 @@ export class SendComponent implements OnInit {
         ...this.ALIAS_LOOKUP_DEFAULT_STATE,
       };
       this.aliasResults$.next([]);
-      return
+      return;
     }
 
     this.isDestinationAccountAlias = true;
 
     let aliasWithoutFirstSymbol = destinationAddress.slice(1).toLowerCase();
 
-    if (aliasWithoutFirstSymbol.startsWith('_@') === true ) {
+    if (aliasWithoutFirstSymbol.startsWith("_@") === true) {
       aliasWithoutFirstSymbol = aliasWithoutFirstSymbol.slice(2);
     }
 
-    const aliasSplitResults = aliasWithoutFirstSymbol.split('@');
+    const aliasSplitResults = aliasWithoutFirstSymbol.split("@");
 
-    let aliasName = ''
-    let aliasDomain = ''
+    let aliasName = "";
+    let aliasDomain = "";
 
     if (aliasSplitResults.length === 2) {
-      aliasName = aliasSplitResults[0]
-      aliasDomain = aliasSplitResults[1]
+      aliasName = aliasSplitResults[0];
+      aliasDomain = aliasSplitResults[1];
     } else {
-      aliasDomain = aliasSplitResults[0]
+      aliasDomain = aliasSplitResults[0];
     }
 
     this.aliasLookup = {
@@ -322,27 +340,29 @@ export class SendComponent implements OnInit {
   }
 
   async lookupAlias() {
-    if (this.aliasLookup.domain === '') {
+    if (this.aliasLookup.domain === "") {
       return;
     }
 
-    if (this.settings.settings.decentralizedAliasesOption === 'disabled') {
-      const UIkit = window['UIkit'];
+    if (this.settings.settings.decentralizedAliasesOption === "disabled") {
+      const UIkit = window["UIkit"];
       try {
         await UIkit.modal.confirm(
           `<p class="uk-alert uk-alert-warning"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span>
           <span style="font-size: 18px;">
-          ${ this.translocoService.translate('configure-app.decentralized-aliases-require-external-requests') }
+          ${this.translocoService.translate("configure-app.decentralized-aliases-require-external-requests")}
           </span>`,
           {
             labels: {
-              cancel: this.translocoService.translate('general.cancel'),
-              ok: this.translocoService.translate('configure-app.allow-external-requests'),
-            }
-          }
+              cancel: this.translocoService.translate("general.cancel"),
+              ok: this.translocoService.translate(
+                "configure-app.allow-external-requests",
+              ),
+            },
+          },
         );
 
-        this.settings.setAppSetting('decentralizedAliasesOption', 'enabled');
+        this.settings.setAppSetting("decentralizedAliasesOption", "enabled");
       } catch (err) {
         // pressed cancel, or a different error
         return;
@@ -356,25 +376,20 @@ export class SendComponent implements OnInit {
     const aliasFullText = aliasLookup.fullText;
     const aliasDomain = aliasLookup.domain;
 
-    const aliasName = (
-        (aliasLookup.name !== '')
-      ? aliasLookup.name
-      : '_'
-    );
+    const aliasName = aliasLookup.name !== "" ? aliasLookup.name : "_";
 
-    const lookupUrl =
-      `https://${ aliasDomain }/.well-known/nano-currency.json?names=${ aliasName }`;
+    const lookupUrl = `https://${aliasDomain}/.well-known/nano-currency.json?names=${aliasName}`;
 
     this.aliasLookupInProgress = {
       ...aliasLookup,
     };
 
-    await this.http.get<any>(lookupUrl).toPromise()
-      .then(res => {
-        const isOutdatedRequest = (
-            this.aliasLookupInProgress.fullText
-          !== aliasFullText
-        );
+    await this.http
+      .get<any>(lookupUrl)
+      .toPromise()
+      .then((res) => {
+        const isOutdatedRequest =
+          this.aliasLookupInProgress.fullText !== aliasFullText;
 
         if (isOutdatedRequest === true) {
           return;
@@ -385,33 +400,34 @@ export class SendComponent implements OnInit {
         };
 
         try {
-          const aliasesInJsonCount = (
-              ( Array.isArray(res.names) === true )
-            ? res.names.length
-            : 0
-          );
+          const aliasesInJsonCount =
+            Array.isArray(res.names) === true ? res.names.length : 0;
 
           if (aliasesInJsonCount === 0) {
             this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(`Alias @${aliasName} not found on ${aliasDomain}`);
+            this.notificationService.sendWarning(
+              `Alias @${aliasName} not found on ${aliasDomain}`,
+            );
             return;
           }
 
-          const matchingAccount =
-            res.names.find(
-              (account) =>
-                (account.name === aliasName)
-            );
+          const matchingAccount = res.names.find(
+            (account) => account.name === aliasName,
+          );
 
           if (matchingAccount == null) {
             this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(`Alias @${aliasName} not found on ${aliasDomain}`);
+            this.notificationService.sendWarning(
+              `Alias @${aliasName} not found on ${aliasDomain}`,
+            );
             return;
           }
 
           if (!this.util.account.isValidAccount(matchingAccount.address)) {
             this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(`Alias ${aliasFullText} does not have a valid address`);
+            this.notificationService.sendWarning(
+              `Alias ${aliasFullText} does not have a valid address`,
+            );
             return;
           }
 
@@ -426,22 +442,28 @@ export class SendComponent implements OnInit {
           this.validateDestination();
 
           return;
-        } catch(err) {
+        } catch (err) {
           this.toAccountStatus = 0; // Error state
-          this.notificationService.sendWarning(`Unknown error has occurred while trying to lookup ${aliasFullText}`);
+          this.notificationService.sendWarning(
+            `Unknown error has occurred while trying to lookup ${aliasFullText}`,
+          );
           return;
         }
       })
-      .catch(err => {
+      .catch((err) => {
         this.aliasLookupInProgress = {
           ...this.ALIAS_LOOKUP_DEFAULT_STATE,
         };
         this.toAccountStatus = 0; // Error state
 
         if (err.status === 404) {
-          this.notificationService.sendWarning(`No aliases found on ${aliasDomain}`);
+          this.notificationService.sendWarning(
+            `No aliases found on ${aliasDomain}`,
+          );
         } else {
-          this.notificationService.sendWarning(`Could not reach domain ${aliasDomain}`);
+          this.notificationService.sendWarning(
+            `Could not reach domain ${aliasDomain}`,
+          );
         }
 
         return;
@@ -462,19 +484,37 @@ export class SendComponent implements OnInit {
 
   async validateDestination() {
     // The timeout is used to solve a bug where the results get hidden too fast and the click is never registered
-    setTimeout(() => this.showAddressBook = false, 400);
+    setTimeout(() => (this.showAddressBook = false), 400);
 
     // Remove spaces from the account id
-    this.toAccountID = this.toAccountID.replace(/ /g, '');
+    this.toAccountID = this.toAccountID.replace(/ /g, "");
 
-    this.addressAliasMatch = (
-        (
-            (this.aliasLookupLatestSuccessful.address !== '')
-          && (this.aliasLookupLatestSuccessful.address === this.toAccountID)
-        )
-      ? this.aliasLookupLatestSuccessful.fullText
-      : null
-    );
+    // Check for NanoNym address BEFORE nano_ validation
+    if (this.toAccountID.startsWith("nnym_")) {
+      this.isNanoNymAddress = true;
+      try {
+        this.nanoNymParsedKeys = this.nanoNymCrypto.decodeNanoNymAddress(
+          this.toAccountID,
+        );
+        this.toAccountStatus = 2; // Valid NanoNym address
+      } catch (error) {
+        this.toAccountStatus = 0; // Invalid NanoNym address
+        this.notificationService.sendError(
+          `Invalid NanoNym address: ${error.message}`,
+        );
+      }
+      return; // Don't check as nano_ address
+    }
+
+    // Reset NanoNym state if not a NanoNym address
+    this.isNanoNymAddress = false;
+    this.nanoNymParsedKeys = null;
+
+    this.addressAliasMatch =
+      this.aliasLookupLatestSuccessful.address !== "" &&
+      this.aliasLookupLatestSuccessful.address === this.toAccountID
+        ? this.aliasLookupLatestSuccessful.fullText
+        : null;
 
     if (this.isDestinationAccountAlias === true) {
       this.addressBookMatch = null;
@@ -482,13 +522,15 @@ export class SendComponent implements OnInit {
       return;
     }
 
-    this.addressBookMatch = (
-        this.addressBookService.getAccountName(this.toAccountID)
-      || this.getAccountLabel(this.toAccountID, null)
-    );
+    this.addressBookMatch =
+      this.addressBookService.getAccountName(this.toAccountID) ||
+      this.getAccountLabel(this.toAccountID, null);
 
-    if (!this.addressBookMatch && this.toAccountID === environment.donationAddress) {
-      this.addressBookMatch = 'Nault Donations';
+    if (
+      !this.addressBookMatch &&
+      this.toAccountID === environment.donationAddress
+    ) {
+      this.addressBookMatch = "Nault Donations";
     }
 
     // const accountInfo = await this.walletService.walletApi.accountInfo(this.toAccountID);
@@ -496,7 +538,7 @@ export class SendComponent implements OnInit {
     if (this.util.account.isValidAccount(this.toAccountID)) {
       const accountInfo = await this.nodeApi.accountInfo(this.toAccountID);
       if (accountInfo.error) {
-        if (accountInfo.error === 'Account not found') {
+        if (accountInfo.error === "Account not found") {
           this.toAccountStatus = 1;
         }
       }
@@ -509,13 +551,19 @@ export class SendComponent implements OnInit {
   }
 
   getAccountLabel(accountID, defaultLabel) {
-    const walletAccount = this.walletService.wallet.accounts.find(a => a.id === accountID);
+    const walletAccount = this.walletService.wallet.accounts.find(
+      (a) => a.id === accountID,
+    );
 
     if (walletAccount == null) {
       return defaultLabel;
     }
 
-    return (this.translocoService.translate('general.account') + ' #' + walletAccount.index);
+    return (
+      this.translocoService.translate("general.account") +
+      " #" +
+      walletAccount.index
+    );
   }
 
   validateAmount() {
@@ -529,34 +577,45 @@ export class SendComponent implements OnInit {
   }
 
   getDestinationID() {
-    if (this.sendDestinationType === 'external-address') {
+    if (this.sendDestinationType === "external-address") {
       return this.toAccountID;
     }
 
     // 'own-address'
-    const walletAccount = this.walletService.wallet.accounts.find(a => a.id === this.toOwnAccountID);
+    const walletAccount = this.walletService.wallet.accounts.find(
+      (a) => a.id === this.toOwnAccountID,
+    );
 
     if (!walletAccount) {
       // Unable to find receiving account in wallet
-      return '';
+      return "";
     }
 
     if (this.toOwnAccountID === this.fromAccountID) {
       // Sending to the same address is only allowed via 'external-address'
-      return '';
+      return "";
     }
 
     return this.toOwnAccountID;
   }
 
   async sendTransaction() {
+    // Handle NanoNym addresses with a separate flow
+    if (this.isNanoNymAddress) {
+      return await this.sendToNanoNym();
+    }
+
     const destinationID = this.getDestinationID();
     const isValid = this.util.account.isValidAccount(destinationID);
     if (!isValid) {
-      return this.notificationService.sendWarning(`To account address is not valid`);
+      return this.notificationService.sendWarning(
+        `To account address is not valid`,
+      );
     }
     if (!this.fromAccountID || !destinationID) {
-      return this.notificationService.sendWarning(`From and to account are required`);
+      return this.notificationService.sendWarning(
+        `From and to account are required`,
+      );
     }
     if (!this.validateAmount()) {
       return this.notificationService.sendWarning(`Invalid XNO amount`);
@@ -588,33 +647,38 @@ export class SendComponent implements OnInit {
       return this.notificationService.sendWarning(`Amount is invalid`);
     }
     if (from.balanceBN.minus(rawAmount).lessThan(0)) {
-      return this.notificationService.sendError(`From account does not have enough XNO`);
+      return this.notificationService.sendError(
+        `From account does not have enough XNO`,
+      );
     }
 
     // Determine a proper raw amount to show in the UI, if a decimal was entered
     this.amountExtraRaw = this.rawAmount.mod(this.nano);
 
     // Determine fiat value of the amount
-    this.amountFiat = this.util.nano.rawToMnano(rawAmount).times(this.price.price.lastPrice).toNumber();
+    this.amountFiat = this.util.nano
+      .rawToMnano(rawAmount)
+      .times(this.price.price.lastPrice)
+      .toNumber();
 
-    this.fromAddressBook = (
-        this.addressBookService.getAccountName(this.fromAccountID)
-      || this.getAccountLabel(this.fromAccountID, 'Account')
-    );
+    this.fromAddressBook =
+      this.addressBookService.getAccountName(this.fromAccountID) ||
+      this.getAccountLabel(this.fromAccountID, "Account");
 
-    this.toAddressBook = (
-        this.addressBookService.getAccountName(destinationID)
-      || this.getAccountLabel(destinationID, null)
-    );
+    this.toAddressBook =
+      this.addressBookService.getAccountName(destinationID) ||
+      this.getAccountLabel(destinationID, null);
 
     // Start precomputing the work...
     this.workPool.addWorkToCache(this.fromAccount.frontier, 1);
 
-    this.activePanel = 'confirm';
+    this.activePanel = "confirm";
   }
 
   async confirmTransaction() {
-    const walletAccount = this.walletService.wallet.accounts.find(a => a.id === this.fromAccountID);
+    const walletAccount = this.walletService.wallet.accounts.find(
+      (a) => a.id === this.fromAccountID,
+    );
     if (!walletAccount) {
       throw new Error(`Unable to find sending account in wallet`);
     }
@@ -629,40 +693,50 @@ export class SendComponent implements OnInit {
     this.confirmingTransaction = true;
 
     try {
-      const destinationID = this.getDestinationID();
+      // Use stealth address for NanoNym, otherwise use regular destination
+      const destinationID = this.isNanoNymAddress
+        ? this.stealthAddress
+        : this.getDestinationID();
 
-      const newHash = await this.nanoBlock.generateSend(walletAccount, destinationID,
-        this.rawAmount, this.walletService.isLedgerWallet());
+      const newHash = await this.nanoBlock.generateSend(
+        walletAccount,
+        destinationID,
+        this.rawAmount,
+        this.walletService.isLedgerWallet(),
+      );
 
       if (newHash) {
-        this.notificationService.removeNotification('success-send');
-        this.notificationService.sendSuccess(`Successfully sent ${this.amount} ${this.selectedAmount.shortName}!`, { identifier: 'success-send' });
-        this.activePanel = 'send';
-        this.amount = null;
-        this.amountFiat = null;
-        this.resetRaw();
-        this.toAccountID = '';
-        this.toOwnAccountID = '';
-        this.toAccountStatus = null;
-        this.fromAddressBook = '';
-        this.toAddressBook = '';
-        this.addressBookMatch = '';
-        this.addressAliasMatch = '';
+        // If NanoNym, send Nostr notification
+        if (this.isNanoNymAddress) {
+          await this.sendNostrNotification(newHash);
+        }
+
+        this.notificationService.removeNotification("success-send");
+        this.notificationService.sendSuccess(
+          `Successfully sent ${this.amount} ${this.selectedAmount.shortName}!`,
+          { identifier: "success-send" },
+        );
+        this.resetForm();
       } else {
         if (!this.walletService.isLedgerWallet()) {
-          this.notificationService.sendError(`There was an error sending your transaction, please try again.`);
+          this.notificationService.sendError(
+            `There was an error sending your transaction, please try again.`,
+          );
         }
       }
     } catch (err) {
-      this.notificationService.sendError(`There was an error sending your transaction: ${err.message}`);
+      this.notificationService.sendError(
+        `There was an error sending your transaction: ${err.message}`,
+      );
     }
-
 
     this.confirmingTransaction = false;
   }
 
   setMaxAmount() {
-    const walletAccount = this.walletService.wallet.accounts.find(a => a.id === this.fromAccountID);
+    const walletAccount = this.walletService.wallet.accounts.find(
+      (a) => a.id === this.fromAccountID,
+    );
     if (!walletAccount) {
       return;
     }
@@ -670,7 +744,9 @@ export class SendComponent implements OnInit {
     this.amountExtraRaw = walletAccount.balanceRaw;
 
     const nanoVal = this.util.nano.rawToNano(walletAccount.balance).floor();
-    const maxAmount = this.getAmountValueFromBase(this.util.nano.nanoToRaw(nanoVal));
+    const maxAmount = this.getAmountValueFromBase(
+      this.util.nano.nanoToRaw(nanoVal),
+    );
     this.amount = maxAmount.toNumber();
     this.syncFiatPrice();
   }
@@ -680,41 +756,155 @@ export class SendComponent implements OnInit {
   }
 
   getAmountBaseValue(value) {
-
     switch (this.selectedAmount.value) {
       default:
-      case 'nano': return this.util.nano.nanoToRaw(value);
-      case 'knano': return this.util.nano.knanoToRaw(value);
-      case 'mnano': return this.util.nano.mnanoToRaw(value);
+      case "nano":
+        return this.util.nano.nanoToRaw(value);
+      case "knano":
+        return this.util.nano.knanoToRaw(value);
+      case "mnano":
+        return this.util.nano.mnanoToRaw(value);
     }
   }
 
   getAmountValueFromBase(value) {
     switch (this.selectedAmount.value) {
       default:
-      case 'nano': return this.util.nano.rawToNano(value);
-      case 'knano': return this.util.nano.rawToKnano(value);
-      case 'mnano': return this.util.nano.rawToMnano(value);
+      case "nano":
+        return this.util.nano.rawToNano(value);
+      case "knano":
+        return this.util.nano.rawToKnano(value);
+      case "mnano":
+        return this.util.nano.rawToMnano(value);
     }
   }
 
   // open qr reader modal
   openQR(reference, type) {
     const qrResult = this.qrModalService.openQR(reference, type);
-    qrResult.then((data) => {
-      switch (data.reference) {
-        case 'account1':
-          this.toAccountID = data.content;
-          this.validateDestination();
-          break;
-      }
-    }, () => {}
+    qrResult.then(
+      (data) => {
+        switch (data.reference) {
+          case "account1":
+            this.toAccountID = data.content;
+            this.validateDestination();
+            break;
+        }
+      },
+      () => {},
     );
   }
 
   copied() {
-    this.notificationService.removeNotification('success-copied');
-    this.notificationService.sendSuccess(`Successfully copied to clipboard!`, { identifier: 'success-copied' });
+    this.notificationService.removeNotification("success-copied");
+    this.notificationService.sendSuccess(`Successfully copied to clipboard!`, {
+      identifier: "success-copied",
+    });
   }
 
+  // NanoNym send flow
+  async sendToNanoNym() {
+    if (!this.fromAccountID || !this.nanoNymParsedKeys) {
+      return this.notificationService.sendWarning(
+        `From account and valid NanoNym address are required`,
+      );
+    }
+    if (!this.validateAmount()) {
+      return this.notificationService.sendWarning(`Invalid XNO amount`);
+    }
+
+    this.preparingTransaction = true;
+
+    try {
+      // 1. Generate ephemeral key for this payment
+      const ephemeral = this.nanoNymCrypto.generateEphemeralKey();
+      this.ephemeralPublicKey = ephemeral.public;
+
+      // 2. Generate shared secret via ECDH
+      const sharedSecret = this.nanoNymCrypto.generateSharedSecret(
+        ephemeral.private,
+        this.nanoNymParsedKeys.viewPublic,
+      );
+
+      // 3. Derive one-time stealth address
+      const stealth = this.nanoNymCrypto.deriveStealthAddress(
+        sharedSecret,
+        ephemeral.public,
+        this.nanoNymParsedKeys.spendPublic,
+      );
+      this.stealthAddress = stealth.address;
+
+      // 4. Get account info for from and stealth address
+      const from = await this.nodeApi.accountInfo(this.fromAccountID);
+      const to = await this.nodeApi.accountInfo(this.stealthAddress);
+
+      // 5. Prepare transaction for confirmation
+      this.fromAccount = await this.nodeApi.accountInfo(this.fromAccountID);
+      this.toAccount = await this.nodeApi.accountInfo(this.stealthAddress);
+      this.toAddressBook = "";
+
+      this.preparingTransaction = false;
+      this.activePanel = "confirm";
+    } catch (err) {
+      this.preparingTransaction = false;
+      this.notificationService.sendError(
+        `Error preparing NanoNym transaction: ${err.message}`,
+      );
+    }
+  }
+
+  async sendNostrNotification(txHash: string) {
+    if (!this.ephemeralPublicKey || !this.nanoNymParsedKeys) {
+      console.error("Missing ephemeral key or NanoNym keys for notification");
+      return;
+    }
+
+    try {
+      const senderNostrKey = this.nanoNymCrypto.generateEphemeralKey();
+      const notification = {
+        version: 1,
+        protocol: "nanoNymNault",
+        R: this.bytesToHex(this.ephemeralPublicKey),
+        tx_hash: txHash,
+        amount: this.amount?.toString() || "",
+        amount_raw: this.rawAmount.toString(),
+      };
+
+      const acceptedRelays = await this.nostrService.sendNotification(
+        notification,
+        senderNostrKey.private,
+        this.nanoNymParsedKeys.nostrPublic,
+      );
+      console.log(`Nostr notification sent to ${acceptedRelays.length} relays`);
+    } catch (error) {
+      console.error("Failed to send Nostr notification:", error);
+      this.notificationService.sendWarning(
+        "Transaction sent but notification failed. Recipient may not see payment immediately.",
+      );
+    }
+  }
+
+  resetForm() {
+    this.activePanel = "send";
+    this.amount = null;
+    this.amountFiat = null;
+    this.resetRaw();
+    this.toAccountID = "";
+    this.toOwnAccountID = "";
+    this.toAccountStatus = null;
+    this.fromAddressBook = "";
+    this.toAddressBook = "";
+    this.addressBookMatch = "";
+    this.addressAliasMatch = "";
+    this.isNanoNymAddress = false;
+    this.nanoNymParsedKeys = null;
+    this.stealthAddress = "";
+    this.ephemeralPublicKey = null;
+  }
+
+  bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
 }
