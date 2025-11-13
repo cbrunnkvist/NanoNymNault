@@ -4,3 +4,6 @@
 [submodule "references/nostr-tools"]
 	path = references/nostr-tools
 	url = https://github.com/nbd-wtf/nostr-tools.git
+[submodule "references/camonanowallet"]
+	path = references/camonanowallet
+	url = https://github.com/CamoNano/camonanowallet.git
