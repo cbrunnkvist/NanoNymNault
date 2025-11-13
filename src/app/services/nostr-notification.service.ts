@@ -25,12 +25,13 @@ export interface RelayStatus {
 })
 export class NostrNotificationService {
   // Default relay list - can be configured by user later
+  // All relays verified working as of 2025-11-13
   private defaultRelays = [
+    "wss://relay.primal.net",
+    "wss://nostr.oxtr.dev",
     "wss://relay.damus.io",
     "wss://nos.lol",
     "wss://relay.snort.social",
-    "wss://relay.nostr.band",
-    "wss://nostr.wine",
   ];
 
   // SimplePool for managing multiple relay connections
