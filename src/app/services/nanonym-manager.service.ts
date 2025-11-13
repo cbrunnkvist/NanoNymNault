@@ -10,13 +10,24 @@ import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
 import { ApiService } from "./api.service";
 import { WalletService } from "./wallet.service";
-import { Subscription } from "rxjs";
+import { Subscription, Subject } from "rxjs";
 
 @Injectable({
   providedIn: "root",
 })
 export class NanoNymManagerService {
   private notificationSubscription: Subscription | null = null;
+  // Map nostr private key hex -> NanoNym index for fast notification routing
+  private nostrPrivateToIndexMap = new Map<string, number>();
+
+  // Observable for notification processing events
+  public notificationProcessed$ = new Subject<{
+    nanoNymIndex: number;
+    nanoNymLabel: string;
+    amount: string;
+    stealthAddress: string;
+    txHash: string;
+  }>();
 
   constructor(
     private storage: NanoNymStorageService,
@@ -47,13 +58,13 @@ export class NanoNymManagerService {
 
     // Encode nnym_ address
     const nnymAddress = this.crypto.encodeNanoNymAddress(
-      keys.spendPublic,
-      keys.viewPublic,
-      keys.nostrPublic,
+      keys.spend.public,
+      keys.view.public,
+      keys.nostr.public,
     );
 
     // Get fallback address
-    const fallbackAddress = this.crypto.getFallbackAddress(keys.spendPublic);
+    const fallbackAddress = this.crypto.getFallbackAddress(keys.spend.public);
 
     // Create NanoNym object
     const nanoNym: NanoNym = {
@@ -64,12 +75,12 @@ export class NanoNymManagerService {
       status: "active",
       createdAt: Date.now(),
       keys: {
-        spendPublic: keys.spendPublic,
-        spendPrivate: keys.spendPrivate,
-        viewPublic: keys.viewPublic,
-        viewPrivate: keys.viewPrivate,
-        nostrPublic: keys.nostrPublic,
-        nostrPrivate: keys.nostrPrivate,
+        spendPublic: keys.spend.public,
+        spendPrivate: keys.spend.private,
+        viewPublic: keys.view.public,
+        viewPrivate: keys.view.private,
+        nostrPublic: keys.nostr.public,
+        nostrPrivate: keys.nostr.private,
       },
       balance: new BigNumber(0),
       paymentCount: 0,
@@ -122,10 +133,22 @@ export class NanoNymManagerService {
    */
   private async startMonitoring(nanoNym: NanoNym): Promise<void> {
     try {
+      const nostrPublicHex = this.bytesToHex(nanoNym.keys.nostrPublic);
+      const nostrPrivateHex = this.bytesToHex(nanoNym.keys.nostrPrivate);
+
+      console.log(
+        `[Manager] Starting monitoring for NanoNym ${nanoNym.index}: ${nanoNym.label}`,
+      );
+      console.log(`[Manager] Nostr public key (hex): ${nostrPublicHex}`);
+
       await this.nostr.subscribeToNotifications(
         nanoNym.keys.nostrPublic,
         nanoNym.keys.nostrPrivate,
       );
+
+      // Add to routing map
+      this.nostrPrivateToIndexMap.set(nostrPrivateHex, nanoNym.index);
+
       console.log(
         `Started monitoring NanoNym ${nanoNym.index}: ${nanoNym.label}`,
       );
@@ -143,6 +166,11 @@ export class NanoNymManagerService {
   private async stopMonitoring(nanoNym: NanoNym): Promise<void> {
     try {
       await this.nostr.unsubscribeFromNotifications(nanoNym.keys.nostrPublic);
+
+      // Remove from routing map
+      const nostrPrivateHex = this.bytesToHex(nanoNym.keys.nostrPrivate);
+      this.nostrPrivateToIndexMap.delete(nostrPrivateHex);
+
       console.log(
         `Stopped monitoring NanoNym ${nanoNym.index}: ${nanoNym.label}`,
       );
@@ -186,7 +214,7 @@ export class NanoNymManagerService {
     try {
       const nanoNym = this.storage.getNanoNym(nanoNymIndex);
       if (!nanoNym) {
-        console.error(`NanoNym with index ${nanoNymIndex} not found`);
+        console.error(`[Manager] NanoNym with index ${nanoNymIndex} not found`);
         return null;
       }
 
@@ -210,7 +238,7 @@ export class NanoNymManagerService {
       const accountInfo = await this.api.accountInfo(stealth.address);
       if (accountInfo.error) {
         console.error(
-          `Stealth address not found on blockchain: ${stealth.address}`,
+          `[Manager] Stealth address not found on blockchain: ${stealth.address}`,
         );
         return null;
       }
@@ -243,8 +271,17 @@ export class NanoNymManagerService {
       // 8. Import into wallet for spending capability
       await this.importStealthAccountToWallet(stealthAccount);
 
+      // 9. Emit event for UI updates (reuse nanoNym from earlier)
+      this.notificationProcessed$.next({
+        nanoNymIndex,
+        nanoNymLabel: nanoNym.label,
+        amount: this.formatAmount(stealthAccount.balance),
+        stealthAddress: stealth.address,
+        txHash: notification.tx_hash,
+      });
+
       console.log(
-        `Processed notification for NanoNym ${nanoNymIndex}, stealth address: ${stealth.address}`,
+        `✅ Payment received: ${this.formatAmount(stealthAccount.balance)} XNO to ${nanoNym.label}`,
       );
       return stealthAccount;
     } catch (error) {
@@ -330,35 +367,51 @@ export class NanoNymManagerService {
    * Set up listener for incoming Nostr notifications
    */
   private setupNotificationListener(): void {
+    console.log("[Manager] Setting up notification listener");
     this.notificationSubscription = this.nostr.incomingNotifications$.subscribe(
       async (incoming) => {
-        console.log("Received Nostr notification:", incoming.notification);
+        // Find which NanoNym this notification belongs to by matching private key
+        const receiverPrivateHex = this.bytesToHex(
+          incoming.receiverNostrPrivate,
+        );
 
-        // Find which NanoNym this notification belongs to
-        const allNanoNyms = this.storage.getAllNanoNyms();
-        for (const nanoNym of allNanoNyms) {
-          // Compare nostr public keys
-          const nostrPublicHex = Array.from(nanoNym.keys.nostrPublic)
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join("");
+        const nanoNymIndex =
+          this.nostrPrivateToIndexMap.get(receiverPrivateHex);
 
-          const receiverPublicHex = Array.from(incoming.receiverNostrPrivate)
-            .map((b) => b.toString(16).padStart(2, "0"))
-            .join("");
-
-          // Note: We're comparing with private key bytes here, but we should compare public keys
-          // This is a simplification - in production we'd derive public from private or store mapping
-
-          // For now, process notification for all active NanoNyms and let verification handle it
-          if (nanoNym.status === "active") {
-            await this.processNotification(
-              incoming.notification,
-              nanoNym.index,
-            );
-          }
+        if (nanoNymIndex === undefined) {
+          console.warn(
+            `[Manager] Received notification for unknown Nostr private key: ${receiverPrivateHex.slice(0, 8)}...`,
+          );
+          return;
         }
+
+        console.log(
+          `[Manager] Matched notification to NanoNym index: ${nanoNymIndex}`,
+        );
+
+        // Process the notification for the matched NanoNym
+        await this.processNotification(incoming.notification, nanoNymIndex);
       },
     );
+  }
+
+  /**
+   * Convert Uint8Array to hex string
+   */
+  private bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+  }
+
+  /**
+   * Format raw amount to human-readable XNO
+   */
+  private formatAmount(rawAmount: BigNumber): string {
+    const mnano = rawAmount.dividedBy(
+      new BigNumber("1000000000000000000000000000000"),
+    );
+    return mnano.toFixed(6);
   }
 
   /**

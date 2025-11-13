@@ -1,5 +1,5 @@
 import { Injectable } from "@angular/core";
-import { SimplePool, nip59 } from "nostr-tools";
+import { SimplePool, nip59, nip19 } from "nostr-tools";
 import type { Event } from "nostr-tools/lib/types/core";
 import * as Rx from "rxjs";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
@@ -25,13 +25,11 @@ export interface RelayStatus {
 })
 export class NostrNotificationService {
   // Default relay list - can be configured by user later
-  // All relays verified working as of 2025-11-13
+  // Reduced to 3 most reliable relays for testing
   private defaultRelays = [
-    "wss://relay.primal.net",
-    "wss://nostr.oxtr.dev",
     "wss://relay.damus.io",
     "wss://nos.lol",
-    "wss://relay.snort.social",
+    "wss://relay.primal.net",
   ];
 
   // SimplePool for managing multiple relay connections
@@ -48,6 +46,10 @@ export class NostrNotificationService {
 
   // Active subscriptions map (nostrPublicHex -> subscription)
   private subscriptions = new Map<string, any>();
+
+  // Relay connection tracking
+  private relayFirstSeen = new Map<string, number>();
+  private relayEventCount = new Map<string, number>();
 
   constructor(private nanoNymCrypto: NanoNymCryptoService) {
     this.pool = new SimplePool();
@@ -102,6 +104,13 @@ export class NostrNotificationService {
   ): Promise<string[]> {
     // Convert receiver public key to hex format (wrapEvent expects Uint8Array for private key)
     const receiverPublicHex = this.bytesToHex(receiverNostrPublic);
+    const receiverNpub = nip19.npubEncode(receiverPublicHex);
+
+    console.log(
+      "[Nostr Send] Receiver Nostr public key (hex):",
+      receiverPublicHex,
+    );
+    console.log("[Nostr Send] Receiver Nostr public key (npub):", receiverNpub);
 
     // Serialize notification payload
     const payloadJson = JSON.stringify(notification);
@@ -123,20 +132,43 @@ export class NostrNotificationService {
         receiverPublicHex,
       );
 
-      // Publish to all relays (using Promise.all with try-catch for ES2017 compatibility)
-      const acceptedRelays: string[] = [];
-      await Promise.all(
-        this.defaultRelays.map(async (relay) => {
-          try {
-            await this.pool.publish([relay], giftWrap);
-            acceptedRelays.push(relay);
-            this.updateRelayStatus(relay, true);
-          } catch (error) {
-            this.updateRelayStatus(relay, false, error);
-          }
-        }),
-      );
+      console.log(`[Nostr Send] Gift-wrap created:`, {
+        id: giftWrap.id,
+        kind: giftWrap.kind,
+        pubkey: giftWrap.pubkey.slice(0, 16) + "...",
+        created_at: giftWrap.created_at,
+        tags: giftWrap.tags,
+        content_length: giftWrap.content.length,
+      });
 
+      // Publish to all relays and wait for confirmation
+      const acceptedRelays: string[] = [];
+
+      for (const relay of this.defaultRelays) {
+        try {
+          console.log(`[Nostr Send] Publishing to ${relay}...`);
+          const publishPromise = this.pool.publish([relay], giftWrap);
+
+          // Wait for the promise and check if relay accepted it
+          const result = await Promise.race([
+            publishPromise,
+            new Promise((_, reject) =>
+              setTimeout(() => reject(new Error("Timeout")), 5000),
+            ),
+          ]);
+
+          console.log(`[Nostr Send] ✅ ${relay} accepted event`);
+          acceptedRelays.push(relay);
+          this.updateRelayStatus(relay, true);
+        } catch (error) {
+          console.error(`[Nostr Send] ❌ ${relay} rejected or timeout:`, error);
+          this.updateRelayStatus(relay, false, error);
+        }
+      }
+
+      console.log(
+        `[Nostr Send] Final: ${acceptedRelays.length}/${this.defaultRelays.length} relays accepted`,
+      );
       return acceptedRelays;
     } catch (error) {
       console.error("Error sending Nostr notification:", error);
@@ -155,32 +187,91 @@ export class NostrNotificationService {
     nostrPrivate: Uint8Array,
   ): void {
     const nostrPublicHex = this.bytesToHex(nostrPublic);
+    const nostrNpub = nip19.npubEncode(nostrPublicHex);
+
+    console.log("[Nostr Subscribe] Nostr public key (hex):", nostrPublicHex);
+    console.log("[Nostr Subscribe] Nostr public key (npub):", nostrNpub);
 
     // Don't create duplicate subscriptions
     if (this.subscriptions.has(nostrPublicHex)) {
-      console.log("Already subscribed to notifications for", nostrPublicHex);
+      console.log("Already subscribed to notifications for npub:", nostrNpub);
       return;
     }
 
-    // Subscribe to kind:1059 (gift-wrapped) events for this pubkey
-    const sub = this.pool.subscribeMany(
-      this.defaultRelays,
-      [
-        {
-          kinds: [1059], // Gift-wrapped events
-          "#p": [nostrPublicHex], // Targeted to this pubkey
-          since: Math.floor(Date.now() / 1000) - 86400, // Last 24 hours
-        },
-      ],
-      {
-        onevent: (event: Event) => {
-          this.handleIncomingEvent(event, nostrPrivate);
-        },
-        oneose: () => {
-          console.log("Nostr subscription synced for", nostrPublicHex);
-        },
-      },
+    // Subscribe to kind:1059 (gift-wrapped) events
+    // Note: NIP-59 gift wraps use ephemeral keys in the outer envelope,
+    // so we cannot filter by #p tag. We must receive all gift wraps and
+    // attempt to decrypt them.
+    const filter = {
+      kinds: [1059],
+      // NIP-59 randomizes timestamps by ±2 days, so we need to look back 4 days
+      // to catch all events (2 days randomization + 2 days buffer)
+      since: Math.floor(Date.now() / 1000) - 4 * 86400, // Last 4 days
+    };
+
+    console.log(
+      "[Nostr] Creating subscription with filter:",
+      JSON.stringify(filter),
     );
+    console.log("[Nostr] Connecting to relays:", this.defaultRelays);
+
+    // Track relay sync events
+    let eoseCount = 0;
+    let eventCount = 0;
+
+    console.log(
+      `[Nostr] Subscription starting - will log EVERY event received`,
+    );
+
+    const sub = this.pool.subscribeMany(this.defaultRelays, filter, {
+      onevent: (event: Event) => {
+        eventCount++;
+        console.log(`[Nostr] 🔔 EVENT #${eventCount} RECEIVED:`, {
+          id: event.id,
+          kind: event.kind,
+          pubkey: event.pubkey?.slice(0, 16) + "...",
+          created_at: event.created_at,
+          created_at_human: new Date(event.created_at * 1000).toISOString(),
+          tags: event.tags,
+          content_length: event.content?.length || 0,
+        });
+        this.handleIncomingEvent(event, nostrPrivate);
+      },
+
+      // Track which relays are responding (uses relay.url from AbstractRelay)
+      receivedEvent: (relay: any, id: string) => {
+        const relayUrl = relay.url;
+        console.log(`[Nostr] 📨 receivedEvent from ${relayUrl}: ${id}`);
+
+        if (!this.relayFirstSeen.has(relayUrl)) {
+          this.relayFirstSeen.set(relayUrl, Date.now());
+          console.log(`[Nostr] ✅ ${relayUrl} connected and responding`);
+          this.updateRelayStatus(relayUrl, true);
+        }
+
+        // Track event counts for statistics
+        const count = (this.relayEventCount.get(relayUrl) || 0) + 1;
+        this.relayEventCount.set(relayUrl, count);
+      },
+
+      oneose: () => {
+        // oneose fires when a relay finishes sending stored events
+        eoseCount++;
+        console.log(
+          `[Nostr] EOSE received (${eoseCount}/${this.defaultRelays.length}) - ${eventCount} total events so far`,
+        );
+        if (eoseCount === this.defaultRelays.length) {
+          console.log(
+            `[Nostr] All ${this.defaultRelays.length} relays synced - Total events: ${eventCount}`,
+          );
+          this.logRelayStats();
+        } else {
+          console.log(
+            `[Nostr] Still waiting for ${this.defaultRelays.length - eoseCount} more relays...`,
+          );
+        }
+      },
+    });
 
     this.subscriptions.set(nostrPublicHex, sub);
     console.log(
@@ -214,10 +305,18 @@ export class NostrNotificationService {
   ): Promise<void> {
     try {
       // Unwrap the gift-wrapped event using NIP-59
-      const unwrapped = nip59.unwrapEvent(event, nostrPrivate);
+      // This may throw an error if the event is not meant for us (wrong key)
+      let unwrapped;
+      try {
+        unwrapped = nip59.unwrapEvent(event, nostrPrivate);
+      } catch (decryptError) {
+        // Expected - this event is encrypted for a different recipient
+        // SILENT: Don't log thousands of irrelevant messages
+        return;
+      }
 
       if (!unwrapped) {
-        console.warn("Failed to unwrap Nostr event");
+        // SILENT: Don't log expected decryption failures
         return;
       }
 
@@ -226,19 +325,23 @@ export class NostrNotificationService {
 
       // Validate notification format
       if (!this.validateNotification(notification)) {
-        console.warn("Invalid notification format:", notification);
+        console.warn("[Nostr] Invalid notification format:", notification);
         return;
       }
+
+      // ONLY log successful, valid NanoNym notifications
+      console.log("[Nostr] ✅ Payment notification received:", {
+        tx_hash: notification.tx_hash,
+        amount: notification.amount || "unknown",
+      });
 
       // Emit the notification for processing
       this.incomingNotifications$.next({
         notification,
         receiverNostrPrivate: nostrPrivate,
       });
-
-      console.log("Received NanoNym notification:", notification);
     } catch (error) {
-      console.error("Error processing incoming Nostr event:", error);
+      console.error("[Nostr] Error processing incoming Nostr event:", error);
     }
   }
 
@@ -273,12 +376,32 @@ export class NostrNotificationService {
   }
 
   /**
+   * Log relay statistics
+   */
+  private logRelayStats(): void {
+    if (this.relayFirstSeen.size === 0) {
+      console.warn("[Nostr] No relays responded");
+      return;
+    }
+
+    console.log("[Nostr] Relay Statistics:");
+    this.relayFirstSeen.forEach((timestamp, url) => {
+      const eventCount = this.relayEventCount.get(url) || 0;
+      console.log(`  ${url}: ${eventCount} events received`);
+    });
+  }
+
+  /**
    * Clean up all subscriptions and connections
    */
   destroy(): void {
     // Close all subscriptions
     this.subscriptions.forEach((sub) => sub.close());
     this.subscriptions.clear();
+
+    // Clear tracking maps
+    this.relayFirstSeen.clear();
+    this.relayEventCount.clear();
 
     // Close pool connections
     this.pool.close(this.defaultRelays);

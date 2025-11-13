@@ -1,12 +1,17 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
-import BigNumber from 'bignumber.js';
-import { NanoNym, StealthAccount, StoredNanoNym, StoredStealthAccount } from '../types/nanonym.types';
+import { Injectable } from "@angular/core";
+import { BehaviorSubject, Observable } from "rxjs";
+import BigNumber from "bignumber.js";
+import {
+  NanoNym,
+  StealthAccount,
+  StoredNanoNym,
+  StoredStealthAccount,
+} from "../types/nanonym.types";
 
-const STORAGE_KEY = 'nanonyms-v1';
+const STORAGE_KEY = "nanonyms-v1";
 
 @Injectable({
-  providedIn: 'root'
+  providedIn: "root",
 })
 export class NanoNymStorageService {
   private nanonymsSubject = new BehaviorSubject<NanoNym[]>([]);
@@ -27,14 +32,14 @@ export class NanoNymStorageService {
    * Get NanoNym by index
    */
   getNanoNym(index: number): NanoNym | null {
-    return this.nanonymsSubject.value.find(nn => nn.index === index) || null;
+    return this.nanonymsSubject.value.find((nn) => nn.index === index) || null;
   }
 
   /**
    * Get active (monitoring) NanoNyms
    */
   getActiveNanoNyms(): NanoNym[] {
-    return this.nanonymsSubject.value.filter(nn => nn.status === 'active');
+    return this.nanonymsSubject.value.filter((nn) => nn.status === "active");
   }
 
   /**
@@ -52,8 +57,8 @@ export class NanoNymStorageService {
    */
   updateNanoNym(index: number, updates: Partial<NanoNym>): void {
     const current = this.nanonymsSubject.value;
-    const updated = current.map(nn =>
-      nn.index === index ? { ...nn, ...updates } : nn
+    const updated = current.map((nn) =>
+      nn.index === index ? { ...nn, ...updates } : nn,
     );
     this.nanonymsSubject.next(updated);
     this.saveToStorage(updated);
@@ -64,7 +69,7 @@ export class NanoNymStorageService {
    */
   deleteNanoNym(index: number): void {
     const current = this.nanonymsSubject.value;
-    const updated = current.filter(nn => nn.index !== index);
+    const updated = current.filter((nn) => nn.index !== index);
     this.nanonymsSubject.next(updated);
     this.saveToStorage(updated);
   }
@@ -72,7 +77,10 @@ export class NanoNymStorageService {
   /**
    * Add a stealth account to a NanoNym
    */
-  addStealthAccount(nanoNymIndex: number, stealthAccount: StealthAccount): void {
+  addStealthAccount(
+    nanoNymIndex: number,
+    stealthAccount: StealthAccount,
+  ): void {
     const nanoNym = this.getNanoNym(nanoNymIndex);
     if (!nanoNym) {
       console.error(`NanoNym with index ${nanoNymIndex} not found`);
@@ -89,36 +97,44 @@ export class NanoNymStorageService {
     this.updateNanoNym(nanoNymIndex, {
       stealthAccounts: updatedStealthAccounts,
       balance,
-      paymentCount
+      paymentCount,
     });
   }
 
   /**
    * Update stealth account balance
    */
-  updateStealthAccountBalance(nanoNymIndex: number, stealthAddress: string, balance: BigNumber): void {
+  updateStealthAccountBalance(
+    nanoNymIndex: number,
+    stealthAddress: string,
+    balance: BigNumber,
+  ): void {
     const nanoNym = this.getNanoNym(nanoNymIndex);
     if (!nanoNym) return;
 
-    const updatedStealthAccounts = nanoNym.stealthAccounts.map(sa =>
-      sa.address === stealthAddress ? { ...sa, balance } : sa
+    const updatedStealthAccounts = nanoNym.stealthAccounts.map((sa) =>
+      sa.address === stealthAddress ? { ...sa, balance } : sa,
     );
 
-    const aggregatedBalance = this.calculateAggregatedBalance(updatedStealthAccounts);
+    const aggregatedBalance = this.calculateAggregatedBalance(
+      updatedStealthAccounts,
+    );
 
     this.updateNanoNym(nanoNymIndex, {
       stealthAccounts: updatedStealthAccounts,
-      balance: aggregatedBalance
+      balance: aggregatedBalance,
     });
   }
 
   /**
    * Calculate total balance across all stealth accounts
    */
-  private calculateAggregatedBalance(stealthAccounts: StealthAccount[]): BigNumber {
+  private calculateAggregatedBalance(
+    stealthAccounts: StealthAccount[],
+  ): BigNumber {
     return stealthAccounts.reduce(
       (sum, sa) => sum.plus(sa.balance || 0),
-      new BigNumber(0)
+      new BigNumber(0),
     );
   }
 
@@ -128,7 +144,7 @@ export class NanoNymStorageService {
   getNextIndex(): number {
     const current = this.nanonymsSubject.value;
     if (current.length === 0) return 0;
-    const maxIndex = Math.max(...current.map(nn => nn.index));
+    const maxIndex = Math.max(...current.map((nn) => nn.index));
     return maxIndex + 1;
   }
 
@@ -146,13 +162,21 @@ export class NanoNymStorageService {
   private loadFromStorage(): void {
     try {
       const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) return;
+      if (!stored) {
+        console.log(
+          "[NanoNymStorage] No stored NanoNyms found in localStorage",
+        );
+        return;
+      }
 
       const parsed: StoredNanoNym[] = JSON.parse(stored);
-      const nanonyms = parsed.map(this.deserializeNanoNym);
+      const nanonyms = parsed.map((stored) => this.deserializeNanoNym(stored));
       this.nanonymsSubject.next(nanonyms);
+      console.log(
+        `[NanoNymStorage] Loaded ${nanonyms.length} NanoNyms from localStorage`,
+      );
     } catch (error) {
-      console.error('Failed to load NanoNyms from storage:', error);
+      console.error("Failed to load NanoNyms from storage:", error);
     }
   }
 
@@ -161,10 +185,13 @@ export class NanoNymStorageService {
    */
   private saveToStorage(nanonyms: NanoNym[]): void {
     try {
-      const serialized = nanonyms.map(this.serializeNanoNym);
+      const serialized = nanonyms.map((nn) => this.serializeNanoNym(nn));
       localStorage.setItem(STORAGE_KEY, JSON.stringify(serialized));
+      console.log(
+        `[NanoNymStorage] Saved ${nanonyms.length} NanoNyms to localStorage`,
+      );
     } catch (error) {
-      console.error('Failed to save NanoNyms to storage:', error);
+      console.error("Failed to save NanoNyms to storage:", error);
     }
   }
 
@@ -187,7 +214,9 @@ export class NanoNymStorageService {
         nostrPublic: this.uint8ToBase64(nn.keys.nostrPublic),
         nostrPrivate: this.uint8ToBase64(nn.keys.nostrPrivate),
       },
-      stealthAccounts: nn.stealthAccounts.map(this.serializeStealthAccount)
+      stealthAccounts: nn.stealthAccounts.map((sa) =>
+        this.serializeStealthAccount(sa),
+      ),
     };
   }
 
@@ -212,7 +241,9 @@ export class NanoNymStorageService {
       },
       balance: new BigNumber(0), // Will be calculated
       paymentCount: stored.stealthAccounts.length,
-      stealthAccounts: stored.stealthAccounts.map(this.deserializeStealthAccount)
+      stealthAccounts: stored.stealthAccounts.map((sa) =>
+        this.deserializeStealthAccount(sa),
+      ),
     };
   }
 
@@ -229,14 +260,16 @@ export class NanoNymStorageService {
       amountRaw: sa.amountRaw,
       memo: sa.memo,
       receivedAt: sa.receivedAt,
-      parentNanoNymIndex: sa.parentNanoNymIndex
+      parentNanoNymIndex: sa.parentNanoNymIndex,
     };
   }
 
   /**
    * Convert StoredStealthAccount back to StealthAccount
    */
-  private deserializeStealthAccount(stored: StoredStealthAccount): StealthAccount {
+  private deserializeStealthAccount(
+    stored: StoredStealthAccount,
+  ): StealthAccount {
     return {
       address: stored.address,
       publicKey: this.base64ToUint8(stored.publicKey),
@@ -247,7 +280,7 @@ export class NanoNymStorageService {
       memo: stored.memo,
       receivedAt: stored.receivedAt,
       parentNanoNymIndex: stored.parentNanoNymIndex,
-      balance: new BigNumber(0) // Will be queried from node
+      balance: new BigNumber(0), // Will be queried from node
     };
   }
 

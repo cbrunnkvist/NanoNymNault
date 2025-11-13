@@ -4,6 +4,7 @@ import { blake2b } from "blakejs";
 import * as nacl from "tweetnacl";
 import { tools as nanocurrencyWebTools } from "nanocurrency-web";
 import { UtilService } from "./util.service";
+import * as ed25519 from "@noble/ed25519";
 
 /**
  * NanoNymCryptoService
@@ -220,23 +221,84 @@ export class NanoNymCryptoService {
   }
 
   /**
-   * Add two Ed25519 points
-   * This is a PLACEHOLDER - proper implementation needed
+   * Add two Ed25519 points using proper elliptic curve arithmetic
+   * Uses @noble/ed25519 for cryptographically correct point addition
    *
-   * For production, we need to implement proper Ed25519 point arithmetic
-   * Options:
-   * 1. Use @noble/ed25519 point operations
-   * 2. Implement full Ed25519 point addition
-   * 3. Use extended coordinates for efficiency
+   * @param point1 - First Ed25519 point (32 bytes)
+   * @param point2 - Second Ed25519 point (32 bytes)
+   * @returns Sum of the two points (32 bytes)
    */
   private ed25519PointAdd(point1: Uint8Array, point2: Uint8Array): Uint8Array {
-    // TEMPORARY WORKAROUND: XOR the points
-    // This is NOT cryptographically correct but allows testing the flow
-    // TODO: Implement proper Ed25519 point addition
+    // Convert Uint8Array to hex strings
+    const hex1 = Array.from(point1)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
+    const hex2 = Array.from(point2)
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("");
 
+    // Convert compressed points to Point and add
+    const p1 = ed25519.Point.fromHex(hex1);
+    const p2 = ed25519.Point.fromHex(hex2);
+    const sum = p1.add(p2);
+
+    // Convert back to compressed 32-byte representation
+    const sumHex = sum.toHex();
     const result = new Uint8Array(32);
     for (let i = 0; i < 32; i++) {
-      result[i] = point1[i] ^ point2[i];
+      result[i] = parseInt(sumHex.substr(i * 2, 2), 16);
+    }
+    return result;
+  }
+
+  /**
+   * Add two scalars modulo Ed25519 group order l
+   * l = 2^252 + 27742317777372353535851937790883648493
+   *
+   * @param scalar1 - First scalar (32 bytes)
+   * @param scalar2 - Second scalar (32 bytes)
+   * @returns (scalar1 + scalar2) mod l (32 bytes)
+   */
+  private ed25519ScalarAdd(
+    scalar1: Uint8Array,
+    scalar2: Uint8Array,
+  ): Uint8Array {
+    // Ed25519 group order (little-endian)
+    const L = BigInt(
+      "0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed",
+    );
+
+    // Convert scalars from little-endian bytes to BigInt
+    const s1 = this.bytesToBigIntLE(scalar1);
+    const s2 = this.bytesToBigIntLE(scalar2);
+
+    // Add and reduce modulo L
+    const sum = (s1 + s2) % L;
+
+    // Convert back to 32-byte little-endian representation
+    return this.bigIntToBytesLE(sum, 32);
+  }
+
+  /**
+   * Convert little-endian bytes to BigInt
+   */
+  private bytesToBigIntLE(bytes: Uint8Array): bigint {
+    let result = BigInt(0);
+    for (let i = 0; i < bytes.length; i++) {
+      result += BigInt(bytes[i]) << BigInt(i * 8);
+    }
+    return result;
+  }
+
+  /**
+   * Convert BigInt to little-endian bytes
+   */
+  private bigIntToBytesLE(value: bigint, length: number): Uint8Array {
+    const result = new Uint8Array(length);
+    let v = value;
+    for (let i = 0; i < length; i++) {
+      result[i] = Number(v & BigInt(0xff));
+      v = v >> BigInt(8);
     }
     return result;
   }
@@ -269,12 +331,9 @@ export class NanoNymCryptoService {
     const tweak = new Uint8Array(tweakHash);
 
     // Compute private key: p_masked = b_spend + t (mod l)
-    // For now, simple XOR as placeholder
-    // TODO: Implement proper scalar addition modulo Ed25519 group order
-    const stealthPrivate = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      stealthPrivate[i] = spendPrivate[i] ^ tweak[i];
-    }
+    // where l is the Ed25519 group order
+    // l = 2^252 + 27742317777372353535851937790883648493
+    const stealthPrivate = this.ed25519ScalarAdd(spendPrivate, tweak);
 
     return stealthPrivate;
   }
@@ -338,6 +397,8 @@ export class NanoNymCryptoService {
     viewPublic: Uint8Array;
     nostrPublic: Uint8Array;
   } {
+    console.log("[NanoNymCrypto] Decoding NanoNym address:", nnymAddress);
+
     // Validate prefix
     if (!nnymAddress.startsWith("nnym_")) {
       throw new Error("Invalid NanoNym address: must start with nnym_");
@@ -372,11 +433,35 @@ export class NanoNymCryptoService {
     }
 
     // Extract keys
+    const spendPublic = data.slice(1, 33);
+    const viewPublic = data.slice(33, 65);
+    const nostrPublic = data.slice(65, 97);
+
+    console.log("[NanoNymCrypto] Extracted keys from address:");
+    console.log(
+      "  - Spend public (hex):",
+      Array.from(spendPublic)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+    );
+    console.log(
+      "  - View public (hex):",
+      Array.from(viewPublic)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+    );
+    console.log(
+      "  - Nostr public (hex):",
+      Array.from(nostrPublic)
+        .map((b) => b.toString(16).padStart(2, "0"))
+        .join(""),
+    );
+
     return {
       version,
-      spendPublic: data.slice(1, 33),
-      viewPublic: data.slice(33, 65),
-      nostrPublic: data.slice(65, 97),
+      spendPublic,
+      viewPublic,
+      nostrPublic,
     };
   }
 

@@ -1,337 +1,920 @@
 <div class="uk-animation-slide-left-small" uk-grid>
   <div class="uk-width-1-1">
+    <h2 class="uk-heading-divider">Receive</h2>
 
-    <ng-template #switchToMerchantModeButton>
-      <button
-        class="uk-width-1-1 uk-width-auto@s uk-button uk-button-primary uk-text-center nlt-icon-button nlt-button-green"
-        type="button"
-        (click)="merchantModeEnable()"
-      >
-        <span class="nlt-icon" uk-icon="icon: cart;"></span>
-        <span class="merchant-mode-text-full">Switch to Merchant Mode</span>
-        <span class="merchant-mode-text-short">Merchant Mode</span>
-      </button>
-    </ng-template>
-
-    <ng-template #copyPaymentUriButton>
-      <button
-        *ngIf="(pendingAccountModel !== '0') && (qrAmount != null)"
-        class="uk-width-1-1 uk-width-5-6@s uk-button uk-button-primary uk-text-center nlt-icon-button"
-        [class.nlt-button-success]="recentlyCopiedPaymentUri"
-        [class.uk-disabled]="recentlyCopiedPaymentUri"
-        type="button"
-        ngxClipboard
-        [cbContent]="qrCodeUri"
-        (cbOnSuccess)="copiedPaymentUri()"
-      >
-        <span class="nlt-icon" uk-icon="icon: copy;"></span>
-        {{ recentlyCopiedPaymentUri ? 'Copied!' : 'Copy payment link' }}
-      </button>
-    </ng-template>
-
-    <ng-template #copyPaymentAddressButton>
-      <button
-        *ngIf="(pendingAccountModel !== '0')"
-        class="uk-width-1-1 uk-width-5-6@s uk-button uk-text-center nlt-icon-button"
-        [class.uk-button-primary]="recentlyCopiedAccountAddress || (qrAmount == null)"
-        [class.uk-button-secondary]="!recentlyCopiedAccountAddress && (qrAmount != null)"
-        [class.nlt-button-success]="recentlyCopiedAccountAddress"
-        [class.uk-disabled]="recentlyCopiedAccountAddress"
-        type="button"
-        ngxClipboard
-        [cbContent]="pendingAccountModel"
-        (cbOnSuccess)="copiedAccountAddress()"
-      >
-        <span class="nlt-icon" uk-icon="icon: copy;"></span>
-        {{ recentlyCopiedAccountAddress ? 'Copied!' : 'Copy address' }}
-      </button>
-    </ng-template>
-    
-    <div class="uk-margin-bottom uk-flex uk-flex-between">
-      <h2 class="uk-flex-1 uk-heading-divider uk-margin-remove">Receive Nano</h2>
-      <div class="uk-flex-none uk-visible@s uk-flex uk-flex-top uk-margin-medium-left">
-        <ng-container *ngTemplateOutlet="switchToMerchantModeButton"></ng-container>
+    <!-- Tab Buttons -->
+    <div class="uk-width-1-1 uk-text-center uk-margin">
+      <div class="send-types-frame">
+        <button
+          [class]="[
+            'send-types-tab',
+            'uk-text-truncate',
+            activeReceiveTab === 'standard'
+              ? 'send-types-tab-active'
+              : 'send-types-tab-inactive',
+            'uk-button',
+            activeReceiveTab === 'standard'
+              ? 'uk-button-primary'
+              : 'uk-button-secondary',
+          ]"
+          type="button"
+          (click)="setActiveReceiveTab('standard')"
+        >
+          Standard Receive
+        </button>
+        <button
+          [class]="[
+            'send-types-tab',
+            'uk-text-truncate',
+            activeReceiveTab === 'nanonym'
+              ? 'send-types-tab-active'
+              : 'send-types-tab-inactive',
+            'uk-button',
+            activeReceiveTab === 'nanonym'
+              ? 'uk-button-primary'
+              : 'uk-button-secondary',
+          ]"
+          type="button"
+          (click)="setActiveReceiveTab('nanonym')"
+        >
+          NanoNyms
+        </button>
       </div>
     </div>
 
-    <div class="uk-card uk-card-default uk-margin">
-      <div class="uk-card-body">
-        <div class="uk-form-horizontal receive-columns">
-
-          <div class="uk-flex-1">
-            <div class="uk-margin">
-              <label for="form-horizontal-select" class="uk-form-label label-block">Account</label>
-              <div class="form-account">
-                <select id="form-horizontal-select" class="uk-select" [(ngModel)]="pendingAccountModel" (change)="onSelectedAccountChange(pendingAccountModel)">
-                  <option [value]="0">All Accounts</option>
-                  <option *ngFor="let account of accounts" [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} XNO)</option>
-                </select>
-              </div>
+    <!-- NanoNym Tab Content -->
+    <div
+      *ngIf="activeReceiveTab === 'nanonym'"
+      class="uk-animation-slide-left-small"
+    >
+      <!-- Total NanoNym Balance Card -->
+      <div
+        *ngIf="nanonyms.length > 0"
+        class="uk-card uk-card-primary uk-card-body uk-margin"
+      >
+        <h3 class="uk-card-title">Total NanoNym Balance</h3>
+        <div uk-grid class="uk-child-width-1-3@m uk-child-width-1-1">
+          <div>
+            <div class="uk-text-meta">Total Balance</div>
+            <div class="uk-text-large">
+              <span class="amount-integer">{{
+                totalNanoNymBalance | rai: "mnano,true" | amountsplit: 0
+              }}</span>
+              <span class="amount-fractional">{{
+                totalNanoNymBalance | rai: "mnano,true" | amountsplit: 1
+              }}</span>
+              <span class="currency-name">XNO</span>
             </div>
-  
-            <div class="uk-margin">
-              <label for="form-horizontal-amount" class="uk-form-label label-block">Requested Amount <span class="uk-text-muted label-optional">optional</span></label>
-              <div class="form-amount">
-                <div class="uk-width-1-1 uk-inline">
-                  <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                  <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" placeholder="Amount of XNO" maxlength="40">
+          </div>
+          <div>
+            <div class="uk-text-meta">Active NanoNyms</div>
+            <div class="uk-text-large">{{ activeNanoNymCount }}</div>
+          </div>
+          <div>
+            <div class="uk-text-meta">Total Payments</div>
+            <div class="uk-text-large">{{ totalPaymentCount }}</div>
+          </div>
+        </div>
+      </div>
+
+      <ng-template #switchToMerchantModeButton>
+        <button
+          class="uk-width-1-1 uk-width-auto@s uk-button uk-button-primary uk-text-center nlt-icon-button nlt-button-green"
+          type="button"
+          (click)="merchantModeEnable()"
+        >
+          <span class="nlt-icon" uk-icon="icon: cart;"></span>
+          <span class="merchant-mode-text-full">Switch to Merchant Mode</span>
+          <span class="merchant-mode-text-short">Merchant Mode</span>
+        </button>
+      </ng-template>
+
+      <ng-template #copyPaymentUriButton>
+        <button
+          *ngIf="pendingAccountModel !== '0' && qrAmount != null"
+          class="uk-width-1-1 uk-width-5-6@s uk-button uk-button-primary uk-text-center nlt-icon-button"
+          [class.nlt-button-success]="recentlyCopiedPaymentUri"
+          [class.uk-disabled]="recentlyCopiedPaymentUri"
+          type="button"
+          ngxClipboard
+          [cbContent]="qrCodeUri"
+          (cbOnSuccess)="copiedPaymentUri()"
+        >
+          <span class="nlt-icon" uk-icon="icon: copy;"></span>
+          {{ recentlyCopiedPaymentUri ? "Copied!" : "Copy payment link" }}
+        </button>
+      </ng-template>
+
+      <ng-template #copyPaymentAddressButton>
+        <button
+          *ngIf="pendingAccountModel !== '0'"
+          class="uk-width-1-1 uk-width-5-6@s uk-button uk-text-center nlt-icon-button"
+          [class.uk-button-primary]="
+            recentlyCopiedAccountAddress || qrAmount == null
+          "
+          [class.uk-button-secondary]="
+            !recentlyCopiedAccountAddress && qrAmount != null
+          "
+          [class.nlt-button-success]="recentlyCopiedAccountAddress"
+          [class.uk-disabled]="recentlyCopiedAccountAddress"
+          type="button"
+          ngxClipboard
+          [cbContent]="pendingAccountModel"
+          (cbOnSuccess)="copiedAccountAddress()"
+        >
+          <span class="nlt-icon" uk-icon="icon: copy;"></span>
+          {{ recentlyCopiedAccountAddress ? "Copied!" : "Copy address" }}
+        </button>
+      </ng-template>
+
+      <!-- NanoNym List Section -->
+      <div *ngIf="nanonyms.length > 0" class="uk-margin-large-bottom">
+        <h2 class="uk-heading-divider">Your NanoNyms</h2>
+
+        <div class="uk-card uk-card-default">
+          <div class="uk-card-body">
+            <div class="uk-overflow-auto">
+              <table
+                class="uk-table uk-table-divider uk-table-hover uk-table-middle"
+              >
+                <thead>
+                  <tr>
+                    <th>Label</th>
+                    <th>Address</th>
+                    <th class="uk-text-right">Balance</th>
+                    <th class="uk-text-center">Status</th>
+                    <th class="uk-text-center">Payments</th>
+                    <th class="uk-text-right">Actions</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  <tr *ngFor="let nanoNym of nanonyms">
+                    <td>
+                      <strong>{{ nanoNym.label }}</strong>
+                    </td>
+                    <td>
+                      <div class="uk-flex uk-flex-middle">
+                        <div
+                          class="nano-address-monospace uk-flex-1"
+                          [title]="nanoNym.nnymAddress"
+                        >
+                          {{ nanoNym.nnymAddress.substring(0, 10) }}&hellip;{{
+                            nanoNym.nnymAddress.substring(
+                              nanoNym.nnymAddress.length - 5
+                            )
+                          }}
+                        </div>
+                        <div
+                          class="nano-address-actions uk-width-auto copy-container"
+                        >
+                          <ul class="uk-iconnav copy-icons">
+                            <li>
+                              <a
+                                ngxClipboard
+                                [cbContent]="nanoNym.nnymAddress"
+                                (cbOnSuccess)="copied()"
+                                uk-icon="icon: copy"
+                                title="Copy NanoNym address"
+                                uk-tooltip
+                              ></a>
+                            </li>
+                          </ul>
+                        </div>
+                      </div>
+                    </td>
+                    <td class="uk-text-right">
+                      <span class="amount-integer">{{
+                        nanoNym.balance | rai: "mnano,true" | amountsplit: 0
+                      }}</span>
+                      <span class="amount-fractional">{{
+                        nanoNym.balance | rai: "mnano,true" | amountsplit: 1
+                      }}</span>
+                      <span class="currency-name">XNO</span>
+                    </td>
+                    <td class="uk-text-center">
+                      <span
+                        class="uk-badge"
+                        [class.uk-badge-success]="nanoNym.status === 'active'"
+                        [class.uk-badge-warning]="nanoNym.status === 'archived'"
+                      >
+                        {{
+                          nanoNym.status === "active" ? "Active" : "Archived"
+                        }}
+                      </span>
+                    </td>
+                    <td class="uk-text-center">
+                      {{ nanoNym.paymentCount }}
+                    </td>
+                    <td class="uk-text-right">
+                      <button
+                        class="uk-button uk-button-small uk-button-default uk-margin-small-right"
+                        type="button"
+                        ngxClipboard
+                        [cbContent]="nanoNym.nnymAddress"
+                        (cbOnSuccess)="copied()"
+                        uk-tooltip
+                        title="Copy Address"
+                      >
+                        <span uk-icon="icon: copy; ratio: 0.8"></span>
+                      </button>
+                      <button
+                        class="uk-button uk-button-small uk-button-default uk-margin-small-right"
+                        type="button"
+                        (click)="showNanoNymQR(nanoNym)"
+                        uk-tooltip
+                        title="Show QR Code"
+                      >
+                        <span uk-icon="icon: image; ratio: 0.8"></span>
+                      </button>
+                      <button
+                        class="uk-button uk-button-small uk-button-default uk-margin-small-right"
+                        type="button"
+                        (click)="viewNanoNymDetails(nanoNym)"
+                        uk-tooltip
+                        title="View Details"
+                      >
+                        <span uk-icon="icon: info; ratio: 0.8"></span>
+                      </button>
+                      <button
+                        class="uk-button uk-button-small"
+                        [class.uk-button-secondary]="
+                          nanoNym.status === 'active'
+                        "
+                        [class.uk-button-primary]="
+                          nanoNym.status === 'archived'
+                        "
+                        type="button"
+                        (click)="toggleNanoNymStatus(nanoNym.index)"
+                        uk-tooltip
+                        [title]="
+                          nanoNym.status === 'active' ? 'Archive' : 'Reactivate'
+                        "
+                      >
+                        <span
+                          [attr.uk-icon]="
+                            nanoNym.status === 'active'
+                              ? 'icon: ban; ratio: 0.8'
+                              : 'icon: refresh; ratio: 0.8'
+                          "
+                        ></span>
+                      </button>
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Generate NanoNym Button -->
+      <div class="uk-margin uk-text-center">
+        <button
+          class="uk-button uk-button-primary uk-button-large"
+          type="button"
+          (click)="openGenerateNanoNymModal()"
+        >
+          <span uk-icon="icon: plus; ratio: 1.2"></span>
+          Generate New NanoNym
+        </button>
+      </div>
+    </div>
+
+    <!-- Standard Receive Tab Content -->
+    <div
+      *ngIf="activeReceiveTab === 'standard'"
+      class="uk-animation-slide-left-small"
+    >
+      <div class="uk-margin-bottom uk-flex uk-flex-between">
+        <div class="uk-flex-1"></div>
+        <div
+          class="uk-flex-none uk-visible@s uk-flex uk-flex-top uk-margin-medium-left"
+        >
+          <ng-container
+            *ngTemplateOutlet="switchToMerchantModeButton"
+          ></ng-container>
+        </div>
+      </div>
+
+      <div class="uk-card uk-card-default uk-margin">
+        <div class="uk-card-body">
+          <div class="uk-form-horizontal receive-columns">
+            <div class="uk-flex-1">
+              <div class="uk-margin">
+                <label
+                  for="form-horizontal-select"
+                  class="uk-form-label label-block"
+                  >Account</label
+                >
+                <div class="form-account">
+                  <select
+                    id="form-horizontal-select"
+                    class="uk-select"
+                    [(ngModel)]="pendingAccountModel"
+                    (change)="onSelectedAccountChange(pendingAccountModel)"
+                  >
+                    <option [value]="0">All Accounts</option>
+                    <option
+                      *ngFor="let account of accounts"
+                      [value]="account.id"
+                    >
+                      {{
+                        account.addressBookName
+                          ? account.addressBookName + " - "
+                          : "#" + account.index + " - "
+                      }}
+                      {{ account.id | squeeze }} ({{
+                        account.balance | rai: "mnano,true" | amountsplit: 0
+                      }}{{
+                        account.balance | rai: "mnano,true" | amountsplit: 1
+                      }}
+                      XNO)
+                    </option>
+                  </select>
                 </div>
-                <div style="margin-top: 10px;" *ngIf="settings.settings.displayCurrency">
+              </div>
+
+              <div class="uk-margin">
+                <label
+                  for="form-horizontal-amount"
+                  class="uk-form-label label-block"
+                  >Requested Amount
+                  <span class="uk-text-muted label-optional"
+                    >optional</span
+                  ></label
+                >
+                <div class="form-amount">
                   <div class="uk-width-1-1 uk-inline">
-                    <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
-                    <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" placeholder="Amount of {{ settings.settings.displayCurrency }}">
+                    <label
+                      class="uk-form-icon uk-link-reset uk-link-muted xno-symbol"
+                      for="form-horizontal-amount"
+                    ></label>
+                    <input
+                      [(ngModel)]="amountNano"
+                      [ngClass]="{ 'uk-form-danger': !validNano }"
+                      [attr.disabled]="pendingAccountModel == '0' || null"
+                      autocomplete="off"
+                      class="uk-input"
+                      id="form-horizontal-amount"
+                      (input)="nanoAmountChange()"
+                      style="padding-left: 52px !important"
+                      type="number"
+                      step="any"
+                      placeholder="Amount of XNO"
+                      maxlength="40"
+                    />
+                  </div>
+                  <div
+                    style="margin-top: 10px"
+                    *ngIf="settings.settings.displayCurrency"
+                  >
+                    <div class="uk-width-1-1 uk-inline">
+                      <a
+                        class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker"
+                        uk-tooltip
+                        title="Last Price: {{
+                          price.price.lastPrice
+                            | fiat: settings.settings.displayCurrency
+                        }} / XNO"
+                        >{{
+                          settings.settings.displayCurrency | currencySymbol
+                        }}</a
+                      >
+                      <input
+                        [(ngModel)]="amountFiat"
+                        [ngClass]="{ 'uk-form-danger': !validFiat }"
+                        [attr.disabled]="pendingAccountModel == '0' || null"
+                        autocomplete="off"
+                        (input)="fiatAmountChange()"
+                        style="padding-left: 52px !important"
+                        class="uk-input"
+                        id="form-horizontal-text-fiat"
+                        type="number"
+                        step="any"
+                        placeholder="Amount of {{
+                          settings.settings.displayCurrency
+                        }}"
+                      />
+                    </div>
                   </div>
                 </div>
               </div>
-            </div>
 
-            <div class="uk-margin uk-margin-medium-top uk-visible@s uk-flex uk-flex-column" style="width: 320px;">
-              <div class="uk-width-1-1 uk-flex" [style]="( (qrAmount != null) ? 'margin-bottom: 20px;' : '' )">
-                <ng-container *ngTemplateOutlet="copyPaymentUriButton"></ng-container>
-              </div>
-              <div class="uk-width-1-1 uk-flex">
-                <ng-container *ngTemplateOutlet="copyPaymentAddressButton"></ng-container>
-              </div>
-            </div>
-          </div>
-
-          <div class="uk-flex-1 qr-column">
-            <div *ngIf="qrCodeImage; else placeholder">
-              <div class="qr-code">
-                <img class="uk-position-absolute" [src]="qrCodeImage" alt="QR code">
-                <div class="qr-confirmation" [class]="qrSuccessClass">
-                  <div uk-icon="icon: check; ratio: 5"></div>
-                  <span class="uk-text-large uk-text-center">Nano Received</span>
+              <div
+                class="uk-margin uk-margin-medium-top uk-visible@s uk-flex uk-flex-column"
+                style="width: 320px"
+              >
+                <div
+                  class="uk-width-1-1 uk-flex"
+                  [style]="qrAmount != null ? 'margin-bottom: 20px;' : ''"
+                >
+                  <ng-container
+                    *ngTemplateOutlet="copyPaymentUriButton"
+                  ></ng-container>
                 </div>
-                <div style="padding-top: 100%"></div>
+                <div class="uk-width-1-1 uk-flex">
+                  <ng-container
+                    *ngTemplateOutlet="copyPaymentAddressButton"
+                  ></ng-container>
+                </div>
               </div>
             </div>
-            <ng-template #placeholder>
-              <div class="qr-code qr-placeholder">
-                <div class="uk-position-absolute text-half-muted" *ngIf="(pendingAccountModel === '0')">Select an account<br/>to view QR code</div>
-                <div class="uk-position-absolute text-half-muted" *ngIf="(pendingAccountModel !== '0')"><div uk-spinner="ratio: 3;"></div></div>
-                <div style="padding-top: 100%"></div>
+
+            <div class="uk-flex-1 qr-column">
+              <div *ngIf="qrCodeImage; else placeholder">
+                <div class="qr-code">
+                  <img
+                    class="uk-position-absolute"
+                    [src]="qrCodeImage"
+                    alt="QR code"
+                  />
+                  <div class="qr-confirmation" [class]="qrSuccessClass">
+                    <div uk-icon="icon: check; ratio: 5"></div>
+                    <span class="uk-text-large uk-text-center"
+                      >Nano Received</span
+                    >
+                  </div>
+                  <div style="padding-top: 100%"></div>
+                </div>
               </div>
-            </ng-template>
-            <div>
-              <div class="uk-flex uk-flex-center uk-flex-middle uk-text-center qr-address" *ngIf="(pendingAccountModel !== '0')">
-                <app-nano-account-id [accountID]="pendingAccountModel" middle="break" class="nano-address-monospace uk-width-auto" style="max-width: 90%;"></app-nano-account-id>
-              </div>
-              <div class="uk-margin-medium-top uk-hidden@s nlt-button-group uk-flex uk-flex-column uk-flex-middle">
-                <ng-container *ngTemplateOutlet="copyPaymentUriButton"></ng-container>
-                <ng-container *ngTemplateOutlet="copyPaymentAddressButton"></ng-container>
-                <ng-container *ngTemplateOutlet="switchToMerchantModeButton"></ng-container>
+              <ng-template #placeholder>
+                <div class="qr-code qr-placeholder">
+                  <div
+                    class="uk-position-absolute text-half-muted"
+                    *ngIf="pendingAccountModel === '0'"
+                  >
+                    Select an account<br />to view QR code
+                  </div>
+                  <div
+                    class="uk-position-absolute text-half-muted"
+                    *ngIf="pendingAccountModel !== '0'"
+                  >
+                    <div uk-spinner="ratio: 3;"></div>
+                  </div>
+                  <div style="padding-top: 100%"></div>
+                </div>
+              </ng-template>
+              <div>
+                <div
+                  class="uk-flex uk-flex-center uk-flex-middle uk-text-center qr-address"
+                  *ngIf="pendingAccountModel !== '0'"
+                >
+                  <app-nano-account-id
+                    [accountID]="pendingAccountModel"
+                    middle="break"
+                    class="nano-address-monospace uk-width-auto"
+                    style="max-width: 90%"
+                  ></app-nano-account-id>
+                </div>
+                <div
+                  class="uk-margin-medium-top uk-hidden@s nlt-button-group uk-flex uk-flex-column uk-flex-middle"
+                >
+                  <ng-container
+                    *ngTemplateOutlet="copyPaymentUriButton"
+                  ></ng-container>
+                  <ng-container
+                    *ngTemplateOutlet="copyPaymentAddressButton"
+                  ></ng-container>
+                  <ng-container
+                    *ngTemplateOutlet="switchToMerchantModeButton"
+                  ></ng-container>
+                </div>
               </div>
             </div>
           </div>
-                  
         </div>
       </div>
-    </div>
 
-    <div class="transactions-list-header uk-width-1-1 uk-flex uk-flex-center uk-flex-middle uk-margin-small-bottom">
-      <h3 class="uk-margin-remove-bottom">Incoming Transactions</h3>
-      <ul class="uk-width-auto uk-iconnav uk-margin-remove-left" style="margin-top: -1px;">
-        <li>
-          <div
-            uk-spinner="ratio: 0.5;"
-            class="icon-transactions-refresh spinner"
-            *ngIf="loadingIncomingTxList else notUpdatingTxList"
-          ></div>
-          <ng-template #notUpdatingTxList>
-            <a uk-icon="icon: refresh;" class="icon-transactions-refresh" (click)="getPending()" uk-tooltip title="Reload incoming transactions from the network"></a>
-          </ng-template>
-        </li>
-      </ul>
-    </div>
+      <div
+        class="transactions-list-header uk-width-1-1 uk-flex uk-flex-center uk-flex-middle uk-margin-small-bottom"
+      >
+        <h3 class="uk-margin-remove-bottom">Incoming Transactions</h3>
+        <ul
+          class="uk-width-auto uk-iconnav uk-margin-remove-left"
+          style="margin-top: -1px"
+        >
+          <li>
+            <div
+              uk-spinner="ratio: 0.5;"
+              class="icon-transactions-refresh spinner"
+              *ngIf="loadingIncomingTxList; else notUpdatingTxList"
+            ></div>
+            <ng-template #notUpdatingTxList>
+              <a
+                uk-icon="icon: refresh;"
+                class="icon-transactions-refresh"
+                (click)="getPending()"
+                uk-tooltip
+                title="Reload incoming transactions from the network"
+              ></a>
+            </ng-template>
+          </li>
+        </ul>
+      </div>
 
-    <div uk-grid>
-      <div class="uk-width-1-1">
-        <div class="transactions-list-mobile only-on-small-viewports">
-          <div
-            class="date-header text-half-muted"
-            *ngIf="(pendingAccountModel !== '0')"
-          >{{ selectedAccountAddressBookName }}</div>
-          <ng-container *ngFor="let transaction of pendingBlocksForSelectedAccount; let transactionIdx = index;">
+      <div uk-grid>
+        <div class="uk-width-1-1">
+          <div class="transactions-list-mobile only-on-small-viewports">
             <div
               class="date-header text-half-muted"
-              *ngIf="(
-                    (pendingAccountModel === '0')
-                && (
-                    ( pendingBlocksForSelectedAccount[transactionIdx - 1] == null )
-                  || (
-                      transaction.destinationAddressBookName
-                    !== pendingBlocksForSelectedAccount[transactionIdx - 1].destinationAddressBookName
-                  )
-                )
-              )"
-            >{{ transaction.destinationAddressBookName }}</div>
-            <app-nano-transaction-mobile
-              [transaction]="transaction"
-              [settingIdenticonsStyle]="settings.settings.identiconsStyle"
-              (click)="showMobileMenuForTransaction(transaction)"
-            ></app-nano-transaction-mobile>
-          </ng-container>
+              *ngIf="pendingAccountModel !== '0'"
+            >
+              {{ selectedAccountAddressBookName }}
+            </div>
+            <ng-container
+              *ngFor="
+                let transaction of pendingBlocksForSelectedAccount;
+                let transactionIdx = index
+              "
+            >
+              <div
+                class="date-header text-half-muted"
+                *ngIf="
+                  pendingAccountModel === '0' &&
+                  (pendingBlocksForSelectedAccount[transactionIdx - 1] ==
+                    null ||
+                    transaction.destinationAddressBookName !==
+                      pendingBlocksForSelectedAccount[transactionIdx - 1]
+                        .destinationAddressBookName)
+                "
+              >
+                {{ transaction.destinationAddressBookName }}
+              </div>
+              <app-nano-transaction-mobile
+                [transaction]="transaction"
+                [settingIdenticonsStyle]="settings.settings.identiconsStyle"
+                (click)="showMobileMenuForTransaction(transaction)"
+              ></app-nano-transaction-mobile>
+            </ng-container>
 
-          <div class="rounded-area" *ngIf="!loadingIncomingTxList && !pendingBlocksForSelectedAccount.length">
-            <div style="text-align: center;">{{
-                (pendingAccountModel === '0')
-              ? 'No new incoming transactions'
-              : 'No new incoming transactions for selected account'
-            }}</div>
+            <div
+              class="rounded-area"
+              *ngIf="
+                !loadingIncomingTxList &&
+                !pendingBlocksForSelectedAccount.length
+              "
+            >
+              <div style="text-align: center">
+                {{
+                  pendingAccountModel === "0"
+                    ? "No new incoming transactions"
+                    : "No new incoming transactions for selected account"
+                }}
+              </div>
+            </div>
+            <div class="rounded-area" *ngIf="loadingIncomingTxList">
+              <div style="text-align: center">
+                <span class="uk-margin-right" uk-spinner></span> Loading
+                incoming transactions...
+              </div>
+            </div>
           </div>
-          <div class="rounded-area" *ngIf="loadingIncomingTxList">
-            <div style="text-align: center;"><span class="uk-margin-right" uk-spinner></span> Loading incoming transactions...</div>
-          </div>
+
+          <table
+            class="transactions-list hide-on-small-viewports uk-table uk-table-striped uk-table-small"
+            style="margin-top: 0"
+          >
+            <thead>
+              <tr>
+                <th scope="col" class="type-column"></th>
+                <th scope="col" class="account-column">Account / Block</th>
+                <th scope="col" class="amount-column">Amount</th>
+                <th scope="col" class="date-column">Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr
+                *ngFor="let pending of pendingBlocksForSelectedAccount"
+                [class]="{ 'uk-text-muted': true }"
+              >
+                <td class="type-column">
+                  <span
+                    class="type uk-text-small"
+                    uk-icon="icon: plus-circle; ratio: 1.2;"
+                  ></span>
+                </td>
+                <td class="account-column uk-visible-toggle uk-text-truncate">
+                  <div uk-grid class="uk-flex-nowrap">
+                    <div
+                      class="uk-width-auto uk-text-truncate"
+                      style="max-width: calc(100% - 35px)"
+                    >
+                      <a
+                        [routerLink]="'/account/' + pending.account"
+                        class="account-container uk-text-truncate"
+                        title="View Account Details"
+                        uk-tooltip
+                      >
+                        <div class="identicon-name-row uk-text-truncate">
+                          <app-nano-identicon
+                            scale="6"
+                            [accountID]="pending.account"
+                            [settingIdenticonsStyle]="
+                              settings.settings.identiconsStyle
+                            "
+                            class="nano-identicon"
+                            *ngIf="settings.settings.identiconsStyle !== 'none'"
+                          ></app-nano-identicon>
+                          <div
+                            class="account-label uk-text-truncate"
+                            *ngIf="pending.addressBookName"
+                          >
+                            {{ pending.addressBookName }}
+                          </div>
+                        </div>
+                        <div
+                          class="nano-address-clickable nano-address-monospace uk-text-truncate"
+                        >
+                          <app-nano-account-id
+                            [accountID]="pending.account"
+                            middle="auto"
+                          ></app-nano-account-id>
+                        </div>
+                      </a>
+                    </div>
+                    <div
+                      class="nano-address-actions uk-width-auto uk-flex uk-flex-bottom"
+                    >
+                      <ul class="uk-iconnav">
+                        <li>
+                          <a
+                            ngxClipboard
+                            [cbContent]="pending.account"
+                            (cbOnSuccess)="copied()"
+                            uk-icon="icon: copy"
+                            title="Copy Account Address"
+                            uk-tooltip
+                          ></a>
+                        </li>
+                      </ul>
+                    </div>
+                  </div>
+                  <a
+                    [routerLink]="'/transaction/' + pending.hash"
+                    class="uk-link-text uk-text-small uk-text-muted uk-text-truncate block-hash block-hash-monospace"
+                    title="View Block Details"
+                    uk-tooltip
+                    >{{ pending.hash }}</a
+                  >
+                  <ng-container *ngIf="pendingAccountModel === '0'">
+                    <div class="arrow-down">
+                      <div
+                        class="icon"
+                        uk-icon="icon: chevron-down; ratio: 1.2;"
+                      ></div>
+                    </div>
+                    <div uk-grid class="uk-flex-nowrap">
+                      <div
+                        class="uk-width-auto uk-text-truncate"
+                        style="max-width: calc(100% - 35px)"
+                      >
+                        <a
+                          [routerLink]="'/account/' + pending.destination"
+                          class="account-container uk-text-truncate"
+                          title="View Account Details"
+                          uk-tooltip
+                        >
+                          <div class="identicon-name-row uk-text-truncate">
+                            <app-nano-identicon
+                              scale="6"
+                              [accountID]="pending.destination"
+                              [settingIdenticonsStyle]="
+                                settings.settings.identiconsStyle
+                              "
+                              class="nano-identicon"
+                              *ngIf="
+                                settings.settings.identiconsStyle !== 'none'
+                              "
+                            ></app-nano-identicon>
+                            <div
+                              class="account-label uk-text-truncate"
+                              *ngIf="pending.destinationAddressBookName"
+                            >
+                              {{ pending.destinationAddressBookName }}
+                            </div>
+                          </div>
+                          <div
+                            class="nano-address-clickable nano-address-monospace uk-text-truncate"
+                          >
+                            <app-nano-account-id
+                              [accountID]="pending.destination"
+                              middle="auto"
+                            ></app-nano-account-id>
+                          </div>
+                        </a>
+                      </div>
+                      <div
+                        class="nano-address-actions uk-width-auto uk-flex uk-flex-bottom"
+                      >
+                        <ul class="uk-iconnav">
+                          <li>
+                            <a
+                              ngxClipboard
+                              [cbContent]="pending.destination"
+                              (cbOnSuccess)="copied()"
+                              uk-icon="icon: copy"
+                              title="Copy Account Address"
+                              uk-tooltip
+                            ></a>
+                          </li>
+                        </ul>
+                      </div>
+                    </div>
+                  </ng-container>
+                </td>
+                <ng-template #transactionActions>
+                  <div class="button-container">
+                    <button
+                      *ngIf="!pending.loading"
+                      class="uk-button uk-button-primary uk-text-center uk-width-auto"
+                      type="button"
+                      (click)="receiveReceivableBlock(pending)"
+                    >
+                      RECEIVE
+                    </button>
+                    <button
+                      *ngIf="pending.loading"
+                      class="uk-button uk-button-secondary uk-disabled uk-button-small nlt-icon-button nlt-icon-button-inline"
+                    >
+                      <span class="spinner" uk-spinner="ratio: 0.5;"></span>
+                      Receiving
+                    </button>
+                  </div>
+                </ng-template>
+                <td
+                  class="amount-column uk-text-middle uk-text-muted"
+                  [title]="
+                    'Incoming Transaction' +
+                    (pending.amountRaw && pending.amountRaw > 0
+                      ? ', +' + pending.amountRaw.toString(10) + ' raw'
+                      : '')
+                  "
+                >
+                  <span class="uk-text-small">Ready to receive</span><br />
+                  <span class="amount-integer">{{
+                    pending.amount | rai: "mnano,true" | amountsplit: 0
+                  }}</span>
+                  <span class="amount-fractional">{{
+                    pending.amount | rai: "mnano,true" | amountsplit: 1
+                  }}</span>
+                  <span class="currency-name">XNO</span>
+                  <div class="compact-actions-date">
+                    <ng-template
+                      [ngTemplateOutlet]="transactionActions"
+                    ></ng-template>
+                  </div>
+                </td>
+                <td class="date-column uk-text-middle uk-text-truncate">
+                  <ng-template
+                    [ngTemplateOutlet]="transactionActions"
+                  ></ng-template>
+                </td>
+              </tr>
+              <tr
+                *ngIf="
+                  !loadingIncomingTxList &&
+                  !pendingBlocksForSelectedAccount.length
+                "
+              >
+                <td colspan="4" style="text-align: center">
+                  {{
+                    pendingAccountModel === "0"
+                      ? "No new incoming transactions"
+                      : "No new incoming transactions for selected account"
+                  }}
+                </td>
+              </tr>
+              <tr *ngIf="loadingIncomingTxList">
+                <td colspan="4" style="text-align: center">
+                  <span class="uk-margin-right" uk-spinner></span> Loading
+                  incoming transactions...
+                </td>
+              </tr>
+            </tbody>
+          </table>
+
+          <table
+            class="uk-table uk-table-striped uk-table-small"
+            *ngIf="settings.settings.minimumReceive"
+          >
+            <thead>
+              <tr class="uk-alert uk-alert-primary missing-accounts-hint">
+                <td colspan="4" style="text-align: center">
+                  <span uk-icon="icon: info"></span> Minimum Receive is set to
+                  <a
+                    class="hint-action"
+                    routerLink="/configure-app"
+                    routerLinkActive="active"
+                    *ngIf="
+                      util.nano
+                        .mnanoToRaw(this.settings.settings.minimumReceive)
+                        .toFixed().length > 24;
+                      else amountInRaw
+                    "
+                    >{{
+                      util.nano
+                        .mnanoToRaw(this.settings.settings.minimumReceive)
+                        .toFixed()
+                        | rai: "mnano,true"
+                        | amountsplit: 0
+                    }}{{
+                      util.nano
+                        .mnanoToRaw(this.settings.settings.minimumReceive)
+                        .toFixed()
+                        | rai: "mnano,true"
+                        | amountsplit: 1
+                    }}
+                    XNO</a
+                  ><ng-template #amountInRaw
+                    ><a
+                      class="hint-action"
+                      routerLink="/configure-app"
+                      routerLinkActive="active"
+                      >{{
+                        util.nano
+                          .mnanoToRaw(this.settings.settings.minimumReceive)
+                          .toFixed()
+                      }}
+                      raw</a
+                    ></ng-template
+                  >, transactions below this amount will be hidden.
+                </td>
+              </tr>
+            </thead>
+          </table>
         </div>
-
-        <table class="transactions-list hide-on-small-viewports uk-table uk-table-striped uk-table-small" style="margin-top: 0;">
-          <thead>
-          <tr>
-            <th scope="col" class="type-column"></th>
-            <th scope="col" class="account-column">Account / Block</th>
-            <th scope="col" class="amount-column">Amount</th>
-            <th scope="col" class="date-column">Actions</th>
-          </tr>
-          </thead>
-          <tbody>
-          <tr *ngFor="let pending of pendingBlocksForSelectedAccount" [class]="{ 'uk-text-muted': true }">
-            <td class="type-column">
-              <span class="type uk-text-small" uk-icon="icon: plus-circle; ratio: 1.2;"></span>
-            </td>
-            <td class="account-column uk-visible-toggle uk-text-truncate">
-              <div uk-grid class="uk-flex-nowrap">
-                <div class="uk-width-auto uk-text-truncate" style="max-width: calc(100% - 35px);">
-                  <a [routerLink]="'/account/' + pending.account" class="account-container uk-text-truncate" title="View Account Details" uk-tooltip>
-                    <div class="identicon-name-row uk-text-truncate">
-                      <app-nano-identicon scale="6" [accountID]="pending.account" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon" *ngIf="(settings.settings.identiconsStyle !== 'none')"></app-nano-identicon>
-                      <div class="account-label uk-text-truncate" *ngIf="pending.addressBookName">{{ pending.addressBookName }}</div>
-                    </div>
-                    <div class="nano-address-clickable nano-address-monospace uk-text-truncate">
-                      <app-nano-account-id [accountID]="pending.account" middle="auto"></app-nano-account-id>
-                    </div>
-                  </a>
-                </div>
-                <div class="nano-address-actions uk-width-auto uk-flex uk-flex-bottom">
-                  <ul class="uk-iconnav">
-                    <li><a ngxClipboard [cbContent]="pending.account" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip></a></li>
-                  </ul>
-                </div>
-              </div>
-              <a [routerLink]="'/transaction/' + pending.hash" class="uk-link-text uk-text-small uk-text-muted uk-text-truncate block-hash block-hash-monospace" title="View Block Details" uk-tooltip>{{ pending.hash }}</a>
-              <ng-container *ngIf="(pendingAccountModel === '0')">
-                <div class="arrow-down">
-                  <div class="icon" uk-icon="icon: chevron-down; ratio: 1.2;"></div>
-                </div>
-                <div uk-grid class="uk-flex-nowrap">
-                  <div class="uk-width-auto uk-text-truncate" style="max-width: calc(100% - 35px);">
-                    <a [routerLink]="'/account/' + pending.destination" class="account-container uk-text-truncate" title="View Account Details" uk-tooltip>
-                      <div class="identicon-name-row uk-text-truncate">
-                        <app-nano-identicon scale="6" [accountID]="pending.destination" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon" *ngIf="(settings.settings.identiconsStyle !== 'none')"></app-nano-identicon>
-                        <div class="account-label uk-text-truncate" *ngIf="pending.destinationAddressBookName">{{ pending.destinationAddressBookName }}</div>
-                      </div>
-                      <div class="nano-address-clickable nano-address-monospace uk-text-truncate">
-                        <app-nano-account-id [accountID]="pending.destination" middle="auto"></app-nano-account-id>
-                      </div>
-                    </a>
-                  </div>
-                  <div class="nano-address-actions uk-width-auto uk-flex uk-flex-bottom">
-                    <ul class="uk-iconnav">
-                      <li><a ngxClipboard [cbContent]="pending.destination" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip></a></li>
-                    </ul>
-                  </div>
-                </div>
-              </ng-container>
-            </td>
-            <ng-template #transactionActions>
-              <div class="button-container">
-                <button *ngIf="!pending.loading" class="uk-button uk-button-primary uk-text-center uk-width-auto" type="button" (click)="receiveReceivableBlock(pending)">RECEIVE</button>
-                <button *ngIf="pending.loading" class="uk-button uk-button-secondary uk-disabled uk-button-small nlt-icon-button nlt-icon-button-inline"><span class="spinner" uk-spinner="ratio: 0.5;"></span> Receiving</button>
-              </div>
-            </ng-template>
-            <td class="amount-column uk-text-middle uk-text-muted" [title]="('Incoming Transaction') + ( (pending.amountRaw && (pending.amountRaw > 0) ) ? ( ', +' + ( pending.amountRaw.toString(10) ) + ' raw' ) : '' )">
-              <span class="uk-text-small">Ready to receive</span><br>
-              <span class="amount-integer">{{ pending.amount | rai: 'mnano,true' | amountsplit: 0 }}</span>
-              <span class="amount-fractional">{{ pending.amount | rai: 'mnano,true' | amountsplit: 1 }}</span>
-              <span class="currency-name">XNO</span>
-              <div class="compact-actions-date">
-                <ng-template [ngTemplateOutlet]="transactionActions"></ng-template>
-              </div>
-            </td>
-            <td class="date-column uk-text-middle uk-text-truncate">
-              <ng-template [ngTemplateOutlet]="transactionActions"></ng-template>
-            </td>
-          </tr>
-          <tr *ngIf="!loadingIncomingTxList && !pendingBlocksForSelectedAccount.length">
-            <td colspan="4" style="text-align: center;">{{
-                (pendingAccountModel === '0')
-              ? 'No new incoming transactions'
-              : 'No new incoming transactions for selected account'
-            }}</td>
-          </tr>
-          <tr *ngIf="loadingIncomingTxList">
-            <td colspan="4" style="text-align: center;"><span class="uk-margin-right" uk-spinner></span> Loading incoming transactions...</td>
-          </tr>
-        </table>
-
-        <table class="uk-table uk-table-striped uk-table-small" *ngIf="settings.settings.minimumReceive">
-          <thead>
-            <tr class="uk-alert uk-alert-primary missing-accounts-hint">
-              <td colspan="4" style="text-align: center;"><span uk-icon="icon: info"></span> Minimum Receive is set to <a class="hint-action" routerLink="/configure-app" routerLinkActive="active" *ngIf="( util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed().length > 24 ) else amountInRaw">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 0 }}{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() | rai: 'mnano,true' | amountsplit: 1 }} XNO</a><ng-template #amountInRaw><a class="hint-action" routerLink="/configure-app" routerLinkActive="active">{{ util.nano.mnanoToRaw(this.settings.settings.minimumReceive).toFixed() }} raw</a></ng-template>, transactions below this amount will be hidden.</td>
-            </tr>
-          </thead>
-        </table>
-
       </div>
     </div>
-
   </div>
-</div>
 
-<div class="modal-position-bottom" id="mobile-transaction-menu-modal" uk-modal>
-  <div class="uk-modal-dialog">
-    <div class="uk-modal-body">
-      <div class="transactions-list-mobile">
-        <app-nano-transaction-mobile
-          [isInteractable]="false"
-          [transaction]="mobileTransactionData"
-          [settingIdenticonsStyle]="settings.settings.identiconsStyle"
-          *ngIf="mobileTransactionData"
-        ></app-nano-transaction-mobile>
-      </div>
-      <div class="uk-width-1-1" *ngIf="mobileTransactionData">
-        <hr>
-        <div
-          class="menu-option uk-text-success"
-          (click)="onReceiveFundsPress(mobileTransactionData)"
-        >
-          <span
-            class="icon icon-download" uk-icon="icon: download; ratio: 1.5;"
-            style="vertical-align: 2px;"
-            *ngIf="!mobileTransactionData.received"
-          ></span>
-          <span *ngIf="!mobileTransactionData.received && !mobileTransactionData.loading">Receive funds</span>
-          <span *ngIf="!mobileTransactionData.received && mobileTransactionData.loading">Receiving...</span>
-          <span
-            class="icon" uk-icon="icon: check; ratio: 1.3;"
-            style="vertical-align: 2px;"
-            *ngIf="mobileTransactionData.received"
-          ></span>
-          <span *ngIf="mobileTransactionData.received">Received!</span>
+  <div
+    class="modal-position-bottom"
+    id="mobile-transaction-menu-modal"
+    uk-modal
+  >
+    <div class="uk-modal-dialog">
+      <div class="uk-modal-body">
+        <div class="transactions-list-mobile">
+          <app-nano-transaction-mobile
+            [isInteractable]="false"
+            [transaction]="mobileTransactionData"
+            [settingIdenticonsStyle]="settings.settings.identiconsStyle"
+            *ngIf="mobileTransactionData"
+          ></app-nano-transaction-mobile>
         </div>
-        <div
-          class="menu-option"
-          [routerLink]="( '/transaction/' + mobileTransactionData.hash )"
-          (click)="mobileTransactionMenuModal.hide()"
-        >
-          <span class="icon" uk-icon="icon: search; ratio: 1.3;" style="vertical-align: 2px;"></span>
-          <span>View transaction details</span>
+        <div class="uk-width-1-1" *ngIf="mobileTransactionData">
+          <hr />
+          <div
+            class="menu-option uk-text-success"
+            (click)="onReceiveFundsPress(mobileTransactionData)"
+          >
+            <span
+              class="icon icon-download"
+              uk-icon="icon: download; ratio: 1.5;"
+              style="vertical-align: 2px"
+              *ngIf="!mobileTransactionData.received"
+            ></span>
+            <span
+              *ngIf="
+                !mobileTransactionData.received &&
+                !mobileTransactionData.loading
+              "
+              >Receive funds</span
+            >
+            <span
+              *ngIf="
+                !mobileTransactionData.received && mobileTransactionData.loading
+              "
+              >Receiving...</span
+            >
+            <span
+              class="icon"
+              uk-icon="icon: check; ratio: 1.3;"
+              style="vertical-align: 2px"
+              *ngIf="mobileTransactionData.received"
+            ></span>
+            <span *ngIf="mobileTransactionData.received">Received!</span>
+          </div>
+          <div
+            class="menu-option"
+            [routerLink]="'/transaction/' + mobileTransactionData.hash"
+            (click)="mobileTransactionMenuModal.hide()"
+          >
+            <span
+              class="icon"
+              uk-icon="icon: search; ratio: 1.3;"
+              style="vertical-align: 2px"
+            ></span>
+            <span>View transaction details</span>
+          </div>
         </div>
       </div>
     </div>
   </div>
 </div>
+<!-- End Standard Receive Tab -->
 
+<!-- Modals Section (shared across all tabs) -->
 <div class="merchant-mode-overlay" id="merchant-mode-modal" uk-modal>
   <div class="merchant-mode-contents uk-flex uk-flex-column uk-flex-middle">
     <div
@@ -342,31 +925,80 @@
       <div class="merchant-mode-logo"></div>
       <div
         class="merchant-mode-exit uk-flex uk-flex-middle"
-        [class.uk-visible@s]="(inMerchantModeQR === true)"
-        (click)="inMerchantModeQR ? merchantModeHideQR() : merchantModeDisable()"
+        [class.uk-visible@s]="inMerchantModeQR === true"
+        (click)="
+          inMerchantModeQR ? merchantModeHideQR() : merchantModeDisable()
+        "
       >
-        <span uk-icon="icon: close; ratio: 1.4;" class="uk-margin-small-right" style="margin-top: 2px;"></span>
-        <span class="label">{{ inMerchantModeQR ? 'Cancel Payment' : 'Exit Merchant Mode' }}</span>
+        <span
+          uk-icon="icon: close; ratio: 1.4;"
+          class="uk-margin-small-right"
+          style="margin-top: 2px"
+        ></span>
+        <span class="label">{{
+          inMerchantModeQR ? "Cancel Payment" : "Exit Merchant Mode"
+        }}</span>
       </div>
     </div>
-    <div class="merchant-centered-container uk-flex-1 uk-width-1-1 uk-flex uk-flex-column uk-flex-center uk-flex-middle uk-text-center">
-      <ng-container *ngIf="(inMerchantModePaymentComplete === false) && (inMerchantModeQR === false) && (pendingAccountModel === '0')">
+    <div
+      class="merchant-centered-container uk-flex-1 uk-width-1-1 uk-flex uk-flex-column uk-flex-center uk-flex-middle uk-text-center"
+    >
+      <ng-container
+        *ngIf="
+          inMerchantModePaymentComplete === false &&
+          inMerchantModeQR === false &&
+          pendingAccountModel === '0'
+        "
+      >
         <div class="uk-width-1-1 uk-card uk-card-default uk-margin-bottom">
           <div class="uk-card-body">
-            <p class="uk-text-large">Select the <span class="uk-text-primary">destination account</span></p>
-            <select id="form-horizontal-select" class="uk-select" [(ngModel)]="pendingAccountModel" (change)="onSelectedAccountChange(pendingAccountModel)">
+            <p class="uk-text-large">
+              Select the
+              <span class="uk-text-primary">destination account</span>
+            </p>
+            <select
+              id="form-horizontal-select"
+              class="uk-select"
+              [(ngModel)]="pendingAccountModel"
+              (change)="onSelectedAccountChange(pendingAccountModel)"
+            >
               <option [value]="0">–</option>
-              <option *ngFor="let account of accounts" [value]="account.id">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }}</option>
+              <option *ngFor="let account of accounts" [value]="account.id">
+                {{
+                  account.addressBookName
+                    ? account.addressBookName + " - "
+                    : "#" + account.index + " - "
+                }}
+                {{ account.id | squeeze }}
+              </option>
             </select>
           </div>
         </div>
       </ng-container>
-      <ng-container *ngIf="(inMerchantModePaymentComplete === false) && (inMerchantModeQR === false) && (pendingAccountModel !== '0')">
+      <ng-container
+        *ngIf="
+          inMerchantModePaymentComplete === false &&
+          inMerchantModeQR === false &&
+          pendingAccountModel !== '0'
+        "
+      >
         <div class="identicon-name-row uk-text-truncate">
-          <app-nano-identicon scale="6" [accountID]="pendingAccountModel" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon" *ngIf="(settings.settings.identiconsStyle !== 'none')"></app-nano-identicon>
-          <div class="account-label uk-text-truncate">{{ selectedAccountAddressBookName }}</div>
+          <app-nano-identicon
+            scale="6"
+            [accountID]="pendingAccountModel"
+            [settingIdenticonsStyle]="settings.settings.identiconsStyle"
+            class="nano-identicon"
+            *ngIf="settings.settings.identiconsStyle !== 'none'"
+          ></app-nano-identicon>
+          <div class="account-label uk-text-truncate">
+            {{ selectedAccountAddressBookName }}
+          </div>
         </div>
-        <app-nano-account-id [accountID]="pendingAccountModel" middle="off" class="nano-address-monospace uk-width-auto"></app-nano-account-id>
+        <app-nano-account-id
+          [accountID]="pendingAccountModel"
+          middle="off"
+          class="nano-address-monospace uk-width-auto"
+        ></app-nano-account-id>
         <button
           class="uk-width-auto uk-button uk-button-secondary uk-text-center nlt-icon-button uk-margin-small-top"
           type="button"
@@ -378,20 +1010,63 @@
 
         <div
           class="uk-width-1-1 uk-card uk-card-default uk-margin-bottom"
-          style="margin-top: 60px;"
+          style="margin-top: 60px"
         >
           <div class="uk-card-body">
-            <p class="uk-text-large">Enter the <span class="uk-text-primary">requested amount</span></p>
+            <p class="uk-text-large">
+              Enter the <span class="uk-text-primary">requested amount</span>
+            </p>
             <div class="form-amount">
               <div class="uk-width-1-1 uk-inline">
-                <label class="uk-form-icon uk-link-reset uk-link-muted xno-symbol" for="form-horizontal-amount"></label>
-                <input [(ngModel)]="amountNano" [ngClass]="{ 'uk-form-danger': !validNano }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" class="uk-input" id="form-horizontal-amount" (input)="nanoAmountChange()" style="padding-left: 52px !important;" type="number" step="any" placeholder="Amount of XNO" maxlength="40">
+                <label
+                  class="uk-form-icon uk-link-reset uk-link-muted xno-symbol"
+                  for="form-horizontal-amount"
+                ></label>
+                <input
+                  [(ngModel)]="amountNano"
+                  [ngClass]="{ 'uk-form-danger': !validNano }"
+                  [attr.disabled]="pendingAccountModel == '0' || null"
+                  autocomplete="off"
+                  class="uk-input"
+                  id="form-horizontal-amount"
+                  (input)="nanoAmountChange()"
+                  style="padding-left: 52px !important"
+                  type="number"
+                  step="any"
+                  placeholder="Amount of XNO"
+                  maxlength="40"
+                />
               </div>
-              <div style="margin-top: 10px;" *ngIf="settings.settings.displayCurrency">
-                <p class="text-half-muted" style="margin: 0 0 14px 0;">or</p>
+              <div
+                style="margin-top: 10px"
+                *ngIf="settings.settings.displayCurrency"
+              >
+                <p class="text-half-muted" style="margin: 0 0 14px 0">or</p>
                 <div class="uk-width-1-1 uk-inline">
-                  <a class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker" uk-tooltip title="Last Price: {{ price.price.lastPrice | fiat: settings.settings.displayCurrency }} / XNO">{{ settings.settings.displayCurrency | currencySymbol }}</a>
-                  <input [(ngModel)]="amountFiat" [ngClass]="{ 'uk-form-danger': !validFiat }" [attr.disabled]="pendingAccountModel == '0' || null" autocomplete="off" (input)="fiatAmountChange()" style="padding-left: 52px !important;" class="uk-input" id="form-horizontal-text-fiat" type="number" step="any" placeholder="Amount of {{ settings.settings.displayCurrency }}">
+                  <a
+                    class="uk-form-icon uk-link-reset uk-link-muted fiat-currency-ticker"
+                    uk-tooltip
+                    title="Last Price: {{
+                      price.price.lastPrice
+                        | fiat: settings.settings.displayCurrency
+                    }} / XNO"
+                    >{{ settings.settings.displayCurrency | currencySymbol }}</a
+                  >
+                  <input
+                    [(ngModel)]="amountFiat"
+                    [ngClass]="{ 'uk-form-danger': !validFiat }"
+                    [attr.disabled]="pendingAccountModel == '0' || null"
+                    autocomplete="off"
+                    (input)="fiatAmountChange()"
+                    style="padding-left: 52px !important"
+                    class="uk-input"
+                    id="form-horizontal-text-fiat"
+                    type="number"
+                    step="any"
+                    placeholder="Amount of {{
+                      settings.settings.displayCurrency
+                    }}"
+                  />
                 </div>
               </div>
             </div>
@@ -406,32 +1081,49 @@
           </div>
         </div>
       </ng-container>
-      <ng-container *ngIf="(inMerchantModeQR === true)">
+      <ng-container *ngIf="inMerchantModeQR === true">
         <p class="uk-text-large uk-margin-remove-bottom">Send</p>
-        <p class="uk-text-large uk-text-primary uk-margin-remove-top" *ngIf="(amountNano === '')">
+        <p
+          class="uk-text-large uk-text-primary uk-margin-remove-top"
+          *ngIf="amountNano === ''"
+        >
           <span class="merchant-mode-currency-name">XNO</span>
         </p>
-        <p class="uk-text-large uk-text-primary uk-margin-remove-top" *ngIf="(amountNano !== '')">
+        <p
+          class="uk-text-large uk-text-primary uk-margin-remove-top"
+          *ngIf="amountNano !== ''"
+        >
+          <span class="merchant-mode-amount-integer">{{
+            merchantModeRawRequestedQR | rai: "mnano,true" | amountsplit: 0
+          }}</span>
+          <span class="merchant-mode-amount-fractional">{{
+            merchantModeRawRequestedQR | rai: "mnano,true" | amountsplit: 1
+          }}</span>
           <span
-            class="merchant-mode-amount-integer"
-          >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 0 }}</span>
-          <span
-            class="merchant-mode-amount-fractional"
-          >{{ merchantModeRawRequestedQR | rai: 'mnano,true' | amountsplit: 1 }}</span>
-          <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
+            class="merchant-mode-currency-name merchant-mode-currency-margin"
+            >XNO</span
+          >
         </p>
-        <p class="text-half-muted" style="margin: -16px 0 10px 0;">to</p>
+        <p class="text-half-muted" style="margin: -16px 0 10px 0">to</p>
         <app-nano-account-id
-          [accountID]="pendingAccountModel" middle="break"
+          [accountID]="pendingAccountModel"
+          middle="break"
           class="nano-address-monospace uk-width-auto"
-          style="display: inline-block; max-width: 325px;"
+          style="display: inline-block; max-width: 325px"
         ></app-nano-account-id>
         <div
           class="uk-width-1-1 uk-flex uk-flex-center uk-margin-top"
-          style="margin-bottom: 40px;"
+          style="margin-bottom: 40px"
         >
-          <img class="merchant-mode-qr-code" [src]="qrCodeImage" alt="QR code" *ngIf="qrCodeImage">
-          <div class="merchant-mode-qr-code" *ngIf="!qrCodeImage"><div uk-spinner="ratio: 2;"></div></div>
+          <img
+            class="merchant-mode-qr-code"
+            [src]="qrCodeImage"
+            alt="QR code"
+            *ngIf="qrCodeImage"
+          />
+          <div class="merchant-mode-qr-code" *ngIf="!qrCodeImage">
+            <div uk-spinner="ratio: 2;"></div>
+          </div>
         </div>
         <div
           class="uk-width-1-1 uk-card uk-card-default uk-margin-bottom"
@@ -439,19 +1131,19 @@
         >
           <div class="uk-card-body">
             <p
-              *ngIf="(amountNano === '')"
+              *ngIf="amountNano === ''"
               class="uk-text-large text-half-muted uk-margin-remove-bottom"
             >
               Received
             </p>
             <p
-              *ngIf="(amountNano !== '') && prompt.moreThanRequested"
+              *ngIf="amountNano !== '' && prompt.moreThanRequested"
               class="uk-text-large text-half-muted uk-margin-remove-bottom"
             >
               Received <span class="uk-text-success">more</span> than requested
             </p>
             <p
-              *ngIf="(amountNano !== '') && prompt.lessThanRequested"
+              *ngIf="amountNano !== '' && prompt.lessThanRequested"
               class="uk-text-large text-half-muted uk-margin-remove-bottom"
             >
               Received <span class="uk-text-warning">less</span> than requested
@@ -461,18 +1153,21 @@
               [class.uk-text-success]="prompt.moreThanRequested"
               [class.uk-text-warning]="prompt.lessThanRequested"
             >
+              <span class="merchant-mode-amount-integer">{{
+                prompt.amountRaw | rai: "mnano,true" | amountsplit: 0
+              }}</span>
+              <span class="merchant-mode-amount-fractional">{{
+                prompt.amountRaw | rai: "mnano,true" | amountsplit: 1
+              }}</span>
               <span
-                class="merchant-mode-amount-integer"
-              >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 0 }}</span>
-              <span
-                class="merchant-mode-amount-fractional"
-              >{{ prompt.amountRaw | rai: 'mnano,true' | amountsplit: 1 }}</span>
-              <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
+                class="merchant-mode-currency-name merchant-mode-currency-margin"
+                >XNO</span
+              >
             </p>
             <div
               *ngIf="prompt.amountHiddenRaw.gt(0)"
               class="uk-text-small text-half-muted block-hash-monospace"
-              style="margin: -22px 0 28px 0;"
+              style="margin: -22px 0 28px 0"
             >
               +{{ prompt.amountHiddenRaw.toString(10) }} raw
             </div>
@@ -482,7 +1177,11 @@
               type="button"
               (click)="merchantModeMarkCompleteFromPrompt(prompt)"
             >
-              <span class="nlt-icon" uk-icon="icon: check;" style="margin-top: -2px;"></span>
+              <span
+                class="nlt-icon"
+                uk-icon="icon: check;"
+                style="margin-top: -2px"
+              ></span>
               Mark Payment Complete
             </button>
             <button
@@ -491,7 +1190,11 @@
               type="button"
               (click)="merchantModeSubtractAmountFromPrompt(prompt, promptIdx)"
             >
-              <span class="nlt-icon" uk-icon="icon: pencil;" style="margin-top: -2px;"></span>
+              <span
+                class="nlt-icon"
+                uk-icon="icon: pencil;"
+                style="margin-top: -2px"
+              ></span>
               Subtract From Amount
             </button>
             <button
@@ -499,13 +1202,19 @@
               type="button"
               (click)="merchantModeDiscardPrompt(promptIdx)"
             >
-              <span class="nlt-icon" uk-icon="icon: close;" style="margin-top: -2px;"></span>
+              <span
+                class="nlt-icon"
+                uk-icon="icon: close;"
+                style="margin-top: -2px"
+              ></span>
               Discard As Unrelated
             </button>
           </div>
         </div>
         <ng-container *ngIf="merchantModePrompts.length === 0">
-          <p class="uk-text-large uk-margin-top text-half-muted">Awaiting payment...</p>
+          <p class="uk-text-large uk-margin-top text-half-muted">
+            Awaiting payment...
+          </p>
           <button
             class="uk-width-auto uk-button uk-text-center nlt-icon-button"
             [class.uk-button-primary]="!loadingIncomingTxList"
@@ -514,59 +1223,92 @@
             type="button"
             (click)="!loadingIncomingTxList && getPending()"
           >
-            <span class="nlt-icon" uk-icon="icon: refresh;" style="margin-top: -2px;" *ngIf="!loadingIncomingTxList"></span>
-            <span class="spinner" uk-spinner="ratio: 0.5;" *ngIf="loadingIncomingTxList"></span>
-            {{ loadingIncomingTxList ? 'Checking Payment...' : 'Check Payment' }}
+            <span
+              class="nlt-icon"
+              uk-icon="icon: refresh;"
+              style="margin-top: -2px"
+              *ngIf="!loadingIncomingTxList"
+            ></span>
+            <span
+              class="spinner"
+              uk-spinner="ratio: 0.5;"
+              *ngIf="loadingIncomingTxList"
+            ></span>
+            {{
+              loadingIncomingTxList ? "Checking Payment..." : "Check Payment"
+            }}
           </button>
         </ng-container>
         <div
           class="merchant-mode-exit uk-flex uk-flex-middle uk-hidden@s"
-          style="margin-top: 70px;"
+          style="margin-top: 70px"
           (click)="merchantModeHideQR()"
         >
-          <span uk-icon="icon: close; ratio: 1.4;" class="uk-margin-small-right" style="margin-top: 2px;"></span>
+          <span
+            uk-icon="icon: close; ratio: 1.4;"
+            class="uk-margin-small-right"
+            style="margin-top: 2px"
+          ></span>
           <span class="label">Cancel Payment</span>
         </div>
       </ng-container>
-      <ng-container *ngIf="(inMerchantModePaymentComplete === true)">
-        <p class="uk-text-large uk-margin-remove-bottom uk-text-success">Received</p>
+      <ng-container *ngIf="inMerchantModePaymentComplete === true">
+        <p class="uk-text-large uk-margin-remove-bottom uk-text-success">
+          Received
+        </p>
         <p class="uk-text-large uk-text-success uk-margin-remove-top">
+          <span class="merchant-mode-amount-integer">{{
+            merchantModeRawReceivedTotal | rai: "mnano,true" | amountsplit: 0
+          }}</span>
+          <span class="merchant-mode-amount-fractional">{{
+            merchantModeRawReceivedTotal | rai: "mnano,true" | amountsplit: 1
+          }}</span>
           <span
-            class="merchant-mode-amount-integer"
-          >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 }}</span>
-          <span
-            class="merchant-mode-amount-fractional"
-          >{{ merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 }}</span>
-          <span class="merchant-mode-currency-name merchant-mode-currency-margin">XNO</span>
+            class="merchant-mode-currency-name merchant-mode-currency-margin"
+            >XNO</span
+          >
         </p>
         <div
           *ngIf="merchantModeRawReceivedTotalHiddenRaw.gt(0)"
           class="uk-text-small text-half-muted block-hash-monospace"
-          style="margin: -22px 0 28px 0;"
+          style="margin: -22px 0 28px 0"
         >
           +{{ merchantModeRawReceivedTotalHiddenRaw.toString(10) }} raw
         </div>
-        <img style="width: 50%; margin-top: -40px;" src="data:image/svg+xml,%3Csvg width='200mm' height='200mm' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m157.05 40.584c-2.5562-2e-6 -5.1127 0.97964-7.0714 2.9383l-65.687 65.687-34.266-34.266c-3.9174-3.9174-10.225-3.9174-14.142 1e-6l-12.915 12.915c-3.9174 3.9174-3.9174 10.225-1e-6 14.142l39.526 39.526c0.4262 0.72955 0.95143 1.4181 1.5782 2.0448l12.915 12.915c3.9174 3.9174 10.225 3.9174 14.142 0l85.906-85.907c3.9174-3.9174 3.9174-10.224 0-14.142l-12.915-12.915c-1.9587-1.9587-4.5147-2.9383-7.0709-2.9383z' fill='none' stop-color='%23000000' stroke='%2332d296' stroke-linejoin='round' stroke-width='2' style='paint-order:stroke fill markers'/%3E%3C/svg%3E" />
-        <p class="uk-flex uk-flex-center uk-flex-middle text-half-muted uk-margin-remove-bottom">
+        <img
+          style="width: 50%; margin-top: -40px"
+          src="data:image/svg+xml,%3Csvg width='200mm' height='200mm' viewBox='0 0 200 200' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='m157.05 40.584c-2.5562-2e-6 -5.1127 0.97964-7.0714 2.9383l-65.687 65.687-34.266-34.266c-3.9174-3.9174-10.225-3.9174-14.142 1e-6l-12.915 12.915c-3.9174 3.9174-3.9174 10.225-1e-6 14.142l39.526 39.526c0.4262 0.72955 0.95143 1.4181 1.5782 2.0448l12.915 12.915c3.9174 3.9174 10.225 3.9174 14.142 0l85.906-85.907c3.9174-3.9174 3.9174-10.224 0-14.142l-12.915-12.915c-1.9587-1.9587-4.5147-2.9383-7.0709-2.9383z' fill='none' stop-color='%23000000' stroke='%2332d296' stroke-linejoin='round' stroke-width='2' style='paint-order:stroke fill markers'/%3E%3C/svg%3E"
+        />
+        <p
+          class="uk-flex uk-flex-center uk-flex-middle text-half-muted uk-margin-remove-bottom"
+        >
           <button
             class="uk-button uk-button-secondary uk-text-center nlt-icon-button"
             type="button"
             ngxClipboard
-            [cbContent]="(
-                  'Amount Requested: '
-                + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 0 )
-                + ( merchantModeRawRequestedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' XNO'
-                + '\n\n'
-                + 'Amount Paid: '
-                + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 0 )
-                + ( merchantModeRawReceivedTotal | rai: 'mnano,true' | amountsplit: 1 )
-                + ' XNO'
-                + '\n\n'
-                + 'Transaction ID\'s:'
-                + '\n- '
-                + merchantModeTransactionHashes.join('\n- ')
-            )"
+            [cbContent]="
+              'Amount Requested: ' +
+              (merchantModeRawRequestedTotal
+                | rai: 'mnano,true'
+                | amountsplit: 0) +
+              (merchantModeRawRequestedTotal
+                | rai: 'mnano,true'
+                | amountsplit: 1) +
+              ' XNO' +
+              '\n\n' +
+              'Amount Paid: ' +
+              (merchantModeRawReceivedTotal
+                | rai: 'mnano,true'
+                | amountsplit: 0) +
+              (merchantModeRawReceivedTotal
+                | rai: 'mnano,true'
+                | amountsplit: 1) +
+              ' XNO' +
+              '\n\n' +
+              'Transaction ID\'s:' +
+              '\n- ' +
+              merchantModeTransactionHashes.join('\n- ')
+            "
           >
             <span class="nlt-icon" uk-icon="icon: copy;"></span>
             Copy Payment Information
@@ -576,20 +1318,368 @@
           <li
             *ngFor="let hash of merchantModeTransactionHashes"
             class="uk-text-left text-half-muted block-hash-monospace"
-            style="word-wrap: anywhere;"
+            style="word-wrap: anywhere"
           >
             {{ hash }}
           </li>
         </ul>
         <div
           class="merchant-mode-exit uk-flex uk-flex-middle"
-          style="margin-top: 70px;"
+          style="margin-top: 70px"
           (click)="merchantModeResetState()"
         >
-          <span uk-icon="icon: plus-circle; ratio: 1.4;" class="uk-margin-small-right" style="margin-top: 2px;"></span>
+          <span
+            uk-icon="icon: plus-circle; ratio: 1.4;"
+            class="uk-margin-small-right"
+            style="margin-top: 2px"
+          ></span>
           <span class="label">New Payment</span>
         </div>
       </ng-container>
     </div>
+  </div>
+</div>
+
+<!-- Generate NanoNym Modal -->
+<div id="generate-nanonym-modal" uk-modal>
+  <div class="uk-modal-dialog uk-modal-body">
+    <button class="uk-modal-close-default" type="button" uk-close></button>
+
+    <ng-container *ngIf="!recentlyGeneratedNanoNym">
+      <h2 class="uk-modal-title">Generate New NanoNym</h2>
+      <p class="uk-text-meta">
+        Create a reusable private payment address. You can generate as many
+        NanoNyms as you need for different purposes.
+      </p>
+
+      <div class="uk-margin">
+        <label class="uk-form-label" for="nanonym-label">
+          Label <span class="uk-text-muted">(optional)</span>
+        </label>
+        <input
+          id="nanonym-label"
+          class="uk-input"
+          type="text"
+          placeholder="e.g., Donations, Sales Q1 2025, Customer #123"
+          [(ngModel)]="newNanoNymLabel"
+          [disabled]="generatingNanoNym"
+          maxlength="50"
+        />
+      </div>
+
+      <div class="uk-margin uk-text-right">
+        <button
+          class="uk-button uk-button-default uk-modal-close uk-margin-small-right"
+          type="button"
+          [disabled]="generatingNanoNym"
+        >
+          Cancel
+        </button>
+        <button
+          class="uk-button uk-button-primary"
+          type="button"
+          (click)="generateNanoNym()"
+          [disabled]="generatingNanoNym"
+        >
+          <span *ngIf="!generatingNanoNym">Generate NanoNym</span>
+          <span *ngIf="generatingNanoNym">
+            <span uk-spinner="ratio: 0.6"></span> Generating...
+          </span>
+        </button>
+      </div>
+    </ng-container>
+
+    <ng-container *ngIf="recentlyGeneratedNanoNym">
+      <h2 class="uk-modal-title">✓ NanoNym Created</h2>
+      <p class="uk-text-meta">
+        <strong>{{ recentlyGeneratedNanoNym.label }}</strong>
+      </p>
+
+      <!-- NanoNym Address Section -->
+      <div class="uk-card uk-card-default uk-card-body uk-margin">
+        <h4 class="uk-card-title">
+          <span class="uk-text-success">Private Payment Address</span>
+        </h4>
+        <p class="uk-text-small uk-text-muted">
+          Share this address to receive unlinkable payments. Each payment
+          creates a unique stealth address.
+        </p>
+
+        <div class="uk-margin uk-text-center">
+          <img
+            [src]="generatedNanoNymQR"
+            alt="NanoNym QR Code"
+            class="qr-code-modal"
+            *ngIf="generatedNanoNymQR"
+          />
+        </div>
+
+        <div class="uk-margin">
+          <div
+            class="nano-address-monospace uk-text-break uk-text-small uk-padding-small uk-background-muted"
+            style="word-wrap: break-word"
+          >
+            {{ recentlyGeneratedNanoNym.nnymAddress }}
+          </div>
+          <button
+            class="uk-button uk-button-primary uk-width-1-1 uk-margin-small-top"
+            type="button"
+            ngxClipboard
+            [cbContent]="recentlyGeneratedNanoNym.nnymAddress"
+            (cbOnSuccess)="copied()"
+          >
+            <span uk-icon="icon: copy"></span> Copy NanoNym Address
+          </button>
+        </div>
+      </div>
+
+      <!-- Fallback Address Section -->
+      <div class="uk-card uk-card-default uk-card-body uk-margin">
+        <h4 class="uk-card-title">
+          <span class="uk-text-warning">⚠ Fallback Address (NOT Private)</span>
+        </h4>
+        <p class="uk-text-small uk-text-danger">
+          <strong>Warning:</strong> Payments to this address are
+          <strong>NOT private</strong>. All transactions will be publicly
+          linked. Only use if sender doesn't support NanoNyms.
+        </p>
+
+        <div class="uk-margin uk-text-center">
+          <img
+            [src]="generatedFallbackQR"
+            alt="Fallback Address QR Code"
+            class="qr-code-modal"
+            *ngIf="generatedFallbackQR"
+          />
+        </div>
+
+        <div class="uk-margin">
+          <div
+            class="nano-address-monospace uk-text-break uk-text-small uk-padding-small uk-background-muted"
+            style="word-wrap: break-word"
+          >
+            {{ recentlyGeneratedNanoNym.fallbackAddress }}
+          </div>
+          <button
+            class="uk-button uk-button-secondary uk-width-1-1 uk-margin-small-top"
+            type="button"
+            ngxClipboard
+            [cbContent]="recentlyGeneratedNanoNym.fallbackAddress"
+            (cbOnSuccess)="copied()"
+          >
+            <span uk-icon="icon: copy"></span> Copy Fallback Address
+          </button>
+        </div>
+      </div>
+
+      <div class="uk-margin uk-text-right">
+        <button
+          class="uk-button uk-button-primary uk-modal-close"
+          type="button"
+          (click)="closeGenerateNanoNymModal()"
+        >
+          Done
+        </button>
+      </div>
+    </ng-container>
+  </div>
+</div>
+
+<!-- NanoNym Details Modal -->
+<div id="nanonym-details-modal" uk-modal>
+  <div class="uk-modal-dialog uk-modal-body" style="max-width: 800px">
+    <button class="uk-modal-close-default" type="button" uk-close></button>
+
+    <ng-container *ngIf="selectedNanoNym">
+      <h2 class="uk-modal-title">{{ selectedNanoNym.label }}</h2>
+
+      <!-- Stats Summary -->
+      <div uk-grid class="uk-child-width-1-3@s uk-child-width-1-1 uk-margin">
+        <div>
+          <div class="uk-text-meta">Balance</div>
+          <div class="uk-text-large">
+            <span class="amount-integer">{{
+              selectedNanoNym.balance | rai: "mnano,true" | amountsplit: 0
+            }}</span>
+            <span class="amount-fractional">{{
+              selectedNanoNym.balance | rai: "mnano,true" | amountsplit: 1
+            }}</span>
+            <span class="currency-name">XNO</span>
+          </div>
+        </div>
+        <div>
+          <div class="uk-text-meta">Status</div>
+          <div class="uk-text-large">
+            <span
+              class="uk-badge"
+              [class.uk-badge-success]="selectedNanoNym.status === 'active'"
+              [class.uk-badge-warning]="selectedNanoNym.status === 'archived'"
+            >
+              {{ selectedNanoNym.status === "active" ? "Active" : "Archived" }}
+            </span>
+          </div>
+        </div>
+        <div>
+          <div class="uk-text-meta">Total Payments</div>
+          <div class="uk-text-large">{{ selectedNanoNym.paymentCount }}</div>
+        </div>
+      </div>
+
+      <hr class="uk-divider-icon" />
+
+      <!-- Addresses Section -->
+      <div class="uk-margin">
+        <h4>NanoNym Address (Private)</h4>
+        <div class="uk-card uk-card-default uk-card-body">
+          <div class="uk-margin uk-text-center">
+            <img
+              [src]="detailsNanoNymQR"
+              alt="NanoNym QR Code"
+              class="qr-code-modal"
+              *ngIf="detailsNanoNymQR"
+            />
+          </div>
+          <div
+            class="nano-address-monospace uk-text-break uk-text-small uk-padding-small uk-background-muted"
+          >
+            {{ selectedNanoNym.nnymAddress }}
+          </div>
+          <button
+            class="uk-button uk-button-primary uk-width-1-1 uk-margin-small-top"
+            type="button"
+            ngxClipboard
+            [cbContent]="selectedNanoNym.nnymAddress"
+            (cbOnSuccess)="copied()"
+          >
+            <span uk-icon="icon: copy"></span> Copy NanoNym Address
+          </button>
+        </div>
+      </div>
+
+      <div class="uk-margin">
+        <h4>Fallback Address (⚠ Not Private)</h4>
+        <div class="uk-card uk-card-default uk-card-body">
+          <div
+            class="nano-address-monospace uk-text-break uk-text-small uk-padding-small uk-background-muted"
+          >
+            {{ selectedNanoNym.fallbackAddress }}
+          </div>
+          <button
+            class="uk-button uk-button-secondary uk-width-1-1 uk-margin-small-top"
+            type="button"
+            ngxClipboard
+            [cbContent]="selectedNanoNym.fallbackAddress"
+            (cbOnSuccess)="copied()"
+          >
+            <span uk-icon="icon: copy"></span> Copy Fallback Address
+          </button>
+        </div>
+      </div>
+
+      <hr class="uk-divider-icon" />
+
+      <!-- Transaction History -->
+      <div class="uk-margin">
+        <h4>Payment History</h4>
+        <div
+          *ngIf="selectedNanoNym.stealthAccounts.length === 0"
+          class="uk-alert uk-alert-primary"
+        >
+          <p>
+            No payments received yet. Share your NanoNym address to start
+            receiving private payments.
+          </p>
+        </div>
+
+        <div
+          *ngIf="selectedNanoNym.stealthAccounts.length > 0"
+          class="uk-card uk-card-default"
+        >
+          <div class="uk-overflow-auto">
+            <table
+              class="uk-table uk-table-divider uk-table-small uk-table-hover"
+            >
+              <thead>
+                <tr>
+                  <th>Date</th>
+                  <th class="uk-text-right">Amount</th>
+                  <th>Stealth Address</th>
+                  <th>Tx Hash</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr *ngFor="let stealth of selectedNanoNym.stealthAccounts">
+                  <td>
+                    {{ stealth.receivedAt | date: "short" }}
+                  </td>
+                  <td class="uk-text-right">
+                    <span class="amount-integer">{{
+                      stealth.balance | rai: "mnano,true" | amountsplit: 0
+                    }}</span>
+                    <span class="amount-fractional">{{
+                      stealth.balance | rai: "mnano,true" | amountsplit: 1
+                    }}</span>
+                    <span class="currency-name">XNO</span>
+                  </td>
+                  <td>
+                    <div
+                      class="nano-address-monospace uk-text-truncate"
+                      style="max-width: 150px"
+                    >
+                      <app-nano-account-id
+                        [accountID]="stealth.address"
+                        middle="on"
+                      ></app-nano-account-id>
+                    </div>
+                  </td>
+                  <td>
+                    <a
+                      [href]="
+                        'https://nanocrawler.cc/explorer/block/' +
+                        stealth.txHash
+                      "
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      class="uk-link-text uk-text-small"
+                    >
+                      {{ stealth.txHash.substring(0, 12) }}...
+                      <span uk-icon="icon: link; ratio: 0.7"></span>
+                    </a>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <!-- Actions -->
+      <div class="uk-margin uk-text-right">
+        <button
+          class="uk-button uk-margin-small-right"
+          [class.uk-button-secondary]="selectedNanoNym.status === 'active'"
+          [class.uk-button-primary]="selectedNanoNym.status === 'archived'"
+          type="button"
+          (click)="
+            toggleNanoNymStatus(selectedNanoNym.index);
+            loadNanoNyms();
+            closeDetailsModal()
+          "
+        >
+          {{
+            selectedNanoNym.status === "active"
+              ? "Archive NanoNym"
+              : "Reactivate NanoNym"
+          }}
+        </button>
+        <button
+          class="uk-button uk-button-default uk-modal-close"
+          type="button"
+          (click)="closeDetailsModal()"
+        >
+          Close
+        </button>
+      </div>
+    </ng-container>
   </div>
 </div>

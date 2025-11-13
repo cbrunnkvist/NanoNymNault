@@ -838,10 +838,49 @@ export class SendComponent implements OnInit {
       const from = await this.nodeApi.accountInfo(this.fromAccountID);
       const to = await this.nodeApi.accountInfo(this.stealthAddress);
 
-      // 5. Prepare transaction for confirmation
-      this.fromAccount = await this.nodeApi.accountInfo(this.fromAccountID);
-      this.toAccount = await this.nodeApi.accountInfo(this.stealthAddress);
+      if (!from) {
+        this.preparingTransaction = false;
+        return this.notificationService.sendError(`From account not found`);
+      }
+
+      from.balanceBN = new BigNumber(from.balance || 0);
+      to.balanceBN = new BigNumber(to.balance || 0);
+
+      this.fromAccount = from;
+      this.toAccount = to;
+
+      // 5. Calculate raw amount (same as regular send flow)
+      const rawAmount = this.getAmountBaseValue(this.amount || 0);
+      this.rawAmount = rawAmount.plus(this.amountExtraRaw);
+
+      if (this.amount < 0 || rawAmount.lessThan(0)) {
+        this.preparingTransaction = false;
+        return this.notificationService.sendWarning(`Amount is invalid`);
+      }
+      if (from.balanceBN.minus(rawAmount).lessThan(0)) {
+        this.preparingTransaction = false;
+        return this.notificationService.sendError(
+          `From account does not have enough XNO`,
+        );
+      }
+
+      // Determine a proper raw amount to show in the UI, if a decimal was entered
+      this.amountExtraRaw = this.rawAmount.mod(this.nano);
+
+      // Determine fiat value of the amount
+      this.amountFiat = this.util.nano
+        .rawToMnano(rawAmount)
+        .times(this.price.price.lastPrice)
+        .toNumber();
+
+      this.fromAddressBook =
+        this.addressBookService.getAccountName(this.fromAccountID) ||
+        this.getAccountLabel(this.fromAccountID, "Account");
+
       this.toAddressBook = "";
+
+      // Start precomputing the work...
+      this.workPool.addWorkToCache(this.fromAccount.frontier, 1);
 
       this.preparingTransaction = false;
       this.activePanel = "confirm";
@@ -870,14 +909,26 @@ export class SendComponent implements OnInit {
         amount_raw: this.rawAmount.toString(),
       };
 
+      console.log("[Send] Preparing Nostr notification:", {
+        tx_hash: txHash,
+        ephemeralPublicKey_hex: this.bytesToHex(this.ephemeralPublicKey),
+        receiverNostrPublic_hex: this.bytesToHex(
+          this.nanoNymParsedKeys.nostrPublic,
+        ),
+        notification: notification,
+      });
+
       const acceptedRelays = await this.nostrService.sendNotification(
         notification,
         senderNostrKey.private,
         this.nanoNymParsedKeys.nostrPublic,
       );
-      console.log(`Nostr notification sent to ${acceptedRelays.length} relays`);
+      console.log(
+        `[Send] Nostr notification sent to ${acceptedRelays.length} relays:`,
+        acceptedRelays,
+      );
     } catch (error) {
-      console.error("Failed to send Nostr notification:", error);
+      console.error("[Send] Failed to send Nostr notification:", error);
       this.notificationService.sendWarning(
         "Transaction sent but notification failed. Recipient may not see payment immediately.",
       );
