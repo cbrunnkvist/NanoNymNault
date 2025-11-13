@@ -252,10 +252,11 @@ npm start
 #### Running Tests (Stock Nault)
 
 ```bash
-# Unit tests (currently have configuration issues)
-npm test
+# Unit tests with Brave as Chrome substitute
+CHROME_BIN="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" npm test
 
-# See NAULT-TESTS.md for details on test infrastructure
+# Note: Many tests fail due to missing DI providers (shallow test coverage)
+# See NAULT-TESTS.md for detailed test infrastructure analysis
 ```
 
 ---

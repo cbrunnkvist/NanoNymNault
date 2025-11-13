@@ -47,10 +47,16 @@ Nault's test suite exists but provides minimal coverage. Tests are primarily "sm
 
 **Problem 3:** Chrome/Chromium not installed  
 **Root Cause:** Karma configured to use Chrome browser for test execution  
-**Impact:** Cannot run browser-based tests  
-**Status:** Not fixed - browser tests skipped (decision: focus on NanoNymNault development)  
+**Status:** ✅ WORKAROUND - Brave Browser works as Chrome substitute via `CHROME_BIN` env var  
+**Command:** `CHROME_BIN="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" npm test`  
 
-**Decision:** Skip fixing Nault's existing test suite. Low ROI given shallow coverage. Focus effort on writing proper tests for NanoNymNault features.
+**Test Results:**
+- Tests successfully execute with Brave as Chrome substitute
+- 58 test files discovered and run
+- Many tests fail due to missing DI providers (expected for shallow tests)
+- Confirms infrastructure works but test quality is low
+
+**Decision:** Tests can run but have low value. Focus effort on writing proper tests for NanoNymNault features.
 
 ### E2E Tests
 **Problem:** Missing `e2e/tsconfig.e2e.json` referenced by protractor.conf.js  
