@@ -132,6 +132,67 @@ NanoNymNault combines three proven technologies:
 
 ---
 
+## Key Management Architecture
+
+### For Nano Users (Current - Recommended)
+
+NanoNymNault uses a **single Nano seed** (BIP-39) to derive all keys:
+
+```
+Nano Seed (24 words)
+    ↓
+    ├─→ Spend Keys (receive & send XNO)
+    ├─→ View Keys (detect payments privately)
+    └─→ Nostr Keys (receive payment notifications)
+```
+
+**Backup:** Just your 24-word Nano seed  
+**Recovery:** Fully deterministic - one seed recovers everything
+
+### For Nostr Users (Future - Advanced)
+
+To preserve your existing Nostr identity while adding NanoNym capabilities:
+
+```
+Your Nostr nsec        +        Nano Seed
+(existing identity)              (new or imported)
+       ↓                              ↓
+   Nostr Keys          +        Nano Keys
+       └─────────────────┬─────────────┘
+                         ↓
+                   NanoNym v2 Address
+```
+
+**Backup:** BOTH your Nostr nsec AND Nano seed  
+**Recovery:** Requires both seeds
+
+### Why Two Seeds?
+
+Nano uses Ed25519 curves, Nostr uses Secp256k1 (Bitcoin's curve). These are mathematically incompatible - there's no secure way to derive keys from one curve to another.
+
+**We chose security over convenience.**
+
+### Design Principles
+
+1. **NanoNymNault Wallet** (Nano-first)
+   - Never asks for your Nostr nsec
+   - Generates Nostr keys internally from Nano seed
+   - Simple: One seed backup
+   - For users who want a privacy-focused Nano wallet
+
+2. **Future Nostr UIs** (Nostr-first)
+   - Uses your existing Nostr identity
+   - Asks for Nano seed (generate new or import existing)
+   - Advanced: Two seed backup
+   - For Nostr users adding NanoZap receiving capability
+
+### Current Status
+
+**Phase 1 (Implemented):** Nano-first flow with v1 addresses  
+**Phase 2 (Planned):** Dual-seed support with v2 addresses for Nostr-first users
+
+---
+
 ## Project Status
 
 🔨 **In Development** - Planning phase complete, implementation starting
