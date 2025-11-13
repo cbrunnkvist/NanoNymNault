@@ -1,0 +1,51 @@
+.table-header-delete-account {
+	width: 1%;
+	min-width: 50px;
+}
+
+th.hidden-column, td.hidden-column {
+	display: none;
+}
+
+.hidden-section {
+	display: none;
+}
+
+.account-container.narrow {
+	max-width: calc(100% - 35px);
+}
+
+.account-container.wide {
+	max-width: calc(100% - 100px);
+}
+
+.copy-container {
+	padding-left: 10px;
+	padding-bottom: 3px;
+	display: grid;
+}
+
+.copy-icons {
+	align-self: end;
+}
+
+.account-amounts-column {
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
+.account-container:hover .nano-address-clickable {
+	border-color: transparent;
+}
+
+.account-container .nano-address-clickable {
+	vertical-align: bottom;
+}
+
+.account-container .account-label {
+	margin-bottom: 3px;
+}
+
+.icon-delete-account {
+	vertical-align: -2px;
+}

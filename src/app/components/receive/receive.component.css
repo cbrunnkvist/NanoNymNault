@@ -1,0 +1,289 @@
+.merchant-mode-text-full {
+    display: none;
+}
+.merchant-mode-text-short {
+    display: inline-block;
+}
+@media (min-width: 460px) {
+    .merchant-mode-text-full {
+        display: inline-block;
+    }
+    .merchant-mode-text-short {
+        display: none;
+    }
+}
+
+.label-block {
+    margin-left: 10px;
+    margin-bottom: 10px;
+    width: unset;
+}
+
+.label-block > .label-optional {
+    margin-left: 6px;
+    font-size: 12px;
+}
+
+.nano-address-actions {
+    margin-top: 2px;
+}
+
+.narrow-div {
+    margin-top: 20px;
+}
+
+.span-icon {
+    margin-left: 10px;
+    flex-shrink: 0;
+}
+
+.form-account {
+	max-width: 800px;
+}
+
+.form-amount {
+	max-width: 450px;
+}
+
+.receive-columns {
+    display: flex;
+    flex-direction: column;
+}
+.qr-column {
+    margin-top: 15px;
+}
+@media (min-width: 640px) {
+    .receive-columns {
+        flex-direction: row-reverse;
+    }
+    .qr-column {
+        width: 0;
+        max-width: 360px;
+        margin-right: 20px;
+        margin-top: 0;
+    }
+}
+
+.qr-code {
+    display: block;
+    border-radius: 20px;
+    max-width: 290px;
+    max-height: 290px;
+    overflow: hidden;
+    position: relative;
+    margin: 0 auto;
+    box-sizing: border-box;
+}
+.qr-address {
+    max-width: 280px;
+    margin: 25px auto 0 auto;
+}
+@media (max-width: 959px) {
+    .qr-code {
+        max-width: 250px;
+        max-height: 250px;
+    }
+    .qr-address {
+        max-width: 280px;
+    }
+}
+.qr-placeholder {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    text-align: center;
+    background: #FFF;
+    padding: 20px;
+}
+
+.qr-confirmation {
+    position: absolute;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    flex-direction: column;
+    width: 150%;
+    height: 150%;
+    margin: -25%;
+    background: #16A670;
+    transition: all 0.3s cubic-bezier(0.6, 0, 1, 1);
+    transform: scale(0);
+    border-radius: 50%;
+    color: #FFF;
+    padding: 30%;
+    box-sizing: border-box;
+}
+.qr-confirmation.in {
+    transform: scale(1);
+}
+.qr-confirmation.in > :first-child {
+    animation: slidedown 0.7s;
+}
+.qr-confirmation.in > :last-child {
+    animation: slideup 1.2s;
+}
+.qr-confirmation.out {
+    animation: fadeout 1s;
+}
+
+@keyframes slidedown {
+    0% {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    50% {
+        transform: translateY(-50px);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes slideup {
+    0% {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    50% {
+        transform: translateY(50px);
+        opacity: 0;
+    }
+    100% {
+        transform: translateY(0);
+        opacity: 1;
+    }
+}
+
+@keyframes fadeout {
+    0% {
+        transform: scale(1);
+        opacity: 1;
+    }
+    98% {
+        transform: scale(1);
+        opacity: 0;
+    }
+    99% {
+        transform: scale(0);
+        opacity: 0;
+    }
+    100% {
+        transform: scale(0);
+        opacity: 1;
+    }
+}
+
+.merchant-mode-overlay {
+    background-color: #FFF;
+    z-index: 1050; /* above notifications */
+    padding: 15px !important;
+}
+
+.merchant-mode-contents {
+    box-sizing: border-box;
+    height: 100%;
+    padding: 20px;
+}
+@media (max-width: 699px) {
+    .merchant-mode-contents {
+        padding: 10px;
+    }
+}
+
+.merchant-mode-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-left: 25px;
+}
+@media (max-width: 699px) {
+    .merchant-mode-header {
+        flex-direction: column;
+        padding-left: 0;
+    }
+}
+@media (min-width: 1200px) {
+    .merchant-mode-header {
+        position: fixed;
+        width: calc(100% - 86px);
+    }
+}
+
+.merchant-mode-exit .label {
+    font-size: 1.2em;
+}
+
+.merchant-mode-logo {
+    width: 200px;
+    height: 85px;
+    background: url('../../../assets/img/nault-logo.svg');
+    background-size: contain;
+    background-repeat: no-repeat;
+    flex-shrink: 0;
+}
+
+.merchant-mode-exit {
+    cursor: pointer;
+    padding: 6px 23px 8px 20px;
+    border: 2px solid transparent;
+    border-radius: 50px;
+    transition: border-color 100ms ease-in-out;
+}
+.merchant-mode-exit:hover {
+    border-color: #676686AA;
+}
+
+.merchant-centered-container {
+    padding-bottom: 170px;
+    max-width: 500px;
+}
+@media (min-width: 1200px) {
+    .merchant-centered-container {
+        padding-bottom: 0;
+    }
+}
+
+.merchant-mode-icon-qr-code {
+    width: 19px;
+    height: 19px;
+    margin-right: 10px;
+    background-color: currentcolor;
+    -webkit-mask-image: url('assets/img/qr-code.svg');
+    mask-image: url('assets/img/qr-code.svg');
+}
+
+.merchant-mode-qr-code {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    box-sizing: border-box;
+    width: 290px;
+    height: 290px;
+    border-radius: 20px;
+    border: 2px solid #19191B;
+    background-color: #FFF;
+}
+
+.merchant-mode-amount-integer,
+.merchant-mode-amount-fractional,
+.merchant-mode-currency-name {
+    font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+    font-size: 34px;
+}
+
+.merchant-mode-amount-integer {
+    font-weight: 700;
+}
+
+.merchant-mode-amount-fractional {
+    font-weight: 500;
+}
+
+.merchant-mode-currency-name {
+    font-weight: 400;
+}
+.merchant-mode-currency-margin {
+    margin-left: 10px;
+}

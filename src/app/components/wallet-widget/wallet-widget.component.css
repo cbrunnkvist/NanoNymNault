@@ -1,0 +1,14 @@
+.wallet-bar a {
+  color: #fff;
+}
+
+.uk-button {
+  margin-left: 10px;
+}
+.uk-text-top {
+  margin-right: 5px;
+}
+
+.password-input {
+  transition: border-color 100ms ease-in-out, background 100ms ease-in-out;
+}

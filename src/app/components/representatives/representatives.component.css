@@ -1,0 +1,205 @@
+.view-all-reps-link {
+	float: right;
+	margin-top: 5px;
+}
+.view-all-reps-link > .uk-icon {
+	vertical-align: 2px;
+}
+
+.representative-health-column-header, .representative-health-column {
+	min-width: 120px;
+}
+
+.voting-weight-column-header {
+	white-space: nowrap;
+	vertical-align: middle;
+}
+
+.representative-health-column {
+	vertical-align: middle;
+}
+
+.representative-health-status {
+	display: flex;
+	align-items: center;
+	line-height: 1;
+}
+
+.representative-health-status > .health-icon {
+	display: flex;
+	width: 15px;
+	height: 15px;
+	border-radius: 100%;
+	margin-right: 6px;
+}
+
+.representative-health-status > .label {
+	font-size: 14px;
+	margin-bottom: -1px;
+}
+
+.representative-health-status.health-green {
+	color: #32D296;
+}
+.representative-health-status.health-green > .health-icon {
+	background-color: #32D296;
+}
+
+.representative-health-status.health-yellow {
+	color: #FAA05A;
+}
+.representative-health-status.health-yellow > .health-icon {
+	background-color: #FAA05A;
+}
+
+.representative-health-status.health-red {
+	color: #F0506E;
+}
+.representative-health-status.health-red > .health-icon {
+	background-color: #F0506E;
+}
+
+.representative-health-status.health-unknown {
+	color: #868AB0;
+}
+.representative-health-status.health-unknown > .health-icon {
+	background-color: #868AB0;
+}
+
+.representative-name-column {
+	cursor: pointer;
+}
+
+.representative-label-container {
+	display: flex;
+	flex-direction: row;
+	align-items: center;
+	margin-bottom: 3px;
+}
+
+.representative-label-container .representative-weight-percentage .value {
+	margin-right: 15px;
+	margin-top: -1px;
+}
+
+.representative-label-container .account-label {
+	margin-right: 10px;
+}
+
+.voting-weight-column {
+	white-space: nowrap;
+	vertical-align: middle;
+	text-align: right;
+}
+
+.representative-row {
+	border-bottom: none !important;
+}
+
+.delegating-account-row > td {
+	padding-top: 3px;
+}
+
+.delegating-account {
+	display: flex;
+}
+
+.delegating-account > .descendant-icon {
+	margin-left: 2px;
+	margin-bottom: 10px;
+	margin-right: 5px;
+	width: 18px;
+	min-width: 18px;
+	height: 13px;
+	border-left: 1px solid #778;
+	border-bottom: 1px solid #778;
+	border-radius: 0 0 0 2px;
+}
+
+.delegating-account > .descendant-details {
+	display: flex;
+	flex-direction: column;
+}
+
+.delegating-account > .descendant-details > .descendant-label {
+	flex-grow: 0;
+	margin-bottom: 3px;
+}
+
+.delegating-account > .descendant-details > .descendant-address {
+	font-size: 0.8em;
+}
+
+.voting-weight-column .amount-integer,
+.voting-weight-column .amount-fractional,
+.voting-weight-column .currency-name {
+	font-family: 'Montserrat', Arial, Helvetica, sans-serif;
+}
+
+.representative-row .voting-weight-column .amount-integer,
+.representative-row .voting-weight-column .amount-fractional,
+.representative-row .voting-weight-column .currency-name {
+	font-size: 16px;
+}
+
+.delegating-account-row .voting-weight-column .amount-integer,
+.delegating-account-row .voting-weight-column .amount-fractional,
+.delegating-account-row .voting-weight-column .currency-name {
+	font-size: 14px;
+}
+
+.voting-weight-column .amount-integer {
+	font-weight: 700;
+}
+
+.voting-weight-column .amount-fractional {
+	font-weight: 500;
+}
+
+.voting-weight-column .currency-name {
+	font-weight: 400;
+	margin-left: 5px;
+}
+
+@media (max-width: 469px) {
+	.representative-label-container {
+		flex-direction: column;
+		align-items: flex-start;
+		justify-content: center;
+	}
+
+	.representative-label-container .representative-weight-percentage {
+		margin-top: 7px;
+	}
+
+	.voting-weight-column .currency-name {
+		display: block;
+		margin-top: -2px;
+	}
+
+	.representative-row .voting-weight-column .currency-name {
+		font-size: 13px;
+	}
+
+	.delegating-account-row .voting-weight-column .currency-name {
+		font-size: 13px;
+	}
+}
+
+.delegating-account-row > .voting-weight-column {
+	vertical-align: bottom;
+}
+
+.delegating-account-details-column {
+	cursor: pointer;
+}
+
+.change-representative-form .account-label {
+	margin-bottom: 3px;
+}
+
+.change-representative-form .action-remove {
+	display: flex;
+	align-items: center;
+	justify-content: flex-end;
+}

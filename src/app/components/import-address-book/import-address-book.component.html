@@ -1,0 +1,76 @@
+<div class="uk-animation-slide-left-small" uk-grid>
+  <div class="uk-width-1-1">
+    <h2 class="uk-heading-divider">Import Address Book Entries</h2>
+
+    <div class="uk-card uk-card-default uk-margin" *ngIf="activePanel == 'error'">
+      <div class="uk-card-header">
+        <h3 class="uk-card-title">Bad Import Data</h3>
+      </div>
+      <div class="uk-card-body">
+        <p>There was an issue reading the import data for your address book.  Double check the address and try again.</p>
+      </div>
+    </div>
+
+    <div class="uk-card uk-card-default uk-margin" *ngIf="activePanel == 'import'">
+      <div class="uk-card-header">
+        <h3 class="uk-card-title">Confirm Import</h3>
+      </div>
+      <div class="uk-card-body">
+        <p class="uk-text-center">
+          You are about to import the following address book entries {{hostname ? 'from ' + hostname : ''}}
+        </p>
+        <p class="uk-text-center">
+          <span class="import-warning" *ngIf="conflictingEntries">
+            {{ conflictingEntries }} entries already exist but will have their name and/or tracking settings changed.
+          </span>
+          <span class="import-warning" *ngIf="newEntries">
+            {{ newEntries }} New entries will be added.
+          </span>
+          <span class="import-warning" *ngIf="existingEntries">
+            {{ existingEntries }} entries already exist and will not be modified.
+          </span>
+        </p>
+
+        <div uk-grid>
+          <div class="uk-width-1-1">
+            <ul class="uk-list uk-list-striped" style="margin-bottom: 0;">
+              <li class="uk-list-header">
+                <div uk-grid>
+                  <div class="uk-width-1-4">New Name</div>
+                  <div class="uk-width-1-4">Current Name</div>
+                  <div class="uk-width-expand uk-text-truncate">Account</div>
+                </div>
+              </li>
+            </ul>
+            <ul class="uk-list uk-list-striped" style="margin-top: 0;">
+              <li *ngFor="let entry of importData" [ngClass]="{ 'uk-text-success': !entry.originalName, 'uk-text-warning': entry.originalName && (entry.originalName !== entry.name || entry.originalTrackBalance !== entry.trackBalance || entry.originalTrackTransactions !== entry.trackTransactions), 'uk-text-muted': entry.originalName === entry.name &&  entry.originalTrackBalance === entry.trackBalance && entry.originalTrackTransactions === entry.trackTransactions}">
+                <div uk-grid>
+                  <div class="uk-width-1-4 uk-text-truncate">
+                    {{ entry.name }}
+                  </div>
+                  <div class="uk-width-1-4 uk-text-truncate">
+                    {{ entry.originalName }}
+                  </div>
+                  <div class="uk-width-1-2 uk-text-truncate">
+                    {{ entry.account }}
+                  </div>
+                </div>
+
+              </li>
+            </ul>
+          </div>
+        </div>
+
+      </div>
+      <div class="uk-card-footer">
+        <div uk-grid>
+          <div class="nlt-button-group uk-width-1-1 uk-text-right">
+            <button routerLink="/address-book" class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m">Cancel</button>
+            <button (click)="confirmImport()" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m">Import Entries</button>
+          </div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+</div>

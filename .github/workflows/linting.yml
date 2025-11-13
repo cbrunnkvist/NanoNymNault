@@ -1,0 +1,29 @@
+name: Linting
+
+on:
+  push:
+  pull_request:
+
+jobs:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Check out Git repository
+        uses: actions/checkout@v1
+
+      - name: Install Node.js, NPM and Yarn
+        uses: actions/setup-node@v2
+        with:
+          node-version: '16'
+
+      - name: Install APT dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential git -y
+          sudo apt-get install libudev-dev -y
+          sudo apt-get install libusb-1.0-0-dev -y
+
+      - name: Install and Lint
+        run: |
+          npm install
+          npm run lint
