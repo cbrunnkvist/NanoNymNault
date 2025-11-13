@@ -206,36 +206,41 @@ Nano uses Ed25519 curves, Nostr uses Secp256k1 (Bitcoin's curve). These are math
 
 ## Development Roadmap
 
-### Phase 1: Core Cryptography (Weeks 1-2)
+### Phase 1: Core Cryptography ✅
 - Implement CamoNano key derivation with multi-account support
 - `nnym_` address encoding/decoding
 - Stealth address generation
 - Unit tests for all cryptographic operations
 
-### Phase 2: Nostr Integration (Weeks 3-4)
+### Phase 2: Nostr Integration ✅
 - Integrate Nostr client library (nostr-tools)
 - Implement NIP-17 gift-wrapped encryption
 - Relay connection and notification handling
 - Multi-relay redundancy
 
-### Phase 3: Wallet UI - Send (Week 5)
+### Phase 3: Wallet UI - Send ✅
 - Detect and parse `nnym_` addresses
 - Send flow with Nostr notification
 - Multi-relay status display
 - Error handling and retry logic
 
-### Phase 4: Wallet UI - Receive (Weeks 6-7)
+### Phase 4: Wallet UI - Receive
 - Generate multiple NanoNyms from seed
 - Background Nostr monitoring
 - Unified balance display across masked accounts
 - Transaction history aggregation
 - Per-NanoNym transaction views
 
-### Phase 5-7: Advanced Features, Testing, Documentation (Weeks 8-14)
+### Phase 5: Advanced Features
 - NanoNym account management (labels, archive/active status)
 - Coin selection and account consolidation
+
+### Phase 6: Testing & Documentation
 - Comprehensive testing (unit, integration, e2e)
 - User documentation and tutorials
+
+### Phase 7: Launch
+- Security review (if budget permits)
 - Community launch
 
 ---
