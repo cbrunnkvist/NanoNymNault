@@ -208,19 +208,54 @@ NanoNymNault combines three proven technologies:
 ```
 
 ### For Developers
+
+#### Prerequisites
+- **Node.js v16.20.2** (via nvm)
+- **Python 3.11** (for native module compilation)
+- **Chrome/Chromium** (for running tests)
+
+#### Building the Reference Nault Wallet
+
+The project is forked from Nault. To build and run the stock Nault wallet locally:
+
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/NanoNymNault.git
-cd NanoNymNault
+cd NanoNymNault/references/Nault
+
+# Switch to Node v16 (required for native module compatibility)
+source ~/.nvm/nvm.sh
+nvm use 16
 
 # Install dependencies
-npm install
+# IMPORTANT: Use these exact flags for Apple Silicon compatibility
+npm_config_arch=x64 \
+PYTHON=/opt/homebrew/opt/python@3.11/bin/python3.11 \
+npm ci
 
 # Run development server
-npm run dev
+npm start
+# Access at http://localhost:4200/
+```
 
-# Run tests
+**Why these specific flags?**
+- `npm_config_arch=x64` - Electron 9.4.4 doesn't have ARM64 builds, use Rosetta emulation
+- `PYTHON=/opt/homebrew/opt/python@3.11/bin/python3.11` - Python 3.14 removed `distutils` which node-gyp requires
+- `npm ci` - Uses exact versions from package-lock.json (not `npm install`)
+- `nvm use 16` - Node v16 required for native module (usb, node-hid) C++ compilation
+
+**Troubleshooting:**
+- If port 4200 is in use: `lsof -ti:4200 | xargs kill -9`
+- If Python error: Install Python 3.11 via `brew install python@3.11`
+- If Node version error: Install via `nvm install 16`
+
+#### Running Tests (Stock Nault)
+
+```bash
+# Unit tests (currently have configuration issues)
 npm test
+
+# See NAULT-TESTS.md for details on test infrastructure
 ```
 
 ---

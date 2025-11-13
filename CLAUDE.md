@@ -351,40 +351,83 @@ Use well-audited libraries:
 
 ## 11. Implementation Roadmap
 
-### Phase 1: Core Cryptography (Weeks 1-2)
+**Priority:** Working user-verifiable PoC > Tests > Documentation
+
+### Phase 1: Core Cryptography
+**Deliverable:** Functional crypto library with manual verification capability
+
 - Multi-account key derivation (BIP-32 style)
 - ECDH shared secret generation
 - Stealth address derivation
 - `nnym_` address encoding/decoding
-- Unit tests
+- **Testing approach:** Unit tests for address encoding, key derivation paths
+  - Focus: Data correctness (addresses decode to correct keys)
+  - Do NOT test: Library internals (bip39, tweetnacl already tested)
+  - Manual verification: Generate test addresses, verify round-trip encoding
 
-### Phase 2: Nostr Integration (Weeks 3-4)
+### Phase 2: Nostr Integration
+**Deliverable:** Send/receive notifications between two wallet instances
+
 - Integrate nostr-tools library
 - NIP-17 encryption/decryption
 - Relay connection management
 - Notification handling
 - Multi-relay redundancy
+- **Testing approach:** Integration tests with mocked Nostr relay
+  - Focus: Message format, encryption correctness
+  - Manual verification: Two browser tabs, send notification from A→B, verify receipt
 
-### Phase 3: Wallet UI - Send (Week 5)
+### Phase 3: Wallet UI - Send
+**Deliverable:** Complete send flow functional in dev mode
+
 - Detect `nnym_` addresses
 - Send flow with Nostr notification
 - Relay status display
 - Error handling
+- **Testing approach:** Manual QA with test NanoNyms
+  - Focus: User workflow works end-to-end
+  - No automated UI tests yet (add Cypress/Playwright later)
 
-### Phase 4: Wallet UI - Receive (Weeks 6-7)
+### Phase 4: Wallet UI - Receive
+**Deliverable:** Complete receive flow functional in dev mode
+
 - Generate multiple NanoNyms
 - Background Nostr monitoring
 - Unified balance display
 - Transaction history
 - Per-NanoNym views
+- **Testing approach:** Manual QA with real test transactions
+  - Focus: Balance calculations correct, no missed notifications
+  - Integration tests for balance aggregation logic
 
-### Phase 5-7: Advanced Features, Testing, Documentation (Weeks 8-14)
+### Phase 5: Polish & User Testing
+**Deliverable:** Beta-ready wallet for community testing
+
 - Account management (labels, archive/active)
-- Coin selection
-- Account consolidation
-- Comprehensive testing
-- User documentation
+- Error handling improvements
+- User documentation (in-wallet help)
+- **Testing approach:** Community beta testing
+  - Focus: Real-world usage patterns, edge cases
+  - Collect feedback on UX/privacy comprehension
+
+### Phase 6: Hardening
+**Deliverable:** Production-ready wallet
+
+- Fix bugs found in beta
+- Add unit tests for critical bug fixes
+- Performance optimization
+- **Testing approach:** Targeted tests for fixed bugs
+  - Focus: Regression prevention for reported issues
+
+### Phase 7: Launch
+**Deliverable:** Public release
+
+- Security review (if budget permits)
+- Final documentation
 - Community launch
+- **Testing approach:** Consider adding Cypress/Playwright for smoke tests
+  - Focus: Critical paths (send, receive, backup/restore)
+  - Ongoing: Monitor for issues in production
 
 ---
 
