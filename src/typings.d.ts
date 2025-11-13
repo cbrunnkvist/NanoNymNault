@@ -6,4 +6,5 @@ interface NodeModule {
 
 interface Window {
   require: NodeRequire;
+  nacl: any; // Nault uses custom nacl build with extended API
 }

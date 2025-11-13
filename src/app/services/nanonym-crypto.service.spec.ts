@@ -1,21 +1,25 @@
-import { TestBed } from '@angular/core/testing';
-import { NanoNymCryptoService } from './nanonym-crypto.service';
+import { TestBed } from "@angular/core/testing";
+import { NanoNymCryptoService } from "./nanonym-crypto.service";
+import { UtilService } from "./util.service";
 
-describe('NanoNymCryptoService', () => {
+describe("NanoNymCryptoService", () => {
   let service: NanoNymCryptoService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({
+      providers: [NanoNymCryptoService, UtilService],
+    });
     service = TestBed.inject(NanoNymCryptoService);
   });
 
-  it('should be created', () => {
+  it("should be created", () => {
     expect(service).toBeTruthy();
   });
 
-  describe('Multi-account key derivation', () => {
-    it('should derive keys from mnemonic seed', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("Multi-account key derivation", () => {
+    it("should derive keys from mnemonic seed", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const keys = service.deriveNanoNymKeys(testMnemonic, 0);
 
       expect(keys.spend.private).toBeTruthy();
@@ -34,8 +38,9 @@ describe('NanoNymCryptoService', () => {
       expect(keys.nostr.public.length).toBe(32);
     });
 
-    it('should derive different keys for different account indices', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    it("should derive different keys for different account indices", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const keys0 = service.deriveNanoNymKeys(testMnemonic, 0);
       const keys1 = service.deriveNanoNymKeys(testMnemonic, 1);
 
@@ -45,8 +50,9 @@ describe('NanoNymCryptoService', () => {
       expect(keys0.nostr.public).not.toEqual(keys1.nostr.public);
     });
 
-    it('should derive same keys for same seed and index (deterministic)', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    it("should derive same keys for same seed and index (deterministic)", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const keys1 = service.deriveNanoNymKeys(testMnemonic, 0);
       const keys2 = service.deriveNanoNymKeys(testMnemonic, 0);
 
@@ -57,20 +63,21 @@ describe('NanoNymCryptoService', () => {
     });
   });
 
-  describe('nnym_ address encoding/decoding', () => {
-    it('should encode and decode NanoNym address', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("nnym_ address encoding/decoding", () => {
+    it("should encode and decode NanoNym address", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const keys = service.deriveNanoNymKeys(testMnemonic, 0);
 
       // Encode
       const address = service.encodeNanoNymAddress(
         keys.spend.public,
         keys.view.public,
-        keys.nostr.public
+        keys.nostr.public,
       );
 
       // Should start with nnym_
-      expect(address.startsWith('nnym_')).toBe(true);
+      expect(address.startsWith("nnym_")).toBe(true);
 
       // Should be approximately 160 characters (nnym_ + base32 encoded 99 bytes)
       expect(address.length).toBeGreaterThan(150);
@@ -86,18 +93,23 @@ describe('NanoNymCryptoService', () => {
       expect(decoded.nostrPublic).toEqual(keys.nostr.public);
     });
 
-    it('should reject invalid addresses', () => {
+    it("should reject invalid addresses", () => {
       // Invalid prefix
-      expect(() => service.decodeNanoNymAddress('nano_invalid')).toThrowError('must start with nnym_');
+      expect(() => service.decodeNanoNymAddress("nano_invalid")).toThrowError(
+        "Invalid NanoNym address: must start with nnym_",
+      );
 
       // Invalid checksum
-      expect(() => service.decodeNanoNymAddress('nnym_111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111'))
-        .toThrowError();
+      expect(() =>
+        service.decodeNanoNymAddress(
+          "nnym_111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111111",
+        ),
+      ).toThrowError();
     });
   });
 
-  describe('Ephemeral key generation', () => {
-    it('should generate random ephemeral keys', () => {
+  describe("Ephemeral key generation", () => {
+    it("should generate random ephemeral keys", () => {
       const key1 = service.generateEphemeralKey();
       const key2 = service.generateEphemeralKey();
 
@@ -113,65 +125,82 @@ describe('NanoNymCryptoService', () => {
     });
   });
 
-  describe('ECDH shared secret generation', () => {
-    it('should generate shared secret between sender and receiver', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("ECDH shared secret generation", () => {
+    it("should generate shared secret between sender and receiver", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
       const senderEphemeral = service.generateEphemeralKey();
 
       // Generate shared secret from sender's perspective
       const sharedSecret = service.generateSharedSecret(
         senderEphemeral.private,
-        receiverKeys.view.public
+        receiverKeys.view.public,
       );
 
       // Should produce 32-byte shared secret
       expect(sharedSecret.length).toBe(32);
 
       // Should not be all zeros
-      const isAllZeros = sharedSecret.every(byte => byte === 0);
+      const isAllZeros = sharedSecret.every((byte) => byte === 0);
       expect(isAllZeros).toBe(false);
     });
   });
 
-  describe('Stealth address derivation', () => {
-    it('should derive stealth address from shared secret', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("Stealth address derivation", () => {
+    it("should derive stealth address from shared secret", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
       const senderEphemeral = service.generateEphemeralKey();
 
       // Generate shared secret
       const sharedSecret = service.generateSharedSecret(
         senderEphemeral.private,
-        receiverKeys.view.public
+        receiverKeys.view.public,
       );
 
       // Derive stealth address
       const stealthAddr = service.deriveStealthAddress(
         sharedSecret,
         senderEphemeral.public,
-        receiverKeys.spend.public
+        receiverKeys.spend.public,
       );
 
       // Should have valid structure
       expect(stealthAddr.publicKey.length).toBe(32);
       expect(stealthAddr.address).toBeTruthy();
-      expect(stealthAddr.address.startsWith('nano_')).toBe(true);
+      expect(stealthAddr.address.startsWith("nano_")).toBe(true);
     });
 
-    it('should derive different stealth addresses for different ephemeral keys', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+    it("should derive different stealth addresses for different ephemeral keys", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
 
       // First payment
       const ephemeral1 = service.generateEphemeralKey();
-      const sharedSecret1 = service.generateSharedSecret(ephemeral1.private, receiverKeys.view.public);
-      const stealth1 = service.deriveStealthAddress(sharedSecret1, ephemeral1.public, receiverKeys.spend.public);
+      const sharedSecret1 = service.generateSharedSecret(
+        ephemeral1.private,
+        receiverKeys.view.public,
+      );
+      const stealth1 = service.deriveStealthAddress(
+        sharedSecret1,
+        ephemeral1.public,
+        receiverKeys.spend.public,
+      );
 
       // Second payment
       const ephemeral2 = service.generateEphemeralKey();
-      const sharedSecret2 = service.generateSharedSecret(ephemeral2.private, receiverKeys.view.public);
-      const stealth2 = service.deriveStealthAddress(sharedSecret2, ephemeral2.public, receiverKeys.spend.public);
+      const sharedSecret2 = service.generateSharedSecret(
+        ephemeral2.private,
+        receiverKeys.view.public,
+      );
+      const stealth2 = service.deriveStealthAddress(
+        sharedSecret2,
+        ephemeral2.public,
+        receiverKeys.spend.public,
+      );
 
       // Stealth addresses should be different (unlinkable payments)
       expect(stealth1.address).not.toEqual(stealth2.address);
@@ -179,27 +208,28 @@ describe('NanoNymCryptoService', () => {
     });
   });
 
-  describe('Stealth private key derivation', () => {
-    it('should derive private key for spending stealth funds', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("Stealth private key derivation", () => {
+    it("should derive private key for spending stealth funds", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
       const senderEphemeral = service.generateEphemeralKey();
 
       // Sender derives stealth address
       const sharedSecretSender = service.generateSharedSecret(
         senderEphemeral.private,
-        receiverKeys.view.public
+        receiverKeys.view.public,
       );
       const stealthAddr = service.deriveStealthAddress(
         sharedSecretSender,
         senderEphemeral.public,
-        receiverKeys.spend.public
+        receiverKeys.spend.public,
       );
 
       // Receiver derives shared secret (using view key)
       const sharedSecretReceiver = service.generateSharedSecret(
         receiverKeys.view.private,
-        senderEphemeral.public
+        senderEphemeral.public,
       );
 
       // Receiver derives private key for spending
@@ -207,42 +237,44 @@ describe('NanoNymCryptoService', () => {
         receiverKeys.spend.private,
         sharedSecretReceiver,
         senderEphemeral.public,
-        receiverKeys.spend.public
+        receiverKeys.spend.public,
       );
 
       // Should produce valid 32-byte private key
       expect(stealthPrivate.length).toBe(32);
 
       // Should not be all zeros
-      const isAllZeros = stealthPrivate.every(byte => byte === 0);
+      const isAllZeros = stealthPrivate.every((byte) => byte === 0);
       expect(isAllZeros).toBe(false);
     });
   });
 
-  describe('Fallback address', () => {
-    it('should generate standard nano_ address from spend key', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("Fallback address", () => {
+    it("should generate standard nano_ address from spend key", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
       const keys = service.deriveNanoNymKeys(testMnemonic, 0);
 
       const fallbackAddr = service.getFallbackAddress(keys.spend.public);
 
       // Should be valid nano_ address
       expect(fallbackAddr).toBeTruthy();
-      expect(fallbackAddr.startsWith('nano_')).toBe(true);
+      expect(fallbackAddr.startsWith("nano_")).toBe(true);
       expect(fallbackAddr.length).toBe(65); // Standard Nano address length
     });
   });
 
-  describe('Round-trip encoding/decoding', () => {
-    it('should correctly round-trip multiple NanoNym addresses', () => {
-      const testMnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+  describe("Round-trip encoding/decoding", () => {
+    it("should correctly round-trip multiple NanoNym addresses", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
 
       for (let i = 0; i < 5; i++) {
         const keys = service.deriveNanoNymKeys(testMnemonic, i);
         const address = service.encodeNanoNymAddress(
           keys.spend.public,
           keys.view.public,
-          keys.nostr.public
+          keys.nostr.public,
         );
         const decoded = service.decodeNanoNymAddress(address);
 
