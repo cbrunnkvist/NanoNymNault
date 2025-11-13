@@ -1,7 +1,3 @@
-[submodule "references/Nault"]
-	path = references/Nault
-	url = https://github.com/cbrunnkvist/Nault.git
-	branch = testsuite-fixup
 [submodule "references/ndk"]
 	path = references/ndk
 	url = https://github.com/nostr-dev-kit/ndk.git
