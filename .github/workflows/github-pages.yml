@@ -1,4 +1,4 @@
-name: Deploy to GitHub Pages
+name: GitHub Pages
 
 on:
   push:
@@ -6,28 +6,34 @@ on:
       - main
 
 jobs:
-  build:
+  build-and-deploy:
     runs-on: ubuntu-latest
-
     steps:
-      - name: Checkout repository
-        uses: actions/checkout@v4
+      - name: Checkout
+        uses: actions/checkout@v2 # If you're using actions/checkout@v2 you must set persist-credentials to false in most cases for the deployment to work correctly.
+        with:
+          persist-credentials: false
 
-      - name: Set up Node.js 16
-        uses: actions/setup-node@v4
+      - name: Setup NodeJS
+        uses: actions/setup-node@v1
         with:
           node-version: 16
 
-      - name: Install dependencies
-        run: npm ci --legacy-peer-deps
+      - name: Install APT dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install build-essential git -y
+          sudo apt-get install libudev-dev -y
+          sudo apt-get install libusb-1.0-0-dev -y
 
-      - name: Build Angular app
-        run: npm run wallet:build
+      - name: Install and Build
+        run: |
+          npm install
+          npm run wallet:build
 
-      - name: Deploy to GitHub Pages
-        uses: peaceiris/actions-gh-pages@v3
+      - name: Deploy to gh-pages
+        uses: JamesIves/github-pages-deploy-action@4.0.0
         with:
-          github_token: ${{ secrets.GITHUB_TOKEN }}
-          publish_dir: ./dist/nault
-          publish_branch: github-pages-wallet
-          force_orphan: true
+          ssh-key: ${{ secrets.DEPLOY_KEY }}
+          branch: github-pages # The branch the action should deploy to.
+          folder: dist # The folder the action should deploy.
