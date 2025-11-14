@@ -10,7 +10,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v2 # If you're using actions/checkout@v2 you must set persist-credentials to false in most cases for the deployment to work correctly.
+        uses: actions/checkout@v2
         with:
           persist-credentials: false
 
@@ -18,6 +18,11 @@ jobs:
         uses: actions/setup-node@v1
         with:
           node-version: 16
+
+      - name: Setup Python 3.11
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.11'
 
       - name: Install APT dependencies
         run: |
@@ -27,13 +32,15 @@ jobs:
           sudo apt-get install libusb-1.0-0-dev -y
 
       - name: Install and Build
+        env:
+          PYTHON: python3.11
         run: |
-          npm install
+          npm ci --legacy-peer-deps
           npm run wallet:build
 
       - name: Deploy to gh-pages
         uses: JamesIves/github-pages-deploy-action@4.0.0
         with:
           ssh-key: ${{ secrets.DEPLOY_KEY }}
-          branch: github-pages # The branch the action should deploy to.
-          folder: dist # The folder the action should deploy.
+          branch: github-pages
+          folder: dist
