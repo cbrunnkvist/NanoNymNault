@@ -17,7 +17,7 @@
     "release": "npm run desktop:build && electron-builder",
     "wallet:dev": "ng serve --open",
     "wallet:dev-ssl": "ng serve --ssl --open",
-    "wallet:build": "ng build --configuration production",
+    "wallet:build": "ng build --configuration production --base-href /NanoNymNault/",
     "wallet:build-desktop": "ng build --configuration=desktop --base-href ",
     "desktop:compile": "cd desktop-app && tsc && cd ..",
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
