@@ -3,8 +3,8 @@ import * as bip39 from "bip39";
 import { blake2b } from "blakejs";
 import * as nacl from "tweetnacl";
 import { UtilService } from "./util.service";
-import { ed25519 } from "@noble/curves/ed25519.js";
-import { bytesToHex } from "@noble/curves/utils.js";
+import { ed25519, edwardsToMontgomeryPub } from "@noble/curves/ed25519";
+import { bytesToHex } from "@noble/curves/abstract/utils";
 import { getPublicKey as getSecpPublicKey } from "@noble/secp256k1";
 
 /**
@@ -148,7 +148,7 @@ export class NanoNymCryptoService {
     const curve25519Private = this.ed25519PrivateToX25519(ephemeralPrivate);
 
     // Convert Ed25519 public key to Curve25519 (X25519) public key using @noble/curves utility
-    const curve25519Public = ed25519.utils.toMontgomery(recipientViewPublic);
+    const curve25519Public = edwardsToMontgomeryPub(recipientViewPublic);
 
     // Compute shared secret using X25519 (ECDH on Curve25519)
     const sharedSecret = nacl.scalarMult(curve25519Private, curve25519Public);
@@ -236,13 +236,13 @@ export class NanoNymCryptoService {
    * @returns Sum of the two points (32 bytes)
    */
   private ed25519PointAdd(point1: Uint8Array, point2: Uint8Array): Uint8Array {
-    // Convert compressed points to Point and add
-    const p1 = ed25519.Point.fromHex(bytesToHex(point1));
-    const p2 = ed25519.Point.fromHex(bytesToHex(point2));
+    // Convert compressed points to ExtendedPoint and add
+    const p1 = ed25519.ExtendedPoint.fromHex(bytesToHex(point1));
+    const p2 = ed25519.ExtendedPoint.fromHex(bytesToHex(point2));
     const sum = p1.add(p2);
 
     // Convert back to compressed 32-byte representation
-    return sum.toBytes();
+    return sum.toRawBytes();
   }
 
   /**
