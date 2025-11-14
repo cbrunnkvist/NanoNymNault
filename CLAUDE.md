@@ -1,9 +1,12 @@
 # CLAUDE.md: NanoNymNault Protocol Specification
 
-**Target Agent:** Claude Code  
-**Project Name:** NanoNymNault  
-**Goal:** Implement a privacy-preserving payment protocol for Nano using reusable pseudonyms (NanoNyms)  
+**Target Agent:** Claude Code
+**Project Name:** NanoNymNault
+**Goal:** Implement a privacy-preserving payment protocol for Nano using reusable pseudonyms (NanoNyms)
 **Primary Constraint:** This implementation **must not require any changes to the Nano base protocol or node software**. It must be an entirely wallet-level (off-chain) coordination protocol.
+
+**Live Developer Preview:** https://cbrunnkvist.github.io/NanoNymNault/
+(Continuously deployed from `main` branch via GitHub Actions)
 
 ---
 

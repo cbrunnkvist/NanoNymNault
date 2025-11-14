@@ -417,4 +417,12 @@ A: Your seed phrase backs up ALL NanoNyms automatically. During recovery, the wa
 
 ---
 
+## Developer Preview
+
+**Try the latest development version:** https://cbrunnkvist.github.io/NanoNymNault/
+
+This developer preview is automatically deployed from the `main` branch. It reflects the latest implemented features and may contain experimental functionality. Use with caution and test with small amounts only.
+
+---
+
 **Built with 🔐 for the Nano community**
