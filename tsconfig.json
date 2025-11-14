@@ -10,7 +10,7 @@
     "experimentalDecorators": true,
     "allowSyntheticDefaultImports": true,
     "skipLibCheck": true,
-    "target": "es2017",
+    "target": "es2020",
     "typeRoots": ["node_modules/@types", "./src/typings"],
     "lib": ["es2020", "dom"],
     "module": "es2020",
