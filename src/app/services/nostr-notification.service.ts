@@ -219,37 +219,25 @@ export class NostrNotificationService {
     let eoseCount = 0;
     let eventCount = 0;
 
-    console.log(
-      `[Nostr] Subscription starting - will log EVERY event received`,
-    );
-
     const sub = this.pool.subscribeMany(this.defaultRelays, filter, {
       onevent: (event: Event) => {
         eventCount++;
-        console.log(`[Nostr] 🔔 EVENT #${eventCount} RECEIVED:`, {
-          id: event.id,
-          kind: event.kind,
-          pubkey: event.pubkey?.slice(0, 16) + "...",
-          created_at: event.created_at,
-          created_at_human: new Date(event.created_at * 1000).toISOString(),
-          tags: event.tags,
-          content_length: event.content?.length || 0,
-        });
+        // Only process event, don't log every single one (too noisy - thousands of events)
         this.handleIncomingEvent(event, nostrPrivate);
       },
 
       // Track which relays are responding (uses relay.url from AbstractRelay)
       receivedEvent: (relay: any, id: string) => {
         const relayUrl = relay.url;
-        console.log(`[Nostr] 📨 receivedEvent from ${relayUrl}: ${id}`);
 
+        // Only log on first event from each relay (connection confirmation)
         if (!this.relayFirstSeen.has(relayUrl)) {
           this.relayFirstSeen.set(relayUrl, Date.now());
           console.log(`[Nostr] ✅ ${relayUrl} connected and responding`);
           this.updateRelayStatus(relayUrl, true);
         }
 
-        // Track event counts for statistics
+        // Track event counts for statistics (silent)
         const count = (this.relayEventCount.get(relayUrl) || 0) + 1;
         this.relayEventCount.set(relayUrl, count);
       },
@@ -311,18 +299,12 @@ export class NostrNotificationService {
         unwrapped = nip59.unwrapEvent(event, nostrPrivate);
       } catch (decryptError) {
         // Expected - this event is encrypted for a different recipient
-        // TEMP: Add logging for debugging
-        console.log(
-          `[Nostr] Decryption failed for event ${event.id.slice(0, 8)}... (Error: ${decryptError.message})`,
-        );
+        // Silent fail - this is normal behavior (most events are not for us)
         return;
       }
 
       if (!unwrapped) {
-        // SILENT: Don't log expected decryption failures
-        console.log(
-          `[Nostr] Event ${event.id.slice(0, 8)} unwrapped to null/undefined (not for us)`,
-        );
+        // Silent fail - event not for us
         return;
       }
 
