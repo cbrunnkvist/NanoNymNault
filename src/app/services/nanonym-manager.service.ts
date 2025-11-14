@@ -248,21 +248,31 @@ export class NanoNymManagerService {
         `[Manager-Process] Derived stealth address: ${stealth.address}`,
       );
 
-      // 4. Verify transaction exists on blockchain
+      // 4. Verify transaction exists on blockchain (account may not be opened yet)
       console.log(
-        `[Manager-Process] Verifying account info for ${stealth.address} on-chain...`,
+        `[Manager-Process] Checking account info for ${stealth.address} on-chain...`,
       );
       const accountInfo = await this.api.accountInfo(stealth.address);
+
+      // Handle unopened accounts (normal for fresh stealth addresses)
+      let accountBalance = "0";
       if (accountInfo.error) {
-        console.error(
-          `[Manager-Process] ❌ Stealth address not found on blockchain: ${stealth.address}. Error: ${accountInfo.error}`,
+        if (accountInfo.error === "Account not found") {
+          console.log(
+            `[Manager-Process] ✅ Stealth address is new (unopened account). Balance will be 0 until receive block is published.`,
+          );
+        } else {
+          console.error(
+            `[Manager-Process] ❌ Unexpected error querying stealth address: ${accountInfo.error}`,
+          );
+          return null;
+        }
+      } else {
+        accountBalance = accountInfo.balance || "0";
+        console.log(
+          `[Manager-Process] ✅ On-chain account info found. Balance: ${accountBalance}`,
         );
-        return null;
       }
-      console.log(
-        `[Manager-Process] ✅ On-chain account info found:`,
-        accountInfo,
-      );
 
       // 5. Derive private key for spending
       const privateKey = this.crypto.deriveStealthPrivateKey(
@@ -284,7 +294,7 @@ export class NanoNymManagerService {
         memo: notification.memo,
         receivedAt: Date.now(),
         parentNanoNymIndex: nanoNymIndex,
-        balance: new BigNumber(accountInfo.balance || 0),
+        balance: new BigNumber(accountBalance),
       };
       console.log(
         `[Manager-Process] Created stealth account object:`,
