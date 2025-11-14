@@ -2,9 +2,10 @@ import { Injectable } from "@angular/core";
 import * as bip39 from "bip39";
 import { blake2b } from "blakejs";
 import * as nacl from "tweetnacl";
-import { tools as nanocurrencyWebTools } from "nanocurrency-web";
 import { UtilService } from "./util.service";
-import * as ed25519 from "@noble/ed25519";
+import { ed25519, edwardsToMontgomeryPub } from "@noble/curves/ed25519.js";
+import { etc } from "@noble/ed25519";
+import { getPublicKey as getSecpPublicKey } from "@noble/secp256k1";
 
 /**
  * NanoNymCryptoService
@@ -78,7 +79,13 @@ export class NanoNymCryptoService {
       seedBytes,
       basePath.concat(this.uint32ToBytes(2)),
     );
-    const nostrKeyPair = nacl.sign.keyPair.fromSeed(nostrSeed);
+    // This seed is not a valid private key. Hash it to get a private key.
+    // Using blake2b to be consistent with the rest of the derivation.
+    const nostrPrivateKey = new Uint8Array(blake2b(nostrSeed, undefined, 32));
+
+    // Derive the public key (x-only, 32 bytes)
+    const nostrFullPublicKey = getSecpPublicKey(nostrPrivateKey, true); // Get compressed public key (33 bytes)
+    const nostrPublicKey = nostrFullPublicKey.slice(1); // Get the 32-byte x-coordinate
 
     return {
       spend: {
@@ -90,8 +97,8 @@ export class NanoNymCryptoService {
         public: viewKeyPair.publicKey,
       },
       nostr: {
-        private: nostrKeyPair.secretKey.slice(0, 32),
-        public: nostrKeyPair.publicKey,
+        private: nostrPrivateKey,
+        public: nostrPublicKey,
       },
     };
   }
@@ -139,9 +146,9 @@ export class NanoNymCryptoService {
   ): Uint8Array {
     // Convert Ed25519 keys to Curve25519 keys for ECDH
     const curve25519Private = this.ed25519PrivateToX25519(ephemeralPrivate);
-    // For now, use the Ed25519 public key directly (simplified approach)
-    // TODO: Implement proper Ed25519 to Curve25519 conversion
-    const curve25519Public = recipientViewPublic;
+
+    // Convert Ed25519 public key to Curve25519 (X25519) public key
+    const curve25519Public = edwardsToMontgomeryPub(recipientViewPublic);
 
     // Compute shared secret using X25519 (ECDH on Curve25519)
     const sharedSecret = nacl.scalarMult(curve25519Private, curve25519Public);
@@ -229,26 +236,13 @@ export class NanoNymCryptoService {
    * @returns Sum of the two points (32 bytes)
    */
   private ed25519PointAdd(point1: Uint8Array, point2: Uint8Array): Uint8Array {
-    // Convert Uint8Array to hex strings
-    const hex1 = Array.from(point1)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-    const hex2 = Array.from(point2)
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("");
-
     // Convert compressed points to Point and add
-    const p1 = ed25519.Point.fromHex(hex1);
-    const p2 = ed25519.Point.fromHex(hex2);
+    const p1 = ed25519.Point.fromHex(etc.bytesToHex(point1));
+    const p2 = ed25519.Point.fromHex(etc.bytesToHex(point2));
     const sum = p1.add(p2);
 
     // Convert back to compressed 32-byte representation
-    const sumHex = sum.toHex();
-    const result = new Uint8Array(32);
-    for (let i = 0; i < 32; i++) {
-      result[i] = parseInt(sumHex.substr(i * 2, 2), 16);
-    }
-    return result;
+    return sum.toBytes();
   }
 
   /**

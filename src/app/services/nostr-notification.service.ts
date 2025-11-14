@@ -311,12 +311,18 @@ export class NostrNotificationService {
         unwrapped = nip59.unwrapEvent(event, nostrPrivate);
       } catch (decryptError) {
         // Expected - this event is encrypted for a different recipient
-        // SILENT: Don't log thousands of irrelevant messages
+        // TEMP: Add logging for debugging
+        console.log(
+          `[Nostr] Decryption failed for event ${event.id.slice(0, 8)}... (Error: ${decryptError.message})`,
+        );
         return;
       }
 
       if (!unwrapped) {
         // SILENT: Don't log expected decryption failures
+        console.log(
+          `[Nostr] Event ${event.id.slice(0, 8)} unwrapped to null/undefined (not for us)`,
+        );
         return;
       }
 

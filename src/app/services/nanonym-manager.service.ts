@@ -211,21 +211,32 @@ export class NanoNymManagerService {
     notification: NanoNymNotification,
     nanoNymIndex: number,
   ): Promise<StealthAccount | null> {
+    console.log(
+      "[Manager-Process] Starting processing for notification:",
+      notification,
+    );
     try {
       const nanoNym = this.storage.getNanoNym(nanoNymIndex);
       if (!nanoNym) {
-        console.error(`[Manager] NanoNym with index ${nanoNymIndex} not found`);
+        console.error(
+          `[Manager-Process] NanoNym with index ${nanoNymIndex} not found`,
+        );
         return null;
       }
+      console.log(`[Manager-Process] Found NanoNym: ${nanoNym.label}`);
 
       // 1. Parse ephemeral public key R from notification
       const R = this.hexToUint8Array(notification.R);
+      console.log(
+        `[Manager-Process] Ephemeral public key R: ${notification.R}`,
+      );
 
       // 2. Generate shared secret using view key
       const sharedSecret = this.crypto.generateSharedSecret(
         nanoNym.keys.viewPrivate,
         R,
       );
+      console.log(`[Manager-Process] Generated shared secret.`);
 
       // 3. Derive expected stealth address
       const stealth = this.crypto.deriveStealthAddress(
@@ -233,15 +244,25 @@ export class NanoNymManagerService {
         R,
         nanoNym.keys.spendPublic,
       );
+      console.log(
+        `[Manager-Process] Derived stealth address: ${stealth.address}`,
+      );
 
       // 4. Verify transaction exists on blockchain
+      console.log(
+        `[Manager-Process] Verifying account info for ${stealth.address} on-chain...`,
+      );
       const accountInfo = await this.api.accountInfo(stealth.address);
       if (accountInfo.error) {
         console.error(
-          `[Manager] Stealth address not found on blockchain: ${stealth.address}`,
+          `[Manager-Process] ❌ Stealth address not found on blockchain: ${stealth.address}. Error: ${accountInfo.error}`,
         );
         return null;
       }
+      console.log(
+        `[Manager-Process] ✅ On-chain account info found:`,
+        accountInfo,
+      );
 
       // 5. Derive private key for spending
       const privateKey = this.crypto.deriveStealthPrivateKey(
@@ -250,6 +271,7 @@ export class NanoNymManagerService {
         R,
         nanoNym.keys.spendPublic,
       );
+      console.log(`[Manager-Process] Derived stealth private key.`);
 
       // 6. Create stealth account object
       const stealthAccount: StealthAccount = {
@@ -264,14 +286,22 @@ export class NanoNymManagerService {
         parentNanoNymIndex: nanoNymIndex,
         balance: new BigNumber(accountInfo.balance || 0),
       };
+      console.log(
+        `[Manager-Process] Created stealth account object:`,
+        stealthAccount,
+      );
 
       // 7. Store stealth account
       this.storage.addStealthAccount(nanoNymIndex, stealthAccount);
+      console.log(`[Manager-Process] Stored stealth account.`);
 
       // 8. Import into wallet for spending capability
       await this.importStealthAccountToWallet(stealthAccount);
 
       // 9. Emit event for UI updates (reuse nanoNym from earlier)
+      console.log(
+        "[Manager-Process] Emitting notificationProcessed$ event for UI update...",
+      );
       this.notificationProcessed$.next({
         nanoNymIndex,
         nanoNymLabel: nanoNym.label,
@@ -285,7 +315,10 @@ export class NanoNymManagerService {
       );
       return stealthAccount;
     } catch (error) {
-      console.error("Failed to process notification:", error);
+      console.error(
+        "[Manager-Process] 💥 Failed to process notification:",
+        error,
+      );
       return null;
     }
   }
