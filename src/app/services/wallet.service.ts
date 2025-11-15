@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, Injector } from '@angular/core';
 import {BehaviorSubject} from 'rxjs';
 import {UtilService} from './util.service';
 import {ApiService} from './api.service';
@@ -13,6 +13,7 @@ import {AppSettingsService} from './app-settings.service';
 import {PriceService} from './price.service';
 import {LedgerService} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
+import { NanoNymManagerService } from './nanonym-manager.service';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
 
@@ -138,7 +139,8 @@ export class WalletService {
     private nanoBlock: NanoBlockService,
     private ledgerService: LedgerService,
     private noZerosPipe: NoPaddingZerosPipe,
-    private notifications: NotificationService) {
+    private notifications: NotificationService,
+    private injector: Injector) {
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
       console.log('New Transaction', transaction);
@@ -661,6 +663,16 @@ export class WalletService {
     if (this.wallet.accounts.length) {
       this.websocket.unsubscribeAccounts(this.wallet.accounts.map(a => a.id)); // Unsubscribe from old accounts
     }
+
+    // Clear NanoNym data (must happen before wallet seed is cleared)
+    // Use lazy injection to avoid circular dependency
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
+
     this.wallet.type = 'seed';
     this.wallet.password = '';
     this.wallet.locked = false;
@@ -1097,6 +1109,14 @@ export class WalletService {
 
   removeWalletData() {
     localStorage.removeItem(this.storeKey);
+
+    // Clear NanoNym data
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
   }
 
   generateWalletExport() {

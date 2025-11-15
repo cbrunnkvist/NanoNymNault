@@ -15,6 +15,7 @@ import {RepresentativeService} from '../../services/representative.service';
 import {NinjaService} from '../../services/ninja.service';
 import {QrModalService} from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
+import {NanoNymManagerService} from '../../services/nanonym-manager.service';
 
 @Component({
   selector: 'app-configure-app',
@@ -40,7 +41,8 @@ export class ConfigureAppComponent implements OnInit {
     private ninja: NinjaService,
     private renderer: Renderer2,
     private qrModalService: QrModalService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    private nanonymManager: NanoNymManagerService) { }
   wallet = this.walletService.wallet;
 
   languages = this.translocoService.getAvailableLangs() as [{id: string, label: string}];
@@ -604,6 +606,7 @@ export class ConfigureAppComponent implements OnInit {
       await UIkit.modal.confirm('<p class="uk-alert uk-alert-danger"><br><span class="uk-flex"><span uk-icon="icon: warning; ratio: 3;" class="uk-align-center"></span></span><span style="font-size: 18px;">' + this.translocoService.translate('configure-app.you-are-about-to-delete-all-locally-stored-data-about-your') + '</span><br><br><b style="font-size: 18px;">' + this.translocoService.translate('reset-wallet.before-continuing-make-sure-you-have-saved-the-nano-seed') + '</b><br><br><span style="font-size: 18px;"><b>' + this.translocoService.translate('reset-wallet.you-will-not-be-able-to-recover-the-funds-without-a-backup') + '</b></span></p><br>');
       this.walletService.resetWallet();
       this.walletService.removeWalletData();
+      this.nanonymManager.resetAll(); // Clear all NanoNym data
 
       this.notifications.sendSuccess(this.translocoService.translate('configure-app.successfully-deleted-all-wallet-data'));
     } catch (err) {}
@@ -621,6 +624,7 @@ export class ConfigureAppComponent implements OnInit {
       this.appSettings.clearAppSettings();
       this.repService.resetRepresentativeList();
       this.api.deleteCache();
+      this.nanonymManager.resetAll(); // Clear all NanoNym data
 
       this.loadFromSettings();
 

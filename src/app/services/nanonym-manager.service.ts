@@ -209,6 +209,25 @@ export class NanoNymManagerService {
   }
 
   /**
+   * Reset all NanoNym data (for wallet seed change)
+   * Stops monitoring, clears storage, and resets internal state
+   */
+  async resetAll(): Promise<void> {
+    console.log('[Manager] Resetting all NanoNym data');
+
+    // Stop all Nostr monitoring
+    await this.stopMonitoringAll();
+
+    // Clear routing map
+    this.nostrPrivateToIndexMap.clear();
+
+    // Clear storage
+    this.storage.clearAll();
+
+    console.log('[Manager] All NanoNym data cleared');
+  }
+
+  /**
    * Process an incoming Nostr notification
    */
   async processNotification(
