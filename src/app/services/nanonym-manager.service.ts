@@ -5,6 +5,10 @@ import {
   StealthAccount,
   NanoNymNotification,
 } from "../types/nanonym.types";
+import {
+  NanoNymAccount,
+  truncateNanoNymAddress,
+} from "../types/spendable-account.types";
 import { NanoNymStorageService } from "./nanonym-storage.service";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
@@ -393,6 +397,46 @@ export class NanoNymManagerService {
     const nanoNym = this.storage.getNanoNym(nanoNymIndex);
     if (!nanoNym) return new BigNumber(0);
     return nanoNym.balance;
+  }
+
+  /**
+   * Get all NanoNyms as spendable accounts
+   * Converts NanoNym objects to the SpendableAccount interface
+   * Shows all NanoNyms regardless of balance (like regular accounts)
+   */
+  getSpendableNanoNymAccounts(): NanoNymAccount[] {
+    const allNanoNyms = this.storage.getAllNanoNyms();
+
+    return allNanoNyms.map(nn => this.convertToSpendableAccount(nn));
+  }
+
+  /**
+   * Get a specific NanoNym as a spendable account
+   */
+  getNanoNymAsSpendableAccount(nanoNymIndex: number): NanoNymAccount | null {
+    const nanoNym = this.storage.getNanoNym(nanoNymIndex);
+    if (!nanoNym) return null;
+    return this.convertToSpendableAccount(nanoNym);
+  }
+
+  /**
+   * Convert a NanoNym to a SpendableAccount
+   */
+  private convertToSpendableAccount(nanoNym: NanoNym): NanoNymAccount {
+    const nano = new BigNumber('1000000000000000000000000000000');
+
+    return {
+      type: 'nanonym',
+      id: nanoNym.nnymAddress,
+      label: nanoNym.label,
+      balance: nanoNym.balance,
+      balanceRaw: nanoNym.balance.mod(nano),
+      pending: new BigNumber(0), // Stealth accounts auto-receive
+      balanceFiat: 0, // Will be calculated by component
+      index: nanoNym.index,
+      nanoNym: nanoNym,
+      truncatedAddress: truncateNanoNymAddress(nanoNym.nnymAddress),
+    };
   }
 
   /**

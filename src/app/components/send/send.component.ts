@@ -18,6 +18,14 @@ import { HttpClient } from "@angular/common/http";
 import * as nanocurrency from "nanocurrency";
 import { NanoNymCryptoService } from "../../services/nanonym-crypto.service";
 import { NostrNotificationService } from "../../services/nostr-notification.service";
+import { NanoNymManagerService } from "../../services/nanonym-manager.service";
+import {
+  SpendableAccount,
+  RegularAccount,
+  NanoNymAccount,
+  formatSpendableAccountLabel
+} from "../../types/spendable-account.types";
+import { NanoNymAccountSelectionService } from "../../services/nanonym-account-selection.service";
 
 const nacl = window["nacl"];
 
@@ -33,6 +41,8 @@ export class SendComponent implements OnInit {
   sendDestinationType = "external-address";
 
   accounts = this.walletService.wallet.accounts;
+  spendableAccounts: SpendableAccount[] = [];
+  selectedSpendableAccount: SpendableAccount | null = null;
 
   ALIAS_LOOKUP_DEFAULT_STATE = {
     fullText: "",
@@ -81,7 +91,7 @@ export class SendComponent implements OnInit {
   confirmingTransaction = false;
   selAccountInit = false;
 
-  // NanoNym-specific state
+  // NanoNym-specific state (receiving)
   isNanoNymAddress = false;
   nanoNymParsedKeys: {
     version: number;
@@ -91,6 +101,13 @@ export class SendComponent implements OnInit {
   } | null = null;
   stealthAddress = "";
   ephemeralPublicKey: Uint8Array | null = null;
+
+  // NanoNym spending state
+  isSpendingFromNanoNym = false;
+  selectedStealthAccounts: any[] = [];
+  privacyWarningShown = false;
+  privacyWarningDismissed = false;
+  privacyWarningPending = false;
 
   constructor(
     private route: ActivatedRoute,
@@ -108,6 +125,8 @@ export class SendComponent implements OnInit {
     private translocoService: TranslocoService,
     private nanoNymCrypto: NanoNymCryptoService,
     public nostrService: NostrNotificationService,
+    private nanoNymManager: NanoNymManagerService,
+    private accountSelection: NanoNymAccountSelectionService,
   ) {}
 
   async ngOnInit() {
@@ -116,6 +135,13 @@ export class SendComponent implements OnInit {
     this.updateQueries(params);
 
     this.addressBookService.loadAddressBook();
+
+    // Load all spendable accounts (regular + NanoNyms)
+    this.loadSpendableAccounts();
+
+    // Load privacy warning dismissed setting
+    const dismissed = localStorage.getItem('nanonym-privacy-warning-dismissed');
+    this.privacyWarningDismissed = dismissed === 'true';
 
     // Set default From account
     this.fromAccountID = this.accounts.length ? this.accounts[0].id : "";
@@ -600,11 +626,17 @@ export class SendComponent implements OnInit {
   }
 
   async sendTransaction() {
-    // Handle NanoNym addresses with a separate flow
+    // Handle sending TO NanoNym addresses with a separate flow
     if (this.isNanoNymAddress) {
       return await this.sendToNanoNym();
     }
 
+    // Check if we're spending FROM a NanoNym
+    if (this.selectedSpendableAccount?.type === 'nanonym') {
+      return await this.sendFromNanoNym();
+    }
+
+    // Regular send flow
     const destinationID = this.getDestinationID();
     const isValid = this.util.account.isValidAccount(destinationID);
     if (!isValid) {
@@ -676,6 +708,11 @@ export class SendComponent implements OnInit {
   }
 
   async confirmTransaction() {
+    // Handle spending FROM NanoNym (Section 8)
+    if (this.isSpendingFromNanoNym) {
+      return await this.confirmNanoNymSpend();
+    }
+
     const walletAccount = this.walletService.wallet.accounts.find(
       (a) => a.id === this.fromAccountID,
     );
@@ -733,7 +770,129 @@ export class SendComponent implements OnInit {
     this.confirmingTransaction = false;
   }
 
+  /**
+   * Confirm and execute spending from NanoNym stealth accounts (Section 8)
+   * Sends multiple transactions, one from each selected stealth account
+   */
+  async confirmNanoNymSpend() {
+    const destinationID = this.getDestinationID();
+
+    this.confirmingTransaction = true;
+
+    try {
+      console.log(`[Send-NanoNym] Sending from ${this.selectedStealthAccounts.length} stealth accounts`);
+
+      let totalSent = new BigNumber(0);
+      let successCount = 0;
+      const txHashes: string[] = [];
+
+      // Send from each stealth account sequentially
+      for (let i = 0; i < this.selectedStealthAccounts.length; i++) {
+        const stealthAccount = this.selectedStealthAccounts[i];
+        const accountBalance = new BigNumber(stealthAccount.amountRaw || stealthAccount.balance);
+
+        // Calculate how much to send from this account
+        const remaining = this.rawAmount.minus(totalSent);
+        const amountToSend = BigNumber.min(accountBalance, remaining);
+
+        console.log(`[Send-NanoNym] Account ${i + 1}/${this.selectedStealthAccounts.length}:`, {
+          address: stealthAccount.address,
+          balance: accountBalance.toString(),
+          sending: amountToSend.toString()
+        });
+
+        // Create temporary wallet account for this stealth address
+        const tempAccount = {
+          id: stealthAccount.address,
+          secret: stealthAccount.privateKey,
+          keyPair: {
+            publicKey: stealthAccount.publicKey,
+            secretKey: stealthAccount.privateKey
+          },
+          index: -1, // Special index for stealth accounts
+          frontier: null, // Will be fetched by generateSend
+          balance: accountBalance,
+          balanceRaw: accountBalance.mod(this.nano),
+          pending: new BigNumber(0),
+          pendingRaw: new BigNumber(0),
+          balanceFiat: 0,
+          pendingFiat: 0,
+          addressBookName: null,
+          receivePow: false
+        };
+
+        // Send the transaction
+        const txHash = await this.nanoBlock.generateSend(
+          tempAccount,
+          destinationID,
+          amountToSend,
+          false // Never ledger for stealth accounts
+        );
+
+        if (txHash) {
+          console.log(`[Send-NanoNym] ✅ Transaction ${i + 1} sent:`, txHash);
+          txHashes.push(txHash);
+          totalSent = totalSent.plus(amountToSend);
+          successCount++;
+        } else {
+          console.error(`[Send-NanoNym] ❌ Transaction ${i + 1} failed`);
+          // Continue trying other accounts even if one fails
+        }
+
+        // Optional: Add small delay for privacy mode (Section 8.4)
+        // For now, send immediately (fast UX)
+      }
+
+      if (successCount > 0) {
+        const sentXNO = this.util.nano.rawToMnano(totalSent).toFixed(6);
+        this.notificationService.removeNotification("success-send");
+        this.notificationService.sendSuccess(
+          `Successfully sent ${sentXNO} XNO from ${successCount} stealth account${successCount > 1 ? 's' : ''}!`,
+          { identifier: "success-send" }
+        );
+
+        console.log(`[Send-NanoNym] ✅ Complete:`, {
+          totalSent: totalSent.toString(),
+          successCount,
+          txHashes
+        });
+
+        // Refresh NanoNym balances
+        const nanoNymAccount = this.selectedSpendableAccount as NanoNymAccount;
+        await this.nanoNymManager.refreshBalances(nanoNymAccount.index);
+
+        this.resetForm();
+      } else {
+        this.notificationService.sendError(
+          `Failed to send transactions from stealth accounts. Please try again.`
+        );
+      }
+    } catch (err) {
+      console.error('[Send-NanoNym] Error:', err);
+      this.notificationService.sendError(
+        `Error sending from NanoNym: ${err.message}`
+      );
+    }
+
+    this.confirmingTransaction = false;
+  }
+
   setMaxAmount() {
+    // Handle NanoNym accounts differently
+    if (this.selectedSpendableAccount?.type === 'nanonym') {
+      const nanoNymAccount = this.selectedSpendableAccount as NanoNymAccount;
+      this.amountExtraRaw = nanoNymAccount.balanceRaw;
+
+      const nanoVal = this.util.nano.rawToNano(nanoNymAccount.balance).floor();
+      const maxAmount = this.getAmountValueFromBase(
+        this.util.nano.nanoToRaw(nanoVal),
+      );
+      this.amount = maxAmount.toNumber();
+      this.syncFiatPrice();
+      return;
+    }
+
+    // Regular wallet account
     const walletAccount = this.walletService.wallet.accounts.find(
       (a) => a.id === this.fromAccountID,
     );
@@ -935,6 +1094,118 @@ export class SendComponent implements OnInit {
     }
   }
 
+  /**
+   * Send flow when spending FROM a NanoNym (Section 8)
+   */
+  async sendFromNanoNym() {
+    const nanoNymAccount = this.selectedSpendableAccount as NanoNymAccount;
+    const destinationID = this.getDestinationID();
+
+    // Validate inputs
+    const isValid = this.util.account.isValidAccount(destinationID);
+    if (!isValid) {
+      return this.notificationService.sendWarning(`To account address is not valid`);
+    }
+    if (!destinationID) {
+      return this.notificationService.sendWarning(`Destination account is required`);
+    }
+    if (!this.validateAmount()) {
+      return this.notificationService.sendWarning(`Invalid XNO amount`);
+    }
+
+    this.preparingTransaction = true;
+
+    try {
+      const rawAmount = this.getAmountBaseValue(this.amount || 0);
+      this.rawAmount = rawAmount.plus(this.amountExtraRaw);
+
+      if (this.amount < 0 || rawAmount.lessThan(0)) {
+        this.preparingTransaction = false;
+        return this.notificationService.sendWarning(`Amount is invalid`);
+      }
+
+      // Use account selection algorithm to pick stealth accounts
+      const selectionResult = this.accountSelection.selectAccountsForSend(
+        this.rawAmount,
+        nanoNymAccount.nanoNym.stealthAccounts
+      );
+
+      if (selectionResult.accounts.length === 0) {
+        this.preparingTransaction = false;
+        return this.notificationService.sendError(
+          `Insufficient balance in ${nanoNymAccount.label}. Available: ${this.util.nano.rawToMnano(nanoNymAccount.balance).toFixed(6)} XNO`
+        );
+      }
+
+      // Store selected stealth accounts for confirmation
+      this.selectedStealthAccounts = selectionResult.accounts;
+      this.isSpendingFromNanoNym = true;
+
+      console.log('[Send-NanoNym] Account selection result:', {
+        requested: this.rawAmount.toString(),
+        accountsSelected: selectionResult.accounts.length,
+        totalBalance: selectionResult.totalBalance.toString(),
+        requiresMultiple: selectionResult.requiresMultipleAccounts
+      });
+
+      // Get destination info
+      const to = await this.nodeApi.accountInfo(destinationID);
+      to.balanceBN = new BigNumber(to.balance || 0);
+      this.toAccount = to;
+
+      // Set from account info (aggregate)
+      this.fromAccount = {
+        balance: nanoNymAccount.balance.toString(),
+        balanceBN: nanoNymAccount.balance,
+      };
+
+      // Determine a proper raw amount to show in the UI
+      this.amountExtraRaw = this.rawAmount.mod(this.nano);
+
+      // Determine fiat value
+      this.amountFiat = this.util.nano
+        .rawToMnano(this.rawAmount)
+        .times(this.price.price.lastPrice)
+        .toNumber();
+
+      this.fromAddressBook = nanoNymAccount.label;
+      this.toAddressBook =
+        this.addressBookService.getAccountName(destinationID) ||
+        this.getAccountLabel(destinationID, null);
+
+      this.preparingTransaction = false;
+
+      // Check if privacy warning should be shown (Section 8.3)
+      const privacyImpact = this.accountSelection.calculatePrivacyImpact(selectionResult);
+      const shouldShowWarning = (
+        selectionResult.requiresMultipleAccounts &&
+        !this.privacyWarningDismissed &&
+        !this.privacyWarningShown
+      );
+
+      console.log('[Send-NanoNym] Privacy check:', {
+        requiresMultiple: selectionResult.requiresMultipleAccounts,
+        dismissed: this.privacyWarningDismissed,
+        shown: this.privacyWarningShown,
+        shouldShow: shouldShowWarning,
+        impact: privacyImpact
+      });
+
+      if (shouldShowWarning) {
+        this.privacyWarningPending = true;
+        this.showPrivacyWarning();
+        return; // Don't proceed to confirm panel yet
+      }
+
+      this.activePanel = "confirm";
+    } catch (err) {
+      this.preparingTransaction = false;
+      this.notificationService.sendError(
+        `Error preparing NanoNym send: ${err.message}`
+      );
+    }
+  }
+
   resetForm() {
     this.activePanel = "send";
     this.amount = null;
@@ -951,11 +1222,109 @@ export class SendComponent implements OnInit {
     this.nanoNymParsedKeys = null;
     this.stealthAddress = "";
     this.ephemeralPublicKey = null;
+    this.isSpendingFromNanoNym = false;
+    this.selectedStealthAccounts = [];
+    this.privacyWarningShown = false;
   }
 
   bytesToHex(bytes: Uint8Array): string {
     return Array.from(bytes)
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("");
+  }
+
+  /**
+   * Load all spendable accounts (regular wallet accounts + NanoNyms)
+   */
+  loadSpendableAccounts(): void {
+    const nano = new BigNumber(this.nano);
+
+    // Convert regular wallet accounts to SpendableAccount format
+    const regularAccounts: RegularAccount[] = this.accounts.map(account => ({
+      type: 'regular' as const,
+      id: account.id,
+      label: account.addressBookName || `Account #${account.index}`,
+      balance: account.balance,
+      balanceRaw: account.balanceRaw,
+      pending: account.pending,
+      balanceFiat: account.balanceFiat,
+      index: account.index,
+      walletAccount: account
+    }));
+
+    // Get NanoNym accounts
+    const nanoNymAccounts = this.nanoNymManager.getSpendableNanoNymAccounts();
+
+    // Calculate fiat values for NanoNyms
+    nanoNymAccounts.forEach(account => {
+      account.balanceFiat = this.util.nano.rawToMnano(account.balance)
+        .times(this.price.price.lastPrice)
+        .toNumber();
+    });
+
+    // Combine both types
+    this.spendableAccounts = [...regularAccounts, ...nanoNymAccounts];
+
+    console.log('[Send] Loaded spendable accounts:', {
+      regular: regularAccounts.length,
+      nanoNym: nanoNymAccounts.length,
+      total: this.spendableAccounts.length
+    });
+  }
+
+  /**
+   * Format account label for dropdown display
+   * Regular: "Account #0 (10.5 XNO)"
+   * NanoNym: "Donations - nnym_12345...67890 (2.5 XNO)"
+   */
+  formatAccountLabel(account: SpendableAccount): string {
+    return formatSpendableAccountLabel(
+      account,
+      (raw: BigNumber) => this.util.nano.rawToMnano(raw).toFixed(6).replace(/\.?0+$/, '')
+    );
+  }
+
+  /**
+   * Handle fromAccountID changes
+   * Find the corresponding SpendableAccount
+   */
+  onFromAccountChange(): void {
+    const selected = this.spendableAccounts.find(acc => acc.id === this.fromAccountID);
+    this.selectedSpendableAccount = selected || null;
+
+    console.log('[Send] Selected account:', {
+      type: selected?.type,
+      id: selected?.id,
+      label: selected?.label,
+      balance: selected?.balance.toString()
+    });
+  }
+
+  /**
+   * Show privacy warning modal (Section 8.3)
+   */
+  showPrivacyWarning(): void {
+    const UIkit = window['UIkit'];
+    UIkit.modal('#nanonym-privacy-warning-modal').show();
+  }
+
+  /**
+   * User accepted privacy warning and wants to proceed
+   */
+  acceptPrivacyWarning(): void {
+    const UIkit = window['UIkit'];
+    UIkit.modal('#nanonym-privacy-warning-modal').hide();
+
+    // Save dismissed setting if checkbox was checked
+    if (this.privacyWarningDismissed) {
+      localStorage.setItem('nanonym-privacy-warning-dismissed', 'true');
+      console.log('[Send-NanoNym] Privacy warning dismissed permanently');
+    }
+
+    this.privacyWarningShown = true;
+    this.privacyWarningPending = false;
+
+    // Now proceed to confirmation panel
+    this.activePanel = "confirm";
   }
 }
