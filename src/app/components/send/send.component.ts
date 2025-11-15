@@ -626,6 +626,9 @@ export class SendComponent implements OnInit {
   }
 
   async sendTransaction() {
+    // Ensure the selected account is up-to-date before proceeding
+    this.onFromAccountChange();
+
     // Handle sending TO NanoNym addresses with a separate flow
     if (this.isNanoNymAddress) {
       return await this.sendToNanoNym();
