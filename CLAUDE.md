@@ -1023,45 +1023,60 @@ Use well-audited libraries:
 
 **Priority:** Working user-verifiable PoC > Tests > Documentation
 
-### Phase 1: Core Cryptography
+**Current Status:** Phase 3 complete ✅ (as of 2025-11-15)
+- ✅ Send TO NanoNym addresses (stealth generation + Nostr notifications)
+- ✅ Spend FROM NanoNyms (multi-account selection + privacy warnings)
+- ✅ 15 passing unit tests for account selection algorithm
+- 🚧 Phase 4 (Receive UI) in progress
+
+---
+
+### Phase 1: Core Cryptography ✅
+**Status:** COMPLETE
 **Deliverable:** Functional crypto library with manual verification capability
 
-- Multi-account key derivation (BIP-32 style)
-- ECDH shared secret generation
-- Stealth address derivation
-- `nnym_` address encoding/decoding
+- ✅ Multi-account key derivation (BIP-32 style)
+- ✅ ECDH shared secret generation
+- ✅ Stealth address derivation
+- ✅ `nnym_` address encoding/decoding
 - **Testing approach:** Unit tests for address encoding, key derivation paths
   - Focus: Data correctness (addresses decode to correct keys)
   - Do NOT test: Library internals (bip39, tweetnacl already tested)
   - Manual verification: Generate test addresses, verify round-trip encoding
 
-### Phase 2: Nostr Integration
+### Phase 2: Nostr Integration ✅
+**Status:** COMPLETE
 **Deliverable:** Send/receive notifications between two wallet instances
 
-- Integrate nostr-tools library
-- NIP-17 encryption/decryption
-- Relay connection management
-- Notification handling
-- Multi-relay redundancy
+- ✅ Integrate nostr-tools library
+- ✅ NIP-17 encryption/decryption
+- ✅ Relay connection management
+- ✅ Notification handling
+- ✅ Multi-relay redundancy
 - **Testing approach:** Integration tests with mocked Nostr relay
   - Focus: Message format, encryption correctness
   - Manual verification: Two browser tabs, send notification from A→B, verify receipt
 
-### Phase 3: Wallet UI - Send
+### Phase 3: Wallet UI - Send ✅
+**Status:** COMPLETE (2025-11-15)
 **Deliverable:** Complete send flow functional in dev mode
 
-- Detect `nnym_` addresses
-- Send flow with Nostr notification
-- Relay status display
-- Error handling
-- **Spending from NanoNyms (NEW):**
-  - Stealth account selection algorithm (minimum accounts + randomized order)
-  - Privacy warning UI with configurable threshold
-  - Multi-account sending support
-  - Balance aggregation and display
+- ✅ Detect `nnym_` addresses
+- ✅ Send flow with Nostr notification
+- ✅ Relay status display
+- ✅ Error handling
+- ✅ **Spending from NanoNyms (Section 8):**
+  - ✅ Stealth account selection algorithm (minimum accounts + randomized order)
+  - ✅ Privacy warning UI with configurable threshold
+  - ✅ Multi-account sending support
+  - ✅ Balance aggregation and display
+  - ✅ NanoNyms appear in "From Account" dropdown with special formatting
+  - ✅ Privacy impact calculation (high/medium/low)
+  - ✅ "Don't show again" option persists to localStorage
 - **Testing approach:** Manual QA with test NanoNyms
   - Focus: User workflow works end-to-end (both TO and FROM NanoNyms)
-  - Test multi-account spending scenarios
+  - ✅ Test multi-account spending scenarios
+  - ✅ 15 unit tests for account selection algorithm
   - No automated UI tests yet (add Cypress/Playwright later)
 
 ### Phase 4: Wallet UI - Receive
