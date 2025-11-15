@@ -284,4 +284,111 @@ describe("NanoNymCryptoService", () => {
       }
     });
   });
+
+  describe("CRITICAL: Full sender-receiver cryptographic roundtrip", () => {
+    it("should verify receiver can spend from sender-derived stealth address", () => {
+      // SETUP: Use deterministic test seed
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+      const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
+
+      // SENDER SIDE: Generate payment
+      const senderEphemeral = service.generateEphemeralKey();
+      const sharedSecretSender = service.generateSharedSecret(
+        senderEphemeral.private,
+        receiverKeys.view.public,
+      );
+      const stealthSender = service.deriveStealthAddress(
+        sharedSecretSender,
+        senderEphemeral.public,
+        receiverKeys.spend.public,
+      );
+
+      // RECEIVER SIDE: Process notification (with R = senderEphemeral.public)
+      const sharedSecretReceiver = service.generateSharedSecret(
+        receiverKeys.view.private,
+        senderEphemeral.public,
+      );
+      const stealthReceiver = service.deriveStealthAddress(
+        sharedSecretReceiver,
+        senderEphemeral.public,
+        receiverKeys.spend.public,
+      );
+      const privateKeyReceiver = service.deriveStealthPrivateKey(
+        receiverKeys.spend.private,
+        sharedSecretReceiver,
+        senderEphemeral.public,
+        receiverKeys.spend.public,
+      );
+
+      // CRITICAL VERIFICATION 1: Addresses match
+      expect(stealthSender.address).toEqual(stealthReceiver.address);
+      expect(stealthSender.publicKey).toEqual(stealthReceiver.publicKey);
+
+      // CRITICAL VERIFICATION 2: Receiver's private key controls sender's public key
+      const derivedPublicKey =
+        service.derivePublicKeyFromPrivate(privateKeyReceiver);
+      expect(derivedPublicKey).toEqual(stealthSender.publicKey);
+
+      // CRITICAL VERIFICATION 3: Can generate valid Nano address from derived keys
+      const addressFromReceiverKeys =
+        service.publicKeyToNanoAddress(derivedPublicKey);
+      expect(addressFromReceiverKeys).toEqual(stealthSender.address);
+    });
+
+    it("should verify roundtrip works for multiple payments (unlinkability)", () => {
+      // Test that 3 separate payments all work independently
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+      const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
+
+      const stealthAddresses: string[] = [];
+
+      for (let i = 0; i < 3; i++) {
+        // Each payment uses different ephemeral key
+        const senderEphemeral = service.generateEphemeralKey();
+
+        // Sender derives stealth address
+        const sharedSecretSender = service.generateSharedSecret(
+          senderEphemeral.private,
+          receiverKeys.view.public,
+        );
+        const stealthSender = service.deriveStealthAddress(
+          sharedSecretSender,
+          senderEphemeral.public,
+          receiverKeys.spend.public,
+        );
+
+        // Receiver derives from notification
+        const sharedSecretReceiver = service.generateSharedSecret(
+          receiverKeys.view.private,
+          senderEphemeral.public,
+        );
+        const stealthReceiver = service.deriveStealthAddress(
+          sharedSecretReceiver,
+          senderEphemeral.public,
+          receiverKeys.spend.public,
+        );
+        const privateKeyReceiver = service.deriveStealthPrivateKey(
+          receiverKeys.spend.private,
+          sharedSecretReceiver,
+          senderEphemeral.public,
+          receiverKeys.spend.public,
+        );
+
+        // Verify each payment independently
+        expect(stealthSender.address).toEqual(stealthReceiver.address);
+        const derivedPubKey =
+          service.derivePublicKeyFromPrivate(privateKeyReceiver);
+        expect(derivedPubKey).toEqual(stealthSender.publicKey);
+
+        // Track addresses to verify they're all different (unlinkable)
+        stealthAddresses.push(stealthSender.address);
+      }
+
+      // Verify all stealth addresses are different (unlinkability)
+      const uniqueAddresses = new Set(stealthAddresses);
+      expect(uniqueAddresses.size).toBe(3);
+    });
+  });
 });

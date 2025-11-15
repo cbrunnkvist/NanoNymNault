@@ -65,14 +65,14 @@ export class NanoNymCryptoService {
       seedBytes,
       basePath.concat(this.uint32ToBytes(0)),
     );
-    const spendKeyPair = nacl.sign.keyPair.fromSeed(spendSeed);
+    const spendKeyPair = this.blake2bKeyPairFromSeed(spendSeed);
 
     // Derive view key (key_type = 1)
     const viewSeed = this.deriveChildKey(
       seedBytes,
       basePath.concat(this.uint32ToBytes(1)),
     );
-    const viewKeyPair = nacl.sign.keyPair.fromSeed(viewSeed);
+    const viewKeyPair = this.blake2bKeyPairFromSeed(viewSeed);
 
     // Derive Nostr key (key_type = 2)
     const nostrSeed = this.deriveChildKey(
@@ -89,12 +89,12 @@ export class NanoNymCryptoService {
 
     return {
       spend: {
-        private: spendKeyPair.secretKey.slice(0, 32),
-        public: spendKeyPair.publicKey,
+        private: spendKeyPair.private,
+        public: spendKeyPair.public,
       },
       view: {
-        private: viewKeyPair.secretKey.slice(0, 32),
-        public: viewKeyPair.publicKey,
+        private: viewKeyPair.private,
+        public: viewKeyPair.public,
       },
       nostr: {
         private: nostrPrivateKey,
@@ -134,26 +134,31 @@ export class NanoNymCryptoService {
   }
 
   /**
-   * Generate ECDH shared secret between sender's ephemeral key and receiver's view key
+   * Generate ECDH shared secret using Ed25519 directly (CamoNano style)
+   * Matches nanopyrs: (scalar * EdwardsPoint).compress()
    *
-   * @param ephemeralPrivate - Sender's ephemeral private key (r) - 32 bytes
-   * @param recipientViewPublic - Recipient's view public key (B_view) - 32 bytes Ed25519
-   * @returns Shared secret point (32 bytes)
+   * @param privateKey - Private key as scalar (32 bytes)
+   * @param publicKey - Public key as Ed25519 point (32 bytes)
+   * @returns Shared secret (32 bytes compressed point)
    */
   generateSharedSecret(
-    ephemeralPrivate: Uint8Array,
-    recipientViewPublic: Uint8Array,
+    privateKey: Uint8Array,
+    publicKey: Uint8Array,
   ): Uint8Array {
-    // Convert Ed25519 keys to Curve25519 keys for ECDH
-    const curve25519Private = this.ed25519PrivateToX25519(ephemeralPrivate);
+    // CamoNano ECDH: (scalar * EdwardsPoint).compress()
+    // Convert seed/private key to scalar using blake2b_scalar process
+    // This matches CamoNano's scalar derivation (BLAKE2b-512, clamp, reduce mod L)
+    const scalarBytes = this.blake2bToScalar(privateKey);
+    const scalar = this.bytesToBigIntLE(scalarBytes);
 
-    // Convert Ed25519 public key to Curve25519 (X25519) public key using @noble/curves utility
-    const curve25519Public = edwardsToMontgomeryPub(recipientViewPublic);
+    // Convert public key bytes to Ed25519 point
+    const point = ed25519.ExtendedPoint.fromHex(bytesToHex(publicKey));
 
-    // Compute shared secret using X25519 (ECDH on Curve25519)
-    const sharedSecret = nacl.scalarMult(curve25519Private, curve25519Public);
+    // Compute scalar * point
+    const result = point.multiply(scalar);
 
-    return sharedSecret;
+    // Compress and return bytes (this is the shared secret)
+    return result.toRawBytes();
   }
 
   /**
@@ -174,6 +179,62 @@ export class NanoNymCryptoService {
   }
 
   /**
+   * Convert input to Ed25519 scalar (matches nanopyrs blake2b_scalar)
+   * Process: BLAKE2b-512 -> take first 32 bytes -> clamp -> reduce mod L
+   *
+   * @param input - Input bytes to hash
+   * @returns Ed25519 scalar as 32-byte array
+   */
+  private blake2bToScalar(input: Uint8Array): Uint8Array {
+    // Step 1: Hash with BLAKE2b-512 (64 bytes)
+    const hash64 = blake2b(input, undefined, 64);
+    const hash32 = new Uint8Array(hash64).slice(0, 32);
+
+    // Step 2: Clamp the bytes (Ed25519 clamping)
+    // Clear bits 0, 1, 2, and 255
+    // Set bit 254
+    const clamped = new Uint8Array(hash32);
+    clamped[0] &= 248; // Clear bits 0, 1, 2
+    clamped[31] &= 127; // Clear bit 255
+    clamped[31] |= 64; // Set bit 254
+
+    // Step 3: Reduce modulo L (Ed25519 group order)
+    // L = 2^252 + 27742317777372353535851937790883648493
+    const L = BigInt(
+      "0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed",
+    );
+    const scalar = this.bytesToBigIntLE(clamped);
+    const reduced = scalar % L;
+
+    return this.bigIntToBytesLE(reduced, 32);
+  }
+
+  /**
+   * Derive Ed25519 keypair from seed using Blake2b (CamoNano compatible)
+   * Matches nanopyrs key derivation: scalar = blake2b_scalar(seed), public = scalar * G
+   *
+   * @param seed - 32-byte seed
+   * @returns Keypair with private (seed) and public (32 bytes) keys
+   */
+  private blake2bKeyPairFromSeed(seed: Uint8Array): {
+    private: Uint8Array;
+    public: Uint8Array;
+  } {
+    // Derive scalar from seed using blake2b_scalar
+    const scalarBytes = this.blake2bToScalar(seed);
+    const scalar = this.bytesToBigIntLE(scalarBytes);
+
+    // Compute public key: scalar * G
+    const publicPoint = ed25519.ExtendedPoint.BASE.multiply(scalar);
+    const publicKey = publicPoint.toRawBytes();
+
+    return {
+      private: seed, // Keep seed as private key (will convert to scalar when needed)
+      public: publicKey,
+    };
+  }
+
+  /**
    * Derive stealth address from shared secret and recipient's spend key
    *
    * @param sharedSecret - ECDH shared secret
@@ -186,40 +247,48 @@ export class NanoNymCryptoService {
     ephemeralPublic: Uint8Array,
     recipientSpendPublic: Uint8Array,
   ): { publicKey: Uint8Array; address: string } {
-    // Compute tweak scalar: t = BLAKE2b(shared_secret || R || B_spend)
-    const data = new Uint8Array(
-      sharedSecret.length +
-        ephemeralPublic.length +
-        recipientSpendPublic.length,
-    );
-    data.set(sharedSecret, 0);
-    data.set(ephemeralPublic, sharedSecret.length);
-    data.set(
-      recipientSpendPublic,
-      sharedSecret.length + ephemeralPublic.length,
-    );
+    // Compute tweak scalar using CamoNano's get_account_scalar(secret, 0):
+    // 1. Concatenate shared_secret || account_index (0 as 4 bytes big-endian)
+    // 2. Hash with BLAKE2b-256 to get "account_seed"
+    // 3. Convert account_seed to scalar using blake2b_scalar
+    const accountIndex = new Uint8Array(4); // [0, 0, 0, 0]
+    accountIndex[0] = 0; // Big-endian uint32 = 0
+    const accountSeedInput = new Uint8Array(sharedSecret.length + 4);
+    accountSeedInput.set(sharedSecret, 0);
+    accountSeedInput.set(accountIndex, sharedSecret.length);
 
-    const tweakHash = blake2b(data, undefined, 32);
-    const tweak = new Uint8Array(tweakHash);
+    const accountSeed = blake2b(accountSeedInput, undefined, 32);
+    const tweakScalar = this.blake2bToScalar(new Uint8Array(accountSeed));
+
+    console.log('[DEBUG deriveStealthAddress] sharedSecret:', bytesToHex(sharedSecret));
+    console.log('[DEBUG deriveStealthAddress] ephemeralPublic:', bytesToHex(ephemeralPublic));
+    console.log('[DEBUG deriveStealthAddress] recipientSpendPublic:', bytesToHex(recipientSpendPublic));
+    console.log('[DEBUG deriveStealthAddress] accountSeed:', bytesToHex(new Uint8Array(accountSeed)));
+    console.log('[DEBUG deriveStealthAddress] tweakScalar:', bytesToHex(tweakScalar));
 
     // Compute stealth address: P_masked = B_spend + (t * G)
     // Step 1: Compute t * G (scalar multiply base point)
-    const tweakKeyPair = nacl.sign.keyPair.fromSeed(tweak);
-    const tweakPoint = tweakKeyPair.publicKey;
+    const tweakPoint = ed25519.ExtendedPoint.BASE.multiply(
+      this.bytesToBigIntLE(tweakScalar),
+    ).toRawBytes();
+
+    console.log('[DEBUG deriveStealthAddress] tweakPoint (t*G):', bytesToHex(tweakPoint));
 
     // Step 2: Add B_spend + tweakPoint
-    // For now, use a simplified approach with nanocurrency utilities
-    // TODO: Implement proper Ed25519 point addition
     const stealthPublicKey = this.ed25519PointAdd(
       recipientSpendPublic,
       tweakPoint,
     );
+
+    console.log('[DEBUG deriveStealthAddress] stealthPublicKey:', bytesToHex(stealthPublicKey));
 
     // Convert to Nano address using util service
     const stealthAddress = this.util.account.getPublicAccountID(
       stealthPublicKey,
       "nano",
     );
+
+    console.log('[DEBUG deriveStealthAddress] stealthAddress:', stealthAddress);
 
     return {
       publicKey: stealthPublicKey,
@@ -313,21 +382,34 @@ export class NanoNymCryptoService {
     ephemeralPublic: Uint8Array,
     spendPublic: Uint8Array,
   ): Uint8Array {
-    // Compute tweak scalar: t = BLAKE2b(shared_secret || R || B_spend)
-    const data = new Uint8Array(
-      sharedSecret.length + ephemeralPublic.length + spendPublic.length,
-    );
-    data.set(sharedSecret, 0);
-    data.set(ephemeralPublic, sharedSecret.length);
-    data.set(spendPublic, sharedSecret.length + ephemeralPublic.length);
+    // Compute tweak scalar using SAME process as deriveStealthAddress:
+    // 1. Concatenate shared_secret || account_index (0 as 4 bytes big-endian)
+    // 2. Hash with BLAKE2b-256 to get "account_seed"
+    // 3. Convert account_seed to scalar using blake2b_scalar
+    const accountIndex = new Uint8Array(4); // [0, 0, 0, 0]
+    accountIndex[0] = 0; // Big-endian uint32 = 0
+    const accountSeedInput = new Uint8Array(sharedSecret.length + 4);
+    accountSeedInput.set(sharedSecret, 0);
+    accountSeedInput.set(accountIndex, sharedSecret.length);
 
-    const tweakHash = blake2b(data, undefined, 32);
-    const tweak = new Uint8Array(tweakHash);
+    const accountSeed = blake2b(accountSeedInput, undefined, 32);
+    const tweakScalar = this.blake2bToScalar(new Uint8Array(accountSeed));
+
+    console.log('[DEBUG deriveStealthPrivateKey] sharedSecret:', bytesToHex(sharedSecret));
+    console.log('[DEBUG deriveStealthPrivateKey] ephemeralPublic:', bytesToHex(ephemeralPublic));
+    console.log('[DEBUG deriveStealthPrivateKey] spendPublic:', bytesToHex(spendPublic));
+    console.log('[DEBUG deriveStealthPrivateKey] accountSeed:', bytesToHex(new Uint8Array(accountSeed)));
+    console.log('[DEBUG deriveStealthPrivateKey] tweakScalar:', bytesToHex(tweakScalar));
+    console.log('[DEBUG deriveStealthPrivateKey] spendPrivate (seed):', bytesToHex(spendPrivate));
+
+    // Convert spend private SEED to SCALAR first (CamoNano uses blake2b_scalar)
+    const spendPrivateScalar = this.blake2bToScalar(spendPrivate);
+    console.log('[DEBUG deriveStealthPrivateKey] spendPrivateScalar:', bytesToHex(spendPrivateScalar));
 
     // Compute private key: p_masked = b_spend + t (mod l)
-    // where l is the Ed25519 group order
-    // l = 2^252 + 27742317777372353535851937790883648493
-    const stealthPrivate = this.ed25519ScalarAdd(spendPrivate, tweak);
+    const stealthPrivate = this.ed25519ScalarAdd(spendPrivateScalar, tweakScalar);
+
+    console.log('[DEBUG deriveStealthPrivateKey] stealthPrivate (b_spend + t):', bytesToHex(stealthPrivate));
 
     return stealthPrivate;
   }
@@ -553,12 +635,41 @@ export class NanoNymCryptoService {
     // Generate random 32-byte seed
     const seed = nacl.randomBytes(32);
 
-    // Derive Ed25519 keypair
-    const keyPair = nacl.sign.keyPair.fromSeed(seed);
+    // Derive Ed25519 keypair using Blake2b (CamoNano compatible)
+    return this.blake2bKeyPairFromSeed(seed);
+  }
 
-    return {
-      private: keyPair.secretKey.slice(0, 32),
-      public: keyPair.publicKey,
-    };
+  /**
+   * Derive public key from private key (for testing/verification)
+   * Used to verify that derived private keys correctly correspond to public keys
+   *
+   * @param privateKey - Ed25519 private key (32 bytes)
+   * @returns Corresponding public key (32 bytes)
+   */
+  derivePublicKeyFromPrivate(privateKey: Uint8Array): Uint8Array {
+    // Note: privateKey can be either a SEED or a SCALAR
+    // - For normal keys: it's a seed that needs to be hashed
+    // - For stealth keys: it's already a scalar from ed25519ScalarAdd
+    // We use the scalar directly (multiply by G) instead of hashing again
+    console.log('[DEBUG derivePublicKeyFromPrivate] privateKey:', bytesToHex(privateKey));
+
+    // Interpret as scalar and multiply by G
+    const scalar = this.bytesToBigIntLE(privateKey);
+    const publicPoint = ed25519.ExtendedPoint.BASE.multiply(scalar);
+    const publicKey = publicPoint.toRawBytes();
+
+    console.log('[DEBUG derivePublicKeyFromPrivate] derived publicKey:', bytesToHex(publicKey));
+    return publicKey;
+  }
+
+  /**
+   * Convert public key to Nano address (for testing/verification)
+   * Used to verify that derived keys produce correct Nano addresses
+   *
+   * @param publicKey - Ed25519 public key (32 bytes)
+   * @returns Nano address (nano_...)
+   */
+  publicKeyToNanoAddress(publicKey: Uint8Array): string {
+    return this.util.account.getPublicAccountID(publicKey, "nano");
   }
 }
