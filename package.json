@@ -8,7 +8,7 @@
   "scripts": {
     "ng": "ng",
     "start": "ng serve",
-    "build": "ng build",
+    "build": "npm run version && ng build",
     "test": "ng test --watch=false",
     "test:watch": "ng test",
     "lint": "ng lint",
