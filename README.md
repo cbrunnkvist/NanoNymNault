@@ -224,16 +224,40 @@ Nano uses Ed25519 curves, Nostr uses Secp256k1 (Bitcoin's curve). These are math
 - Multi-relay status display
 - Error handling and retry logic
 
-### Phase 4: Wallet UI - Receive
-- Generate multiple NanoNyms from seed
+### Phase 4: Wallet UI - Receive (In Progress)
+
+**Phase 4A: Foundation Services ✅**
+- Storage service for NanoNyms and stealth accounts
+- Manager service for business logic
+- Type definitions and interfaces
+- Balance aggregation logic
+
+**Phase 4B: Nostr Notification Processing ✅**
 - Background Nostr monitoring
-- Unified balance display across masked accounts
-- Transaction history aggregation
+- Automatic notification decryption (NIP-59)
+- Stealth address derivation from notifications
+- Blockchain verification
+
+**Phase 4C: UI Integration ✅**
+- Generate multiple NanoNyms from seed (with labels)
+- Display NanoNyms in Receive tab
+- Show stealth account list per NanoNym
+- Unified balance display across stealth accounts
 - Per-NanoNym transaction views
+- Archive/reactivate NanoNyms
+
+**Phase 4D: Stealth Account Spending 🔨 (Current Blocker)**
+- Import stealth accounts into WalletService for spending
+- Account selection algorithm (Section 8.2 of CLAUDE.md)
+- Privacy warning UI (Section 8.3 of CLAUDE.md)
+- Multi-account send flow
+- Privacy Mode (optional delays)
 
 ### Phase 5: Advanced Features
-- NanoNym account management (labels, archive/active status)
-- Coin selection and account consolidation
+- Advanced account selection strategies (FIFO, LIFO, manual control)
+- Privacy score calculation and analytics
+- Stealth account consolidation (Section 15 of CLAUDE.md)
+- Scheduled auto-consolidation
 
 ### Phase 6: Testing & Documentation
 - Comprehensive testing (unit, integration, e2e)
@@ -242,6 +266,33 @@ Nano uses Ed25519 curves, Nostr uses Secp256k1 (Bitcoin's curve). These are math
 ### Phase 7: Launch
 - Security review (if budget permits)
 - Community launch
+
+---
+
+## Current Status & Next Steps
+
+**✅ What's Working:**
+- Sending TO NanoNyms (full flow: generate stealth address → send XNO → send Nostr notification)
+- Receiving payments (notifications decrypt, stealth addresses derived, balances displayed)
+- NanoNym management (generate, label, archive/reactivate, view details)
+- Multi-relay Nostr redundancy (3-5 relays simultaneously)
+
+**❌ Current Blocker: Spending FROM Stealth Accounts**
+
+Location: `src/app/services/nanonym-manager.service.ts:343-348`
+
+```typescript
+// TODO: Add stealth account to WalletService
+// This will require modifying WalletService to support imported accounts
+```
+
+**What needs to be implemented:**
+1. **WalletService integration** - Import stealth accounts as spendable accounts
+2. **Account selection algorithm** - Choose which stealth accounts to spend from (minimize linkage)
+3. **Privacy warning UI** - Warn users when multiple accounts will be linked on-chain
+4. **Multi-account send flow** - Coordinate sending from N stealth accounts to 1 destination
+
+**See:** CLAUDE.md Section 8 (Spending from Stealth Accounts) for complete specification.
 
 ---
 
@@ -279,7 +330,6 @@ Nano uses Ed25519 curves, Nostr uses Secp256k1 (Bitcoin's curve). These are math
 #### Prerequisites
 - **Node.js v16.20.2** (via nvm)
 - **Python 3.11** (for native module compilation)
-- **Chrome/Chromium** (for running tests)
 
 #### Building the Reference Nault Wallet
 
@@ -316,15 +366,9 @@ npm start
 - If Python error: Install Python 3.11 via `brew install python@3.11`
 - If Node version error: Install via `nvm install 16`
 
-#### Running Tests (Stock Nault)
+#### Testing
 
-```bash
-# Unit tests with Brave as Chrome substitute
-CHROME_BIN="/Applications/Brave Browser.app/Contents/MacOS/Brave Browser" npm test
-
-# Note: Many tests fail due to missing DI providers (shallow test coverage)
-# See NAULT-TESTS.md for detailed test infrastructure analysis
-```
+**For test running instructions, test strategy, and debugging:** See **[TESTING.md](TESTING.md)**
 
 ---
 
