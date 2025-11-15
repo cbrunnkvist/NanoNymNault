@@ -48,3 +48,6 @@ Thumbs.db
 
 # Debug
 debug.log*-debug-*.log
+
+# Generated files
+src/environments/version.ts

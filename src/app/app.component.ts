@@ -15,6 +15,7 @@ import { DesktopService, LedgerService } from './services';
 import { environment } from 'environments/environment';
 import { DeeplinkService } from './services/deeplink.service';
 import { TranslocoService } from '@ngneat/transloco';
+import { version } from 'environments/version';
 
 
 @Component({
@@ -65,6 +66,7 @@ export class AppComponent implements OnInit {
   searchData = '';
   isConfigured = this.walletService.isConfigured;
   donationAccount = environment.donationAddress;
+  public appVersion = version;
 
   @HostListener('window:resize', ['$event']) onResize (e) {
     this.onWindowResize(e.target);
