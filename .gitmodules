@@ -7,3 +7,6 @@
 [submodule "references/camonanowallet"]
 	path = references/camonanowallet
 	url = https://github.com/CamoNano/camonanowallet.git
+[submodule "references/nanopyrs"]
+	path = references/nanopyrs
+	url = https://github.com/CamoNano/nanopyrs.git
