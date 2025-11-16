@@ -136,7 +136,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
     // Load NanoNyms and start monitoring
     await this.loadNanoNyms();
-    await this.nanoNymManager.startMonitoringAll();
 
     // Subscribe to notification processing events
     this.notificationSub = this.nanoNymManager.notificationProcessed$.subscribe(

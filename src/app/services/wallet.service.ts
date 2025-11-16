@@ -365,6 +365,15 @@ export class WalletService {
   async loadImportedWallet(seed: string, password: string, accountsIndex: number, indexes: Array<number>, walletType: WalletType) {
     this.resetWallet();
 
+    // Clear NanoNym data (must happen before wallet seed is cleared)
+    // Use lazy injection to avoid circular dependency
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
+
     this.wallet.seed = seed;
     this.wallet.seedBytes = this.util.hex.toUint8(seed);
     this.wallet.password = password;
@@ -485,6 +494,15 @@ export class WalletService {
   async createWalletFromSeed(seed: string) {
     this.resetWallet();
 
+    // Clear NanoNym data (must happen before wallet seed is cleared)
+    // Use lazy injection to avoid circular dependency
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
+
     this.wallet.seed = seed;
     this.wallet.seedBytes = this.util.hex.toUint8(seed);
 
@@ -565,6 +583,15 @@ export class WalletService {
   createNewWallet(seed: string) {
     this.resetWallet();
 
+    // Clear NanoNym data (must happen before wallet seed is cleared)
+    // Use lazy injection to avoid circular dependency
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
+
     this.wallet.seedBytes = this.util.hex.toUint8(seed);
     this.wallet.seed = seed;
 
@@ -575,6 +602,16 @@ export class WalletService {
 
   async createLedgerWallet() {
     // this.resetWallet(); Now done earlier to ensure user not sending to wrong account
+    this.resetWallet();
+
+    // Clear NanoNym data (must happen before wallet seed is cleared)
+    // Use lazy injection to avoid circular dependency
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
 
     this.wallet.type = 'ledger';
 
@@ -585,6 +622,15 @@ export class WalletService {
 
   async createWalletFromSingleKey(key: string, expanded: boolean) {
     this.resetWallet();
+
+    // Clear NanoNym data (must happen before wallet seed is cleared)
+    // Use lazy injection to avoid circular dependency
+    try {
+      const nanonymManager = this.injector.get(NanoNymManagerService);
+      nanonymManager.resetAll();
+    } catch (error) {
+      console.warn('Could not reset NanoNym data:', error);
+    }
 
     this.wallet.type = expanded ? 'expandedKey' : 'privateKey';
     this.wallet.seed = key;
@@ -662,15 +708,6 @@ export class WalletService {
   resetWallet() {
     if (this.wallet.accounts.length) {
       this.websocket.unsubscribeAccounts(this.wallet.accounts.map(a => a.id)); // Unsubscribe from old accounts
-    }
-
-    // Clear NanoNym data (must happen before wallet seed is cleared)
-    // Use lazy injection to avoid circular dependency
-    try {
-      const nanonymManager = this.injector.get(NanoNymManagerService);
-      nanonymManager.resetAll();
-    } catch (error) {
-      console.warn('Could not reset NanoNym data:', error);
     }
 
     this.wallet.type = 'seed';

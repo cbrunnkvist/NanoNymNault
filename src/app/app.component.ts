@@ -16,6 +16,7 @@ import { environment } from 'environments/environment';
 import { DeeplinkService } from './services/deeplink.service';
 import { TranslocoService } from '@ngneat/transloco';
 import { version } from 'environments/version';
+import { NanoNymManagerService } from './services/nanonym-manager.service';
 
 
 @Component({
@@ -42,7 +43,8 @@ export class AppComponent implements OnInit {
     private ledger: LedgerService,
     private renderer: Renderer2,
     private deeplinkService: DeeplinkService,
-    private translate: TranslocoService) {
+    private translate: TranslocoService,
+    private nanoNymManager: NanoNymManagerService) {
       router.events.subscribe(() => {
         this.closeNav();
       });
@@ -120,6 +122,9 @@ export class AppComponent implements OnInit {
     }
 
     await this.walletService.reloadBalances();
+
+    // Start monitoring all NanoNyms on app start
+    await this.nanoNymManager.startMonitoringAll();
 
     // Workaround fix for github pages when Nault is refreshed (or externally linked) and there is a subpath for example to the send screen.
     // This data is saved from the 404.html page
