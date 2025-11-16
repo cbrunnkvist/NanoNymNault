@@ -16,9 +16,18 @@ const STORAGE_KEY = "nanonyms-v1";
 export class NanoNymStorageService {
   private nanonymsSubject = new BehaviorSubject<NanoNym[]>([]);
   public nanonyms$: Observable<NanoNym[]> = this.nanonymsSubject.asObservable();
+  private loaded = false;
+  private loadPromise: Promise<void>;
 
   constructor() {
-    this.loadFromStorage();
+    this.loadPromise = this.loadFromStorage();
+  }
+
+  /**
+   * Wait for the storage to be loaded
+   */
+  public whenLoaded(): Promise<void> {
+    return this.loadPromise;
   }
 
   /**
@@ -161,25 +170,36 @@ export class NanoNymStorageService {
   /**
    * Load NanoNyms from localStorage
    */
-  private loadFromStorage(): void {
-    try {
-      const stored = localStorage.getItem(STORAGE_KEY);
-      if (!stored) {
-        console.log(
-          "[NanoNymStorage] No stored NanoNyms found in localStorage",
-        );
-        return;
-      }
-
-      const parsed: StoredNanoNym[] = JSON.parse(stored);
-      const nanonyms = parsed.map((stored) => this.deserializeNanoNym(stored));
-      this.nanonymsSubject.next(nanonyms);
-      console.log(
-        `[NanoNymStorage] Loaded ${nanonyms.length} NanoNyms from localStorage`,
-      );
-    } catch (error) {
-      console.error("Failed to load NanoNyms from storage:", error);
+  private async loadFromStorage(): Promise<void> {
+    if (this.loaded) {
+      return;
     }
+    return new Promise((resolve) => {
+      try {
+        const stored = localStorage.getItem(STORAGE_KEY);
+        if (!stored) {
+          console.log(
+            "[NanoNymStorage] No stored NanoNyms found in localStorage",
+          );
+          this.nanonymsSubject.next([]); // Ensure it's empty
+          this.loaded = true;
+          resolve();
+          return;
+        }
+  
+        const parsed: StoredNanoNym[] = JSON.parse(stored);
+        const nanonyms = parsed.map((stored) => this.deserializeNanoNym(stored));
+        this.nanonymsSubject.next(nanonyms);
+        console.log(
+          `[NanoNymStorage] Loaded ${nanonyms.length} NanoNyms from localStorage`,
+        );
+      } catch (error) {
+        console.error("Failed to load NanoNyms from storage:", error);
+        this.nanonymsSubject.next([]); // Reset on error
+      }
+      this.loaded = true;
+      resolve();
+    });
   }
 
   /**

@@ -190,6 +190,7 @@ export class NanoNymManagerService {
    * Start monitoring all active NanoNyms
    */
   async startMonitoringAll(): Promise<void> {
+    await this.storage.whenLoaded(); // Wait for storage to load
     const activeNanoNyms = this.storage.getActiveNanoNyms();
     for (const nanoNym of activeNanoNyms) {
       await this.startMonitoring(nanoNym);

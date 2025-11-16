@@ -135,7 +135,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     });
 
     // Load NanoNyms and start monitoring
-    this.loadNanoNyms();
+    await this.loadNanoNyms();
     await this.nanoNymManager.startMonitoringAll();
 
     // Subscribe to notification processing events
@@ -150,11 +150,11 @@ export class ReceiveComponent implements OnInit, OnDestroy {
         );
 
         // Refresh NanoNym list to update balances
-        this.loadNanoNyms();
+        await this.loadNanoNyms();
 
         // Refresh balances for the specific NanoNym
         await this.nanoNymManager.refreshBalances(event.nanoNymIndex);
-        this.loadNanoNyms();
+        await this.loadNanoNyms();
       },
     );
 
@@ -713,7 +713,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
       this.notificationService.sendSuccess(`NanoNym created: ${nanoNym.label}`);
 
       // Refresh NanoNym list
-      this.loadNanoNyms();
+      await this.loadNanoNyms();
     } catch (error) {
       this.notificationService.sendError(
         `Failed to create NanoNym: ${error.message}`,
@@ -724,7 +724,8 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     }
   }
 
-  loadNanoNyms() {
+  async loadNanoNyms() {
+    await this.nanoNymStorage.whenLoaded();
     this.nanonyms = this.nanoNymStorage.getAllNanoNyms();
   }
 
@@ -757,7 +758,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
           `NanoNym reactivated: ${nanoNym.label}`,
         );
       }
-      this.loadNanoNyms();
+      await this.loadNanoNyms();
     } catch (error) {
       this.notificationService.sendError(
         `Failed to update NanoNym: ${error.message}`,
