@@ -1,706 +1,426 @@
-# CLAUDE.md: NanoNymNault Protocol Specification
+## CLAUDE.md: NanoNym Protocol & NanoNymNault Wallet Specification
 
-**Target Agent:** Claude Code
-**Project Name:** NanoNymNault
-**Goal:** Implement a privacy-preserving payment protocol for Nano using reusable pseudonyms (NanoNyms)
-**Primary Constraint:** This implementation **must not require any changes to the Nano base protocol or node software**. It must be an entirely wallet-level (off-chain) coordination protocol.
-
-**Live Developer Preview:** https://cbrunnkvist.github.io/NanoNymNault/
-(Continuously deployed from `main` branch via GitHub Actions)
+Target agent: Claude Code
+Project name: NanoNyms
+Goal: Implement a wallet-level protocol that provides reusable, privacy-preserving payment identifiers (NanoNyms) for Nano.
+Primary constraint: No changes to the Nano base protocol or node software (pure wallet/off-chain coordination).
+Live preview: [NanoNymNault Developer Preview](https://cbrunnkvist.github.io/NanoNymNault/)
 
 ---
 
-## 1. Project Objective
+## 1. Objective and Core Concept
 
-The goal is to implement **NanoNyms** - reusable pseudonyms that enable privacy-preserving payments on Nano. A user (e.g., merchant, streamer, or donation recipient) can share a **single, static NanoNym** (`nnym_` address) while receiving multiple, un-linkable payments.
+Problem: A standard`nano_` address links all incoming transactions and history on-chain, breaking receiver privacy.
 
-**Problem Statement:** A standard `nano_` address publicly links all incoming transactions, balances, and history, which is a major privacy leak.
+Solution: NanoNyms are reusable pseudonyms (prefix`nnym_`) that encode keys for stealth-address receiving and off-chain notifications. Each inbound payment creates a unique stealth Nano account that cannot be linked on-chain to other payments or to the NanoNym.
 
-**Solution:** NanoNyms use stealth addresses (CamoNano-inspired cryptography) with off-chain notifications (Nostr NIP-17) to provide receiver unlinkability without the traceability issues of on-chain notifications.
-
----
-
-## 2. What is a NanoNym?
-
-**NanoNym** = **Nano** + **onym** (Ancient Greek ὄνυμα "name")
-
-A NanoNym is a **reusable pseudonym** for receiving payments:
-- Encoded as `nnym_` addresses (~160 characters)
-- Contains three public keys (spend, view, Nostr notification)
-- All NanoNyms are structurally identical and infinitely reusable
-- Multiple NanoNyms can be derived from a single seed
-- Users decide how to deploy them (long-term public, per-transaction, per-department, etc.)
+NanoNym properties:
+- String format:`nnym_...` (≈160 chars, Nano-style base32).
+- Encodes three public keys:
+    - Spend public key`B_spend` (Ed25519).
+    - View public key`B_view` (Ed25519).
+    - Nostr notification public key`nostr_public` (Secp256k1).
+- All NanoNyms are structurally identical, infinitely reusable.
+- Multiple NanoNyms derived from a single seed; user chooses usage model (public, per-customer, per-department, etc.).
+- No on-chain protocol changes; all privacy is provided by stealth addresses + Nostr notifications.
 
 ---
 
-## 3. Incompatible Protocols (Rejected)
+## 2. Design Positioning
 
-Analysis confirmed that several common privacy protocols are fundamentally incompatible with Nano's block lattice:
+Incompatible approaches (rejected for Nano):
+- BIP-47 (PayNyms): needs on-chain`OP_RETURN`-style notifications (not available on Nano).
+- BIP-78 PayJoin v1: needs shared transactions with multiple inputs/outputs (incompatible with Nano account-chains).
 
-* **BIP-47 (PayNyms):** Requires on-chain `OP_RETURN` notification field. Nano has no equivalent.
-* **BIP-78 (PayJoin v1):** Requires multiple parties to contribute inputs/outputs to a single shared transaction. Nano's architecture uses separate `send` and `receive` blocks on individual account-chains.
+Compatible / adapted ideas:
+- CamoNano: ECDH-based stealth addresses on Nano.
+    - Keep: cryptography.
+    - Drop: on-chain notifications (cost and timing leaks).
+- nanopyrs: Reference Python implementation of CamoNano-style crypto (useful for tools).
+- BIP-352 Silent Payments: ECDH-based stealth design, simplified by Nano’s account model.
+- BIP-77 Async Payjoin v2: concept of off-chain directory/coordination.
+- Nostr NIP-17: encrypted “gift-wrapped” messages; used as off-chain notification channel.
 
----
-
-## 4. Compatible & Adapted Protocols
-
-After deep analysis of Bitcoin improvement proposals and existing Nano implementations:
-
-* **CamoNano:** ✅ Proven cryptography for stealth addresses, adapted from Monero
-  - Problem: Uses on-chain notifications (XNO 0.00049 cost + timing correlation leaks)
-  - Solution: Keep cryptography, replace notifications
-
-* **nanopyrs:** ✅ Python implementation of CamoNano cryptography, useful for backend/CLI tools.
-
-* **BIP-352 (Silent Payments):** ✅ ECDH-based stealth generation (actually simpler for Nano)
-  - Nano's account model simplifies the input aggregation complexity
-  - Insight: Don't need network-wide scanning with proper notification system
-
-* **BIP-77 (Async Payjoin v2):** ✅ Off-chain directory server with OHTTP privacy
-  - Insight: Use existing infrastructure (Nostr) instead of custom directory
-
-* **Nostr NIP-17:** ✅ Gift-wrapped encrypted messages with metadata privacy
-  - Perfect for off-chain payment notifications
-  - 1000+ relays already operational
-  - Free, censorship-resistant, privacy-preserving
+Final architecture:
+- Stealth address cryptography (CamoNano/BIP-352 style)
+- Off-chain notifications via Nostr NIP-17 gift-wrapped events
+- Multi-account derivation for unlimited NanoNyms from one seed
 
 ---
 
-## 5. Final Protocol Design: CamoNano + Nostr
+## 3. NanoNym Address Format (`nnym_`)
 
-**Architecture:** Hybrid approach combining proven technologies
+Binary layout (99 bytes before base32 encoding):
 
-```
-CamoNano Cryptography (stealth addresses)
-  + Nostr NIP-17 (off-chain notifications)
-  + Multi-account support (unlimited NanoNyms from one seed)
-  = NanoNymNault
-```
+- Byte 0: version =`0x01` (v1).
+- Bytes 1–32:`B_spend` (Ed25519 public key).
+- Bytes 33–64:`B_view` (Ed25519 public key).
+- Bytes 65–96:`nostr_public` (Secp256k1 public key, 32 bytes).
+- Bytes 97–98: checksum (first 2 bytes of BLAKE2b-5 hash over previous bytes).
 
-### 5.1. The NanoNym Address Format: `nnym_`
+Encoding:
+- Use Nano-style base32 alphabet.
+- Final human-readable format:`nnym_<base32>`.
 
-**Format:**
-```
-nnym_<base32_encoded_data>
+Rationale for embedding`nostr_public`:
+- Defines the notification destination directly.
+- No extra lookup for Nostr identity.
+- Each NanoNym can use:
+    - Unique Nostr key for better privacy, or
+    - Shared Nostr key for simpler UX.
 
-Data Structure (99 bytes):
-  Byte 0:       Version (0x01 for version 1)
-  Bytes 1-32:   B_spend (Ed25519 public key, 32 bytes)
-  Bytes 33-64:  B_view (Ed25519 public key, 32 bytes)
-  Bytes 65-96:  nostr_public (Schnorr public key, 32 bytes)
-  Bytes 97-98:  Checksum (first 2 bytes of BLAKE2b-5 hash)
-
-Base32 Encoding: Use Nano's standard alphabet
-Result length: ~160 characters
-```
-
-**Why include Nostr pubkey:**
-- Receiver's Nostr identity is the notification destination
-- No separate address resolution needed
-- Enables "scan for notifications" without additional lookup
-- Each NanoNym can have unique Nostr key (better privacy) or shared key (simpler UX)
-
-**Safety:** Non-compliant wallets will reject `nnym_` addresses, preventing accidental non-private sends.
-
-### 5.2. Multi-Account Key Derivation
-
-**Unlimited NanoNyms from single seed:**
-
-```
-Master Seed (BIP-39)
-  ↓
-m/44'/165'/0'  (Nano standard path)
-  ↓
-m/44'/165'/0'/1000'  (NanoNym master)
-  ↓
-m/44'/165'/0'/1000'/<account_index>'  (Multiple NanoNyms!)
-  ↓
-  ├─ m/44'/165'/0'/1000'/<account_index>'/0  → b_spend, B_spend
-  ├─ m/44'/165'/0'/1000'/<account_index>'/1  → b_view, B_view
-  └─ m/44'/165'/0'/1000'/<account_index>'/2  → nostr_private, nostr_public
-
-Where account_index = 0, 1, 2, 3, ... N (unlimited)
-```
-
-**Examples:**
-- Account 0: Default/General NanoNym
-- Account 1: Donations Q1 2025
-- Account 2: Per-customer checkout
-- Account N: Any purpose user chooses
-
-**Recovery:** Single seed backs up all NanoNyms. Wallet uses gap limit (20 consecutive unused accounts) like BIP-44.
-
-**Wallet Birthday Optimization:**
-- Wallet stores creation timestamp (Unix epoch) in local storage
-- Used during recovery to optimize Nostr relay queries (only request events since wallet creation)
-- Reduces bandwidth and improves recovery speed
-- If birthday unknown (e.g., imported seed), defaults to Nano genesis block or user-specified date
-- Birthday is NOT required for recovery, only for optimization
-
-### 5.3. Fallback Mechanism (Safety)
-
-The wallet's "Receive" UI must display **both**:
-1. The NanoNym (`nnym_` address) for compliant wallets
-2. A standard `nano_` **fallback address** (derived from `B_spend`)
-
-**Warning to user:** Payments to fallback address are **not private** (all transactions publicly linked).
-
-This prevents fund loss when someone tries to send from a non-compliant wallet.
+Compatibility:
+- Non-supporting wallets will reject`nnym_` addresses; the UI must expose a standard`nano_` fallback address to prevent fund loss.
 
 ---
 
-## 6. Sender's Workflow
+## 4. Key Derivation and Account Model
 
-**When user sends to `nnym_` address:**
+Seed and derivation:
+- Root: BIP-39 seed.
+- Standard Nano path:`m/44'/165'/0'`.
+- NanoNym master path:`m/44'/165'/0'/1000'`.
+- Per-NanoNym account:
+    -`m/44'/165'/0'/1000'/<account_index>'`
+        -`/0` → spend keypair:`b_spend`,`B_spend`
+        -`/1` → view keypair:`b_view`,`B_view`
+        -`/2` → Nostr keypair:`nostr_private`,`nostr_public`
 
-1. Parse `nnym_` address → extract B_spend, B_view, nostr_public
+Where`account_index = 0, 1, 2, ...` (unbounded).
 
-2. Generate ephemeral key for this payment:
-   ```
-   r = random_scalar()  (or deterministic from sender keys)
-   R = r * G  (ephemeral public key)
-   ```
+Recovery:
+- Single seed recovers all NanoNyms and their keys.
+- Use BIP-44-style gap limit (e.g. 20 unused accounts) to find all active NanoNyms.
 
-3. Derive shared secret via ECDH:
-   ```
-   shared_secret = r * B_view
-   ```
+Wallet birthday optimization:
+- Store a creation timestamp locally.
+- Use it as a lower bound for Nostr history and (optionally) blockchain scans.
+- If unknown, default to a conservative date (genesis or user-provided).
+- Birthday is an optimization, not required for correctness.
+
+Fallback address:
+- For each NanoNym, derive a standard`nano_` fallback address from`B_spend`.
+- Receive UI must show both:
+    - NanoNym address (`nnym_...`): private, preferred.
+    -`nano_` fallback: non-private, for incompatible wallets.
+- UI clearly warns that fallback payments are linkable on-chain.
+
+---
+
+## 5. Send Workflow (Sender → NanoNym)
+
+When the sender inputs a`nnym_` address:
+
+1. Parse`nnym_`:
+    - Extract`B_spend`,`B_view`,`nostr_public`.
+
+2. Generate an ephemeral keypair for this payment:
+    -`r = random_scalar()` (or deterministic from sender keys).
+    -`R = r * G` (ephemeral public key).
+
+3. ECDH shared secret:
+    -`shared_secret = r * B_view`.
 
 4. Compute tweak scalar:
-   ```
-   t = BLAKE2b(shared_secret_x || R || B_spend)
-   ```
+    -`t = BLAKE2b(shared_secret_x || R || B_spend)`.
 
 5. Derive one-time stealth address:
-   ```
-   P_masked = B_spend + (t * G)
-   masked_nano_address = nano_encode(P_masked)
-   ```
+    -`P_masked = B_spend + (t * G)`.
+    -`masked_nano_address = nano_encode(P_masked)`.
 
-6. Send XNO to `masked_nano_address` on Nano blockchain
-   - Looks like any other Nano transaction
-   - No special markers or metadata
+6. On-chain payment:
+    - Send XNO to`masked_nano_address`.
+    - On-chain, this looks like a standard Nano payment with no special markers.
 
-7. Create Nostr notification message:
-   ```json
-   {
-     "version": 1,
-     "protocol": "nanoNymNault",
-     "R": "hex(R)",                 // Ephemeral public key
-     "tx_hash": "...",               // Nano transaction hash
-     "amount": "1.234567",           // Optional: XNO amount
-     "amount_raw": "1234567000...",  // Optional: raw amount
-     "memo": "..."                   // Optional: encrypted memo
-   }
-   ```
+7. Off-chain Nostr notification payload (logical structure):
 
-8. Encrypt with NIP-17 gift-wrapping:
-   - Inner seal: Encrypt payload with recipient's nostr_public
-   - Outer gift-wrap: Encrypt seal with ephemeral Nostr keypair
-   - Randomized timestamp (±2 days) for timing privacy
-   - Publish to 3-5 Nostr relays
+```json
+{
+  "version": 1,
+  "protocol": "nanoNymNault",
+  "R": "hex(R)",
+  "tx_hash": "nano_tx_hash",
+  "amount": "optional_display_amount_xno",
+  "amount_raw": "optional_raw_amount",
+  "memo": "optional_encrypted_memo"
+}
+```
 
-9. Done! Payment sent privately.
+8. NIP-17 gift-wrapping:
+    - Inner encryption: payload to recipient’s`nostr_public`.
+    - Outer gift-wrap: sent via ephemeral Nostr keypair.
+    - Randomize visible timestamp ±2 days to reduce timing correlation.
+    - Publish to 3–5 Nostr relays.
+
+Result: Receiver is notified off-chain and can compute the stealth account and private key.
 
 ---
 
-## 7. Receiver's Workflow
+## 6. Receive Workflow (NanoNym Wallet)
 
-**NanoNym account continuously monitors Nostr relays:**
+For each active NanoNym:
 
-1. Connect to Nostr relays via WebSocket
+1. Nostr relay monitoring:
+    - Connect to multiple relays via WebSocket.
+    - Subscribe to NIP-17 gift-wrapped events (kind 1059) targeting`nostr_public`.
 
-2. Subscribe to gift-wrapped events (kind:1059) for own nostr_public
+2. For each received notification:
+    - Unwrap outer gift-wrap (ephemeral Nostr keys).
+    - Decrypt inner payload using`nostr_private`.
+    - Extract`R` and`tx_hash`.
 
-3. For each notification received:
-   a. Unwrap outer gift-wrap layer → get seal
-   b. Unwrap inner seal → get notification payload
-   c. Extract ephemeral key R and tx_hash
+3. Recompute expected stealth address:
+    -`shared_secret = b_view * R`.
+    -`t = BLAKE2b(shared_secret_x || R || B_spend)`.
+    -`P_test = B_spend + (t * G)`.
+    -`expected_address = nano_encode(P_test)`.
 
-4. Derive expected stealth address:
-   ```
-   shared_secret = b_view * R
-   t = BLAKE2b(shared_secret_x || R || B_spend)
-   P_test = B_spend + (t * G)
-   expected_address = nano_encode(P_test)
-   ```
+4. Validate against chain:
+    - Query Nano node for`tx_hash`.
+    - Confirm destination equals`expected_address`.
+    - Confirm amount (if present).
 
-5. Query Nano node for transaction:
-   - Use tx_hash to fetch details
-   - Verify destination matches expected_address
-   - Verify amount (if provided)
+5. Derive private spend key:
+    -`p_masked = b_spend + t`.
 
-6. Derive private key for spending:
-   ```
-   p_masked = b_spend + t
-   ```
+6. Wallet bookkeeping:
+    - Store`(p_masked, expected_address, R, tx_hash, metadata)`.
+    - Aggregate into NanoNym’s balance and transaction history.
 
-7. Import into wallet:
-   - Store (p_masked, masked_address, R, tx_hash, metadata)
-   - Add to aggregated NanoNym balance
-   - Display in unified transaction history
+Offline operation:
+- On startup, request historical NIP-17 events since last seen timestamp (or wallet birthday) from all relays; merge and deduplicate by`tx_hash`.
 
-**Background sync:** If wallet was offline, request historical events since last check using Nostr REQ filters.
+---
 
-### 7.5. Recovery Strategy: Guaranteeing Fund Recovery
+## 7. Recovery Strategy (Multi-Tier, Seed-Only Guarantee)
 
-**Critical Design Requirement:** Users must be able to recover all funds from seed phrase alone, without depending on external services (including Nostr relays).
+Goal: All funds must be recoverable from seed alone, even if all Nostr relays are unreliable or pruned.
 
-**The Recovery Problem:**
-- Nostr relays are **not guaranteed archival storage**
-- Relays may prune old messages (no retention guarantees)
-- Different relays have different message histories
-- User may restore seed on new device months/years later
+### 7.1 Tier 1 – Nostr Multi-Relay Recovery (Fast, Primary)
 
-**Solution: Multi-Tier Recovery with Guaranteed Fallback**
+Characteristics:
+- Expected success: ≳99% with relay redundancy.
+- Latency: typically under 30 seconds.
 
-#### Tier 1: Primary Recovery - Multi-Relay Nostr Queries (Fast)
+Process:
+1. User enters seed on a new device.
+2. Wallet derives NanoNyms using the derivation path and gap limit.
+3. For each NanoNym:
+    - Connect to 3–5 Nostr relays (plus user-configured relays).
+    - Send REQ for:
+```json
+      {
+        "kinds": [1059],
+        "#p": ["<nostr_public_hex>"],
+        "since": <wallet_birthday_or_default>
+      }
+      ```
+4. For each event:
+    - Decrypt payload, extract`R` and`tx_hash`.
+    - Recompute stealth address and derive`p_masked`.
+    - Import account and attach on-chain data.
 
-**Success rate:** 99%+ with proper relay redundancy
-**Recovery time:** < 30 seconds
+Notes:
+- Parallel queries across all relays; merge results.
+- Relay set should include at least some long-lived, reliable relays; allow user configuration.
 
-1. User enters seed phrase on new device
-2. Wallet derives NanoNym accounts using gap limit (20 consecutive unused accounts)
-3. For each discovered NanoNym, wallet:
-   - Connects to 3-5 Nostr relays (including user-configurable relays)
-   - Subscribes to gift-wrapped events (kind:1059) for that NanoNym's nostr_public
-   - Requests historical events using Nostr REQ filters with `since` parameter:
-     ```json
-     {
-       "kinds": [1059],
-       "#p": ["<nostr_public_hex>"],
-       "since": <wallet_birthday_timestamp>
-     }
-     ```
-4. For each notification received:
-   - Decrypt and extract R, tx_hash
-   - Derive stealth address
-   - Query Nano node for transaction details
-   - Import stealth account with private key
-5. Display recovered balance and transaction history
+### 7.2 Tier 2 – Encrypted Backup Notes on Nostr (Fast, Redundant)
 
-**Optimization: Wallet Birthday**
-- Store wallet creation timestamp in encrypted metadata
-- Only request Nostr events since wallet birthday (reduces query load)
-- Default to genesis block if birthday unknown
+Purpose: More compact, redundant recovery channel using encrypted “snapshot” backups.
 
-**Relay Redundancy:**
-- Query all configured relays simultaneously
-- Merge results (deduplicate by tx_hash)
-- If any relay returns notifications, recovery succeeds
-- Recommended: 3-5 public relays + optional self-hosted relay
+Backup behavior:
+- Trigger: after each new payment (throttled, e.g. max once per hour).
+- Data (conceptual):
 
-#### Tier 2: Encrypted Backup Notes to Nostr (Automatic)
-
-**Success rate:** 95%+ (complements Tier 1)
-**Recovery time:** < 10 seconds
-
-To provide additional redundancy, wallet automatically publishes encrypted recovery data to Nostr:
-
-**Backup Schedule:**
-- Automatically triggered after each new payment received
-- Published as NIP-17 gift-wrapped message to self
-- Throttled: Maximum once per hour (prevents spam)
-
-**Backup Data Format:**
 ```json
 {
   "version": 1,
   "protocol": "nanoNymNault-backup",
-  "wallet_birthday": 1704067200,  // Unix timestamp
-  "nanoNym_index": 0,              // Which NanoNym this backup is for
+  "wallet_birthday": 1704067200,
+  "nanoNym_index": 0,
   "stealth_accounts": [
     {
       "address": "nano_1masked...",
-      "R": "hex(R)",
-      "tx_hash": "...",
-      "amount_raw": "1000000000...",
+      "R": "hex_R",
+      "tx_hash": "hash",
+      "amount_raw": "raw_amount",
       "received_timestamp": 1704070800,
-      "label": "Optional payment memo"
-    },
-    // ... all known stealth accounts for this NanoNym
+      "label": "optional_memo"
+    }
   ]
 }
 ```
 
-**Encryption:**
-- Encrypted using recovery key: `recovery_key = BLAKE2b(seed || "nanoNymNault-recovery")`
-- Published as NIP-17 private note to self (sender = receiver = NanoNym's nostr_public)
-- Stored on Nostr relays (free, decentralized storage)
+- Encryption:
+    - Derive`recovery_key = BLAKE2b(seed || "nanoNymNault-recovery")`.
+    - Encrypt entire backup payload with`recovery_key`.
+    - Publish as NIP-17 gift-wrapped event to self (sender and receiver =`nostr_public`).
 
-**Recovery Process:**
-1. Derive recovery_key from seed
-2. Query Nostr for backup notes (kind:1059, sender=receiver=self)
-3. Decrypt using recovery_key
-4. Extract all stealth account addresses
-5. Query Nano blockchain for current balances
-6. Import accounts with derived private keys
+Recovery:
+1. Derive`recovery_key` from seed.
+2. Fetch backup events (kinds 1059 where sender=receiver=self).
+3. Decrypt backup payloads.
+4. For each stealth address, recompute`p_masked` and sync balances from Nano node.
 
-**Benefits:**
-- Faster than Tier 1 (all addresses in one message vs per-payment notifications)
-- More compact (array of addresses vs individual notifications)
-- Still decentralized (uses Nostr)
-- No relay enumeration (encrypted, looks like regular NIP-17 message)
+Benefits:
+- Faster than replaying all notifications.
+- Single or few messages contain complete address list.
 
-#### Tier 3: Blockchain Scanning Fallback (Guaranteed)
+### 7.3 Tier 3 – Blockchain-Based Fallback (Guarantee, Slow)
 
-**Success rate:** 100% (guaranteed from seed alone)
-**Recovery time:** 5-30 minutes (depending on wallet history)
+Goal: Absolute guarantee of recoverability from seed only, even without Nostr.
 
-If both Tier 1 and Tier 2 fail (e.g., all Nostr relays unavailable or have pruned messages), wallet falls back to scanning the Nano blockchain:
+Current approach:
+- Not practical to brute-force`R` values; full cryptanalytic search is infeasible.
+- Current practical strategy is heuristic and community-architecture-based:
 
-**Scanning Algorithm:**
+1. Encourage community archival relays with long-term retention.
+2. In worst case, perform heuristics on the Nano chain:
+    - Enumerate candidate accounts that look like stealth outputs (e.g., unopened accounts with pending funds, accounts with single receive).
+    - Use date and amount heuristics; user manually verifies candidates.
+    - This is a last resort; design intent is that Tier 1 and Tier 2 cover almost all real cases.
 
-```
-For each NanoNym account (0 to gap_limit):
-  B_spend = derive_public_key(nanoNym_index, key_type=spend)
-  B_view = derive_public_key(nanoNym_index, key_type=view)
-  b_view = derive_private_key(nanoNym_index, key_type=view)
+Implementation priority:
+- Phase 1: Tier 1 + Tier 2 (core, must be robust).
+- Phase 2: Integrate community archival relays as a standard fallback.
+- Phase 3: Heuristic chain scanning if needed (expert/advanced mode).
 
-  For each block from wallet_birthday to current_height:
-    For each transaction in block:
-      recipient_address = transaction.destination
+### 7.4 Recovery Tiers Summary
 
-      // Test if this could be a stealth address for this NanoNym
-      // Strategy: Brute-force test with incrementing nonce
-      // (We don't have R, so we must search)
+| | Tier | Method | Expected speed | Expected success | Dependencies | |
+|------|-------------------------|----------------|------------------|------------------------|
+| | 1 | Nostr notification replay | < 30 s | ≥ 99% | 3–5 normal relays | |
+| | 2 | Encrypted backup notes | < 10 s | ≥ 95% | Nostr relays | |
+| | 3 | Chain-based heuristics | minutes | 100% target | Seed + Nano network | |
 
-      // Optimization: Only test accounts with balance > 0
-      if account_balance(recipient_address) == 0:
-        continue
-
-      // This is expensive, so we use heuristics:
-      // 1. Only test unopened/minimal accounts
-      // 2. Only test within date range of wallet activity
-
-      found_accounts.push(recipient_address)
-
-  // For found accounts, attempt to derive private keys
-  // by testing possible R values (requires more advanced cryptanalysis)
-```
-
-**Challenge: Missing R Value**
-
-Without the notification containing R, we cannot directly derive the tweak. Two approaches:
-
-**Approach A: Expensive Brute Force (Not Recommended)**
-- For each candidate address, try all possible R values
-- Computationally infeasible for large wallets
-
-**Approach B: Heuristic Account Discovery (Practical)**
-- Query Nano blockchain for **all accounts** with specific patterns:
-  - Unopened accounts with pending blocks
-  - Recently opened accounts with single receive block
-  - Accounts with balance but minimal transaction history
-- Filter to date range around wallet birthday
-- User manually reviews candidate accounts
-- Import accounts that user recognizes (by amount/timestamp)
-
-**Approach C: Community Relay Archive (Recommended Long-term)**
-- Establish community-run "archival relays" with guaranteed retention
-- Users can query these as fallback
-- Similar to Bitcoin's full node infrastructure
-- Wallet includes default archival relays
-
-**Implementation Priority:**
-- Phase 1: Implement Tier 1 + Tier 2 (covers 99%+ of cases)
-- Phase 2: Implement Tier 3 Approach C (community archival relays)
-- Phase 3: Implement Tier 3 Approach B (heuristic scanning) if needed
-
-**UI Flow:**
-
-```
-┌─────────────────────────────────────────────┐
-│  Wallet Recovery                            │
-├─────────────────────────────────────────────┤
-│  Enter your seed phrase:                    │
-│  [______________________________________]   │
-│                                             │
-│  [Recover Wallet]                           │
-└─────────────────────────────────────────────┘
-
-          ↓ User clicks "Recover Wallet"
-
-┌─────────────────────────────────────────────┐
-│  Recovery in Progress...                    │
-├─────────────────────────────────────────────┤
-│  ✓ Seed validated                           │
-│  ✓ Derived 3 NanoNym accounts (gap limit)   │
-│  ⏳ Querying Nostr relays...                │
-│     • relay.damus.io: 12 notifications      │
-│     • nos.lol: 12 notifications             │
-│     • relay.snort.social: 11 notifications  │
-│                                             │
-│  ✓ Found 12 payments (14.5 XNO total)       │
-│  ✓ Recovery complete!                       │
-└─────────────────────────────────────────────┘
-
-If Tier 1 fails:
-
-┌─────────────────────────────────────────────┐
-│  Primary Recovery Failed                    │
-├─────────────────────────────────────────────┤
-│  ⚠️ Could not retrieve notifications from   │
-│     Nostr relays.                           │
-│                                             │
-│  Trying encrypted backup recovery...        │
-│  ✓ Found backup from 2025-11-14             │
-│  ✓ Recovered 12 stealth accounts            │
-│  ✓ Recovery complete!                       │
-└─────────────────────────────────────────────┘
-
-If both Tier 1 & 2 fail:
-
-┌─────────────────────────────────────────────┐
-│  Fallback Recovery Required                 │
-├─────────────────────────────────────────────┤
-│  ⚠️ Nostr relays unavailable or pruned      │
-│                                             │
-│  Options:                                   │
-│  1. [Try Community Archival Relays]         │
-│  2. [Scan Blockchain] (slow, 15-30 min)     │
-│  3. [Enter Custom Relay URL]                │
-│  4. [Cancel - Try Again Later]              │
-└─────────────────────────────────────────────┘
-```
-
-#### Recovery Guarantee Summary
-
-| Tier | Method | Speed | Success Rate | Dependency |
-|------|--------|-------|--------------|------------|
-| 1 | Multi-relay Nostr queries | < 30s | 99%+ | 3-5 Nostr relays |
-| 2 | Encrypted backup notes | < 10s | 95%+ | Nostr relays |
-| 3 | Blockchain scanning | 5-30m | 100% | None (seed only) |
-
-**Key Insight:** Unlike CamoNano (on-chain notifications) and Monero (mandatory blockchain scanning), NanoNymNault provides:
-- ✅ Fast recovery via Nostr (Tier 1 & 2)
-- ✅ Guaranteed recovery from seed alone (Tier 3)
-- ✅ No scanning required for normal operations
-- ✅ No on-chain privacy leaks
+Design principle:
+- Normal operation: no blockchain scanning.
+- Fast recovery via Nostr (Tiers 1/2).
+- Seed-only guarantee via combination of Nostr + optional chain-based heuristics + archival infrastructure.
 
 ---
 
 ## 8. Spending from Stealth Accounts
 
-### 8.1. The Spending Challenge
+### 8.1 Constraint
 
-**Problem:** When users receive payments to a NanoNym, each payment creates a unique stealth account on the Nano blockchain. Users now need a way to **spend** those funds.
+Nano uses an account model:
+- Each stealth payment creates its own Nano account.
+- Cannot merge multiple accounts into a single on-chain “input”.
+- Any time multiple stealth accounts send to the same recipient, those accounts become publicly linked.
 
-**Nano's Fundamental Constraint:**
-- Nano uses an **account model** (not Bitcoin's UTXO model)
-- Each account has its own blockchain
-- **Cannot combine inputs** from multiple accounts in a single transaction
-- Each stealth account must send **independently**
+The protocol cannot fix this without Nano protocol changes. Instead, it:
+- Maximizes privacy at receive time.
+- Minimizes necessary linkages when spending.
+- Warns users when multi-account sends will reduce privacy.
+- Offers optional timing randomization (Privacy Mode).
 
-**Example Scenario:**
-```
-User has received 40 XNO total:
-  - nnym_1 (Donations): 20 XNO across 5 stealth accounts (4 XNO each)
-  - nnym_2 (Store): 20 XNO across 10 stealth accounts (2 XNO each)
-  - nano_main: 10 XNO (standard account)
+### 8.2 Stealth Account Selection Algorithm
 
-User wants to send:
-  - 30 XNO to nano_R1 (recipient 1)
-  - 20 XNO to nano_R2 (recipient 2)
-```
+Goal: Choose which stealth accounts fund a given send amount.
 
-**Privacy Trade-off:**
-- ✅ **Privacy preserved:** Receiving (stealth addresses + Nostr notifications), unspent stealth accounts remain unlinkable
-- ⚠️ **Privacy lost when spending:** If sending from multiple stealth accounts to the same destination, those accounts become **publicly linked on-chain**
+Objectives:
+1. Use the minimum number of accounts possible.
+2. Add randomness to avoid deterministic patterns.
+3. Only use stealth accounts from the relevant NanoNym(s) unless user explicitly opts otherwise.
 
-**Key Insight:** This is a fundamental limitation of Nano's architecture. Unlike Monero (ring signatures) or Zcash (zk-SNARKs), Nano cannot cryptographically obscure the spending side without protocol changes.
-
-**Solution:** NanoNymNault focuses on **transparent user education + flexible controls** to balance usability and privacy.
-
----
-
-### 8.2. Account Selection Algorithm
-
-**Strategy: "Minimum Accounts with Randomized Tie-Breaking"**
-
-**Design Goals:**
-1. **Minimize on-chain linkage:** Use fewest stealth accounts possible
-2. **Reduce predictability:** Add randomness to prevent deterministic patterns
-3. **Simplicity:** Only touch stealth accounts (never standard wallet accounts)
-
-**Algorithm:**
+Reference implementation:
 
 ```typescript
 function selectStealthAccountsForSend(
   amount: BigNumber,
   availableStealthAccounts: StealthAccount[]
 ): StealthAccount[] {
-
-  // 1. Filter accounts with non-zero balance
   const funded = availableStealthAccounts.filter(a => a.balance.gt(0));
 
-  // 2. Try single account first (best privacy)
-  const singleAccount = funded.find(a => a.balance.gte(amount));
-  if (singleAccount) {
-    return [singleAccount];  // ✅ No linkage!
-  }
+  // Prefer single-account sends for maximal privacy.
+  const single = funded.find(a => a.balance.gte(amount));
+  if (single) return [single];
 
-  // 3. Need multiple accounts - use minimum with randomization
-  // Sort by balance descending (largest first)
+  // Otherwise, use a simple greedy strategy (largest first).
   const sorted = [...funded].sort((a, b) =>
     b.balance.comparedTo(a.balance)
   );
 
-  // 4. Find minimal set
   const selected: StealthAccount[] = [];
   let remaining = amount;
 
   for (const account of sorted) {
     if (remaining.lte(0)) break;
-
     selected.push(account);
     remaining = remaining.minus(account.balance);
   }
 
-  // 5. Randomize order of sends (reduces timing correlation)
+  // Randomize order to reduce timing correlation.
   return shuffleArray(selected);
 }
-
-function shuffleArray<T>(array: T[]): T[] {
-  const shuffled = [...array];
-  for (let i = shuffled.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [shuffled[i], shuffled[j]] = [shuffled[j], shuffled[i]];
-  }
-  return shuffled;
-}
 ```
+`shuffleArray` uses Fisher–Yates shuffle with crypto-secure randomness if possible.
 
-**Properties:**
-- **Primary rule:** Use fewest stealth accounts possible to cover the amount
-- **Randomization:** Shuffle order of sends to reduce timing correlation patterns
-- **Tie-breaking:** Among candidate sets of same size, pick randomly (future enhancement)
-- **Constraint:** Only selects from stealth accounts belonging to the NanoNym (never touches standard wallet accounts)
+Future enhancement:
+- For multiple equally minimal subsets (knapsack variant), randomly choose one rather than always using greedy.
 
-**Future Enhancement (v1.2+):**
-Advanced tie-breaking with multiple equivalent sets:
-- If multiple combinations yield same account count, choose randomly
-- Example: 30 XNO could be (15+10+5) or (20+8+2) - pick randomly
-- Requires more complex algorithm (knapsack problem variant)
+### 8.3 Privacy Warning UX (Functional Requirements)
 
----
+When to warn:
+- Send requires multiple stealth accounts.
+- Configurable threshold:
+    - Default: warn when using ≥ 2 accounts.
+    - Hard minimum: always warn when using ≥ 5 accounts, even if user disabled standard warnings.
 
-### 8.3. Privacy Warning UX
+Behavior:
+- Before sending, show:
+    - Number of stealth accounts that will be linked.
+    - Reminder that these accounts will be publicly linkable on-chain.
+- Provide:
+    - Primary action: “I understand – send”.
+    - Secondary action: “Review inputs” for advanced users.
+- “Don’t show this again” option:
+    - Stored in local settings.
+    - Overridden for very large linkage (e.g. ≥ 5 accounts).
 
-**Trigger Conditions:**
-
-Show privacy warning when:
-1. **Multiple accounts required:** Cannot send from single stealth account
-2. **Threshold met:** Number of accounts ≥ configurable threshold (default: 2)
-   - Rationale: Don't annoy users for every 2-account spend, but warn for larger linkages
-
-**Warning UI:**
-
-```
-┌─────────────────────────────────────────────┐
-│  ⚠️  Privacy Notice                         │
-├─────────────────────────────────────────────┤
-│  This payment will spend from 3 separate    │
-│  stealth accounts. On-chain observers will  │
-│  be able to infer that these accounts       │
-│  belong to the same owner.                  │
-│                                             │
-│  Privacy Impact:                            │
-│  • 3 stealth accounts will be linked        │
-│  • Your other 9 accounts remain private     │
-│  • Timing correlation: Sends occur within   │
-│    seconds (enable Privacy Mode for delays) │
-│                                             │
-│  ☐ Don't show this warning again            │
-│                                             │
-│  [Review Inputs]  [I Understand - Send]     │
-└─────────────────────────────────────────────┘
-```
-
-**Button Behavior:**
-- **Primary:** "I Understand - Send" (blue, prominent)
-- **Secondary:** "Review Inputs" (shows detailed account list, optional for advanced users)
-
-**Checkbox:**
-- "Don't show this warning again" - persists to local storage
-- User can re-enable in Settings
-- Warning still shows if account count exceeds higher threshold (e.g., ≥5 accounts)
-
-**Detailed View (Review Inputs):**
-
-```
-┌─────────────────────────────────────────────┐
-│  Stealth Accounts for This Send            │
-├─────────────────────────────────────────────┤
-│  Sending 30 XNO to nano_3abc...xyz          │
-│                                             │
-│  From NanoNym: Donations                    │
-│                                             │
-│  ☑ nano_1st... (10.5 XNO) - Jan 15         │
-│  ☑ nano_1nd... (8.2 XNO)  - Jan 14         │
-│  ☑ nano_1rd... (7.1 XNO)  - Jan 12         │
-│  ☑ nano_1th... (4.2 XNO)  - Jan 10         │
-│                                             │
-│  Total: 30.0 XNO from 4 accounts ✅         │
-│                                             │
-│  ⚠️ These accounts will be publicly linked  │
-│                                             │
-│         [Back]  [Send]                      │
-└─────────────────────────────────────────────┘
-```
-
-**Configuration (Settings):**
+Configuration model:
 
 ```typescript
 interface PrivacyWarningSettings {
-  enabled: boolean;                    // Default: true
-  multiAccountThreshold: number;       // Default: 2
-  alwaysShowAboveCount: number;        // Default: 5 (always show even if disabled)
-  showDetailedImpact: boolean;         // Default: true
+  enabled: boolean;              // default true
+  multiAccountThreshold: number; // default 2
+  alwaysShowAboveCount: number;  // default 5
+  showDetailedImpact: boolean;   // default true
 }
 ```
 
----
+### 8.4 Privacy Mode (Optional Timing Randomization)
 
-### 8.4. Privacy Mode (Opt-in)
+Purpose: Reduce timing correlation when multiple stealth accounts send to the same destination.
 
-**Purpose:** Reduce timing correlation when spending from multiple stealth accounts
+Behavior:
+- If enabled:
+    - After each transaction (except last), delay next send by a random interval.
+    - Example: 10–30 seconds per delay.
 
-**Mechanism:** Add randomized delays between consecutive transactions
-
-**Implementation:**
+Reference implementation:
 
 ```typescript
 async function sendFromMultipleStealthAccounts(
-  stealthAccounts: StealthAccount[],
+  accounts: StealthAccount[],
   destination: string,
-  usePrivacyMode: boolean = false
+  usePrivacyMode: boolean
 ): Promise<SendResult[]> {
-
   const results: SendResult[] = [];
 
-  for (let i = 0; i < stealthAccounts.length; i++) {
-    const account = stealthAccounts[i];
-
-    // Send transaction
-    const result = await sendTransaction(
-      account,
-      destination,
-      account.amount
-    );
-
+  for (let i = 0; i < accounts.length; i++) {
+    const account = accounts[i];
+    const result = await sendTransaction(account, destination, account.amount);
     results.push(result);
 
-    // Privacy delay (if enabled and not last transaction)
-    if (usePrivacyMode && i < stealthAccounts.length - 1) {
-      const delay = 10000 + Math.random() * 20000;  // 10-30 seconds
-      await sleep(delay);
-
-      // Show progress to user
+    if (usePrivacyMode && i < accounts.length - 1) {
+      const delayMs = 10000 + Math.random() * 20000;
+      await sleep(delayMs);
       showProgress({
         current: i + 1,
-        total: stealthAccounts.length,
-        nextSendIn: delay
+        total: accounts.length,
+        nextSendIn: delayMs
       });
     }
   }
@@ -709,593 +429,208 @@ async function sendFromMultipleStealthAccounts(
 }
 ```
 
-**UX:**
+User settings:
+- Toggle: “Enable Privacy Mode (delay between multi-account sends)” – default off.
 
-**Settings Toggle:**
-```
-┌─────────────────────────────────────────────┐
-│  NanoNym Spending Settings                  │
-├─────────────────────────────────────────────┤
-│  ☐ Enable Privacy Mode                      │
-│     Add 10-30 second delays between         │
-│     transactions to reduce timing           │
-│     correlation (slower but more private)   │
-│                                             │
-│  Default: Disabled (fast sends)             │
-└─────────────────────────────────────────────┘
-```
-
-**Progress Indicator (Privacy Mode Enabled):**
-```
-┌─────────────────────────────────────────────┐
-│  Sending with Privacy Mode...               │
-├─────────────────────────────────────────────┤
-│  ✓ Transaction 1 of 4 sent                  │
-│  ✓ Transaction 2 of 4 sent                  │
-│  ⏳ Waiting 18 seconds before next send...  │
-│     (Privacy delay)                         │
-│                                             │
-│  [Cancel Remaining]                         │
-└─────────────────────────────────────────────┘
-```
-
-**Trade-offs:**
-- ✅ Better privacy (harder for observers to correlate timing)
-- ❌ Slower UX (30 XNO from 4 accounts = ~45 seconds total)
-- ⚠️ Partial send risk (if user closes wallet mid-send)
-  - Mitigation: Clearly show progress and allow cancellation
-
-**Recommendation:** Disabled by default (preserve fast UX), power users can enable
+Trade-offs:
+- Higher privacy vs slower UX.
+- Partial sends possible if user quits mid-process; UI must clearly show in-progress state and allow cancellation.
 
 ---
 
-### 8.5. User Story Example
+## 9. NanoNym and Multi-Account Management
 
-**Scenario:** User has 40 XNO across multiple accounts and wants to make two payments
+All NanoNyms are structurally identical; “usage style” is purely convention.
 
-**Initial State:**
-```
-Wallet Balance Overview:
-  - nano_main: 10 XNO (standard account)
-  - nnym_1 "Donations": 20 XNO
-      → nano_1st... (10.5 XNO)
-      → nano_1nd... (4.5 XNO)
-      → nano_1rd... (3.0 XNO)
-      → nano_1th... (2.0 XNO)
-  - nnym_2 "Store": 20 XNO
-      → nano_2st... (5.0 XNO)
-      → nano_2nd... (4.0 XNO)
-      → nano_2rd... (3.5 XNO)
-      → nano_2th... (3.0 XNO)
-      → nano_2th... (2.5 XNO)
-      → nano_2th... (2.0 XNO)
-```
+Typical use patterns:
+- Long-term public NanoNym:
+    - Shared in website footers, business cards.
+- Per-transaction NanoNym:
+    - Generated per checkout, used once or short-term.
+- Per-department NanoNyms:
+    - For accounting separation (Sales, Donations, Support, etc.).
 
-**User Actions:**
+UI requirements:
+- Ability to:
+    - Generate new NanoNym with label.
+    - List NanoNyms with:
+        - Label.
+        - Aggregated balance.
+        - Payment count.
+        - Status: Active (listening to Nostr) vs Archived (not listening).
+    - View per-NanoNym history.
+    - Copy address / show QR.
+    - Archive/reactivate NanoNyms:
+        - Archiving stops Nostr monitoring but does not affect recoverability or spending.
 
-**Payment 1: Send 30 XNO to nano_R1**
-
-User selects:
-- **From:** NanoNym "Donations" + NanoNym "Store" (combined selection)
-- **To:** nano_R1
-- **Amount:** 30 XNO
-
-Wallet logic:
-1. Check if any single stealth account has ≥30 XNO → **No**
-2. Apply selection algorithm → Use minimum accounts:
-   - From nnym_1: nano_1st... (10.5) + nano_1nd... (4.5) + nano_1rd... (3.0) + nano_1th... (2.0) = 20 XNO
-   - From nnym_2: nano_2st... (5.0) + nano_2nd... (4.0) + nano_2rd... (1.0 partial) = 10 XNO
-   - **Total: 6 accounts** (could optimize to 3-4 larger accounts)
-
-Better algorithm result:
-   - nano_1st... (10.5)
-   - nano_2st... (5.0)
-   - nano_2nd... (4.0)
-   - nano_2rd... (3.5)
-   - nano_2th... (3.0)
-   - nano_2th... (2.5)
-   - nano_2th... (1.5 partial from 2.0)
-   - **Optimized: 4 accounts** → 10.5 + 5.0 + 4.5 + 10.0 = 30 XNO
-
-3. Show privacy warning: "This payment will spend from 4 stealth accounts..."
-4. User confirms
-5. Send 4 transactions (randomized order):
-   ```
-   [12:34:56] nano_2st... → 5.0 XNO → nano_R1
-   [12:34:58] nano_1st... → 10.5 XNO → nano_R1
-   [12:35:01] nano_2nd... → 4.0 XNO → nano_R1
-   [12:35:03] nano_1nd... → 4.5 XNO → nano_R1 (partial)
-   ```
-
-**Payment 2: Send 20 XNO to nano_R2**
-
-User selects:
-- **From:** NanoNym "Store"
-- **To:** nano_R2
-- **Amount:** 20 XNO
-
-Wallet logic:
-1. Check remaining balances in nnym_2:
-   - nano_2rd... (3.5), nano_2th... (3.0), nano_2th... (2.5), nano_2th... (2.0)
-   - Total available: 11 XNO < 20 XNO → **Insufficient funds in nnym_2 alone**
-2. User must select additional source or reduce amount
-3. User adds nnym_1 as source
-4. Algorithm selects minimum accounts
-5. Show privacy warning and proceed
-
-**Key Observations:**
-- Standard account (nano_main) never touched unless user explicitly selects it
-- Each NanoNym maintains separate stealth account pool
-- Users can select one or multiple NanoNyms as funding sources
-- Privacy warning educates users about on-chain linkage
-
----
-
-### 8.6. Privacy Impact Analysis
-
-**Privacy Preserved:**
-- ✅ **Receive-time unlinkability:** Stealth addresses cannot be linked when received
-- ✅ **Sender anonymity:** When sending TO nnym_ addresses (stealth generation)
-- ✅ **Off-chain notifications:** No on-chain metadata leaks
-- ✅ **Unspent accounts:** Stealth accounts not involved in send remain private
-
-**Privacy Lost During Spending:**
-- ❌ **On-chain linkage:** Stealth accounts sending to same destination are publicly linked forever
-- ❌ **Timing correlation:** Transactions broadcast within seconds (unless Privacy Mode enabled)
-- ❌ **Amount correlation:** Total amount matches user intent (e.g., exactly 30 XNO)
-- ❌ **Graph analysis:** All transaction edges point to same recipient
-
-**Comparison to Other Privacy Protocols:**
-
-| Protocol | Receive Privacy | Spend Privacy | Multi-Output Spend |
-|----------|----------------|---------------|-------------------|
-| Monero | ✅ High (stealth) | ✅ High (ring sigs) | ✅ Obfuscated |
-| BIP-352 Silent Payments | ✅ High (stealth) | ⚠️ Medium (links outputs) | ❌ Links inputs on-chain |
-| Zcash Shielded | ✅ Very High (zk-SNARKs) | ✅ High (in-pool) / ❌ Low (to transparent) | ✅ Obfuscated in pool |
-| CamoNano | ✅ High (stealth) | ❓ Unspecified | ❓ Unspecified |
-| **NanoNymNault** | ✅ High (stealth + Nostr) | ⚠️ Medium (warns user) | ❌ Links on-chain, mitigated by warnings |
-
-**Threat Model:**
-
-**Against Blockchain Observers:**
-- ✅ Cannot link receive payments to same NanoNym
-- ❌ Can link spend transactions to same recipient
-- ⚠️ Timing analysis partially mitigated with Privacy Mode
-
-**Against Network Observers:**
-- ✅ Cannot correlate Nostr notifications with sends
-- ⚠️ Can observe wallet connecting to multiple Nano nodes simultaneously (use VPN/Tor for anonymity)
-
-**Against Targeted Surveillance:**
-- ⚠️ If attacker controls recipient address, they see all sending stealth addresses
-- ✅ Attacker cannot link stealth addresses back to NanoNym (sender still pseudonymous)
-- ✅ Other stealth accounts remain hidden
-
-**Mitigation Strategies:**
-
-**Short-term (MVP):**
-1. ✅ Clear privacy warnings before multi-account sends
-2. ✅ Default to minimum account strategy (reduce linkage)
-3. ✅ User education in docs/tooltips
-4. ✅ Randomize send order (reduce timing patterns)
-
-**Medium-term (v1.1-v1.2):**
-1. Privacy Mode with randomized delays (opt-in)
-2. Advanced selection strategies (FIFO, LIFO, manual control)
-3. Privacy score calculation and display
-4. Per-send privacy impact analysis
-
-**Long-term (v2.0):**
-1. Consolidation feature (see Section 15: Future Enhancements)
-2. Spend batching optimization
-3. Optional mixing via intermediary stealth accounts (research needed)
-
-**Key Philosophical Insight:**
-
-Perfect spend-side privacy is **impossible on Nano without protocol changes**. NanoNymNault embraces this limitation with **radical transparency**:
-- ✅ Provide best-in-class receive privacy (stealth + Nostr)
-- ⚠️ Educate users about spend privacy trade-offs
-- 🛠️ Give users tools to mitigate (Privacy Mode, warnings, selection strategies)
-- 📚 Build trust through honesty about limitations
-
-This approach prioritizes **informed consent** over false promises.
-
----
-
-## 9. Multi-Account Management
-
-### 9.1. Use Cases (All Structurally Identical)
-
-**No "ephemeral" vs "reusable" types** - all NanoNyms work the same way. Users choose how to use them:
-
-**Long-term public NanoNym:**
-- Generate once, print on business cards
-- Share on website footer
-- Use for years
-
-**Per-transaction NanoNym:**
-- Generate fresh for each customer checkout
-- Display temporarily on POS screen
-- Archive after payment received
-
-**Per-department NanoNyms:**
-- Sales, Consulting, Returns, etc.
-- Accounting categorization
-- Revenue tracking
-
-### 9.2. Wallet UI
-
-**Generate New NanoNym:**
-```
-┌─────────────────────────────────────┐
-│ Generate New NanoNym                │
-├─────────────────────────────────────┤
-│ Label (optional):                   │
-│ [Donations 2025 Q1____________]     │
-│                                     │
-│         [Generate]  [Cancel]        │
-└─────────────────────────────────────┘
-```
-
-**List NanoNyms:**
-- Show all generated NanoNyms with labels
-- Display balance and payment count
-- Status: Active (monitoring) or Archived (not monitoring)
-- Options: View details, Archive/Reactivate, Copy address, Show QR
-
-**Unified Balance:**
-- Aggregate all stealth account balances per NanoNym
-- Show total across all NanoNyms
-- Per-NanoNym transaction history
-
-### 9.3. Archive Feature (UX Optimization)
-
-**Active:** Wallet monitors Nostr notifications for this NanoNym  
-**Archived:** Stop monitoring (reduces background processing)  
-**Note:** Funds always accessible, can reactivate anytime
-
-This is a UX optimization, not a protocol feature.
+Aggregated view:
+- Show total wallet balance and per-NanoNym balances.
+- Stealth accounts are grouped under their parent NanoNym.
 
 ---
 
 ## 10. Technical Implementation Notes
 
-### 10.1. Cryptographic Libraries
+Cryptography:
+- Curve for Nano keys: Ed25519 (as in Nano).
+- Curve for Nostr keys: Secp256k1.
+- Hashing: BLAKE2b for tweaks and checksums.
+- ECDH: Standard implementations (Ed25519, Secp256k1).
+- Use well-audited libs; do not reimplement primitives.
 
-Use well-audited libraries:
-- **Ed25519:** Nano's standard curve (for spend/view keys)
-- **Secp256k1:** Nostr's curve (for Nostr keys)
-- **BLAKE2b:** Hashing (Nano standard)
-- **ECDH:** Standard implementation
-- **NIP-17 encryption:** Use nostr-tools or nostr-sdk libraries
+Nostr integration:
+- Use a mature client library (e.g.`nostr-tools` for JS/TS).
+- Support multiple relays by default (3–5 recommended).
+- Behavior:
+    - Publish notifications to all configured relays.
+    - Subscribe to all for recovery and real-time monitoring.
+    - Auto-reconnect on failures.
 
-### 10.2. Nostr Integration
+Performance expectations (rough targets):
+- Stealth derivation: < 100 ms per payment on typical hardware.
+- Notification latency (Nostr): median < 2 seconds.
+- Background Nostr subscriptions: low CPU/battery (idle WebSockets).
 
-**Client library:** nostr-tools (JavaScript/TypeScript)  
-**Default relays:** 3-5 public relays (relay.damus.io, nos.lol, etc.)  
-**Connection:** WebSocket-based, lightweight  
-**Redundancy:** Publish to all, subscribe from all  
-**Failover:** Auto-reconnect on failure
-
-### 10.3. Performance Considerations
-
-**Notification latency:** < 2 seconds (median)  
-**Derivation speed:** < 100ms per stealth address  
-**Background monitoring:** Minimal battery impact (WebSocket idle)  
-**Multi-account:** Each active NanoNym requires one Nostr subscription
-
-### 10.4. Security Considerations
-
-**View key separation:** Can share b_view for watch-only wallet (cannot spend)  
-**Nostr key compromise:** Attacker can read future notifications but cannot steal funds (needs b_spend)  
-**Relay trust:** Relays cannot decrypt notifications (NIP-17 encryption)  
-**Timing analysis:** NIP-17 randomizes timestamps (±2 days)
-
----
-
-## 11. Privacy Analysis
-
-### Against Blockchain Observers:
-✅ Cannot link payments to receiver (unique stealth addresses)  
-✅ Cannot link multiple payments to same NanoNym  
-✅ No notification transactions visible on-chain  
-✅ Cannot distinguish NanoNym payments from regular Nano transactions
-
-### Against Nostr Relay Operators:
-✅ Cannot read notification contents (NIP-17 encryption)  
-✅ Cannot link sender to receiver (ephemeral keys in gift-wrap)  
-✅ Cannot see true timestamp (randomized)  
-✅ Cannot perform timing analysis
-
-### Against Network Observers:
-⚠️ Can see user connecting to Nostr relays (mitigate: Tor/VPN)  
-✅ Cannot correlate Nostr activity with Nano transactions (encrypted, randomized timing)
-
-### Compared to CamoNano:
-✅ No on-chain notification cost (XNO 0.00049 saved per payment)  
-✅ No timing correlation (randomized timestamps vs observable on-chain timing)  
-✅ Better sender anonymity (ephemeral Nostr keys vs Nano account visible)  
-✅ No recipient enumeration (encrypted Nostr vs public spend address monitoring)
+Security and privacy considerations:
+- View key sharing:
+    -`b_view` alone is sufficient for watch-only wallets (can reconstruct incoming stealth addresses but cannot spend).
+- Nostr key compromise:
+    - Attacker can read future notifications but cannot spend (no access to`b_spend`).
+- Relays:
+    - All notification payloads are encrypted (NIP-17).
+    - Relays cannot read or link contents.
+- Timing:
+    - Notification timestamps are randomized.
+    - Privacy Mode can randomize on-chain spend timing.
 
 ---
 
-## 12. Implementation Roadmap
+## 11. Privacy Analysis (Condensed)
 
-**Priority:** Working user-verifiable PoC > Tests > Documentation
+Against blockchain observers:
+- Cannot link disparate receive payments to same NanoNym:
+    - Each payment uses a unique stealth account.
+- No explicit on-chain markers; NanoNym payments look like standard Nano sends.
+- Spending:
+    - Multi-account sends to same destination create visible linkages between those accounts.
+    - Timing correlation possible unless Privacy Mode is used.
 
-**Current Status:** Phase 3 complete ✅ (as of 2025-11-15)
-- ✅ Send TO NanoNym addresses (stealth generation + Nostr notifications)
-- ✅ Spend FROM NanoNyms (multi-account selection + privacy warnings)
-- ✅ 15 passing unit tests for account selection algorithm
-- 🚧 Phase 4 (Receive UI) in progress
+Against Nostr relays:
+- Events are NIP-17 gift-wrapped:
+    - Relays cannot see payload or real timestamp.
+    - Sender/receiver identity obscured by ephemeral keys.
+- Relay cannot link notifications to specific Nano accounts.
 
----
+Against network observers:
+- Can see Nostr and Nano traffic; users can mitigate with VPN/Tor.
+- Cannot trivially correlate Nostr events with specific on-chain transactions due to encryption and timestamp randomization.
 
-### Phase 1: Core Cryptography ✅
-**Status:** COMPLETE
-**Deliverable:** Functional crypto library with manual verification capability
+Comparison snapshot:
 
-- ✅ Multi-account key derivation (BIP-32 style)
-- ✅ ECDH shared secret generation
-- ✅ Stealth address derivation
-- ✅ `nnym_` address encoding/decoding
-- **Testing approach:** Unit tests for address encoding, key derivation paths
-  - Focus: Data correctness (addresses decode to correct keys)
-  - Do NOT test: Library internals (bip39, tweetnacl already tested)
-  - Manual verification: Generate test addresses, verify round-trip encoding
+| | Protocol | Receive privacy | Spend privacy | Requires chain changes | |
+|-------------------|-----------------|-------------------|------------------------|
+| | Monero | High | High | Yes (own chain) | |
+| | BIP-352 | High | Medium | Assumes Bitcoin | |
+| | Zcash shielded | Very high | High (in-pool) | Yes (own chain) | |
+| | CamoNano | High | Unspecified | No (on-chain notify) | |
+| | NanoNymNault | High | Medium (warned) | No (wallet-level) | |
 
-### Phase 2: Nostr Integration ✅
-**Status:** COMPLETE
-**Deliverable:** Send/receive notifications between two wallet instances
-
-- ✅ Integrate nostr-tools library
-- ✅ NIP-17 encryption/decryption
-- ✅ Relay connection management
-- ✅ Notification handling
-- ✅ Multi-relay redundancy
-- **Testing approach:** Integration tests with mocked Nostr relay
-  - Focus: Message format, encryption correctness
-  - Manual verification: Two browser tabs, send notification from A→B, verify receipt
-
-### Phase 3: Wallet UI - Send ✅
-**Status:** COMPLETE (2025-11-15)
-**Deliverable:** Complete send flow functional in dev mode
-
-- ✅ Detect `nnym_` addresses
-- ✅ Send flow with Nostr notification
-- ✅ Relay status display
-- ✅ Error handling
-- ✅ **Spending from NanoNyms (Section 8):**
-  - ✅ Stealth account selection algorithm (minimum accounts + randomized order)
-  - ✅ Privacy warning UI with configurable threshold
-  - ✅ Multi-account sending support
-  - ✅ Balance aggregation and display
-  - ✅ NanoNyms appear in "From Account" dropdown with special formatting
-  - ✅ Privacy impact calculation (high/medium/low)
-  - ✅ "Don't show again" option persists to localStorage
-- **Testing approach:** Manual QA with test NanoNyms
-  - Focus: User workflow works end-to-end (both TO and FROM NanoNyms)
-  - ✅ Test multi-account spending scenarios
-  - ✅ 15 unit tests for account selection algorithm
-  - No automated UI tests yet (add Cypress/Playwright later)
-
-### Phase 4: Wallet UI - Receive
-**Deliverable:** Complete receive flow functional in dev mode
-
-- Generate multiple NanoNyms
-- Background Nostr monitoring
-- Unified balance display
-- Transaction history
-- Per-NanoNym views
-- **Testing approach:** Manual QA with real test transactions
-  - Focus: Balance calculations correct, no missed notifications
-  - Integration tests for balance aggregation logic
-
-### Phase 5: Polish & User Testing
-**Deliverable:** Beta-ready wallet for community testing
-
-- Account management (labels, archive/active)
-- Error handling improvements
-- User documentation (in-wallet help)
-- **Privacy Mode (opt-in):** Randomized delays for multi-account sends
-- **Spending enhancements:**
-  - Privacy impact analysis and scoring
-  - "Review Inputs" detailed view
-  - Configurable privacy warning settings
-- **Testing approach:** Community beta testing
-  - Focus: Real-world usage patterns, edge cases, spending workflows
-  - Collect feedback on UX/privacy comprehension
-  - Test privacy warning effectiveness
-
-### Phase 6: Hardening & E2E Testing
-**Deliverable:** Production-ready wallet with automated test coverage
-
-**Bug Fixes & Optimization:**
-- Fix bugs found in beta and community testing
-- Add unit tests for critical bug fixes (regression prevention)
-- Performance optimization (crypto operations, UI rendering, Nostr subscriptions)
-
-**End-to-End Test Suite (Playwright):**
-- Implement after Phase 4D (spending) and Phase 5 (advanced features) are stable
-- Test strategy: Real testnet transactions + full UI workflow
-- Critical paths to cover:
-  - Generate NanoNym → Send to nnym_ → Receive notification → Verify balance
-  - Spend from stealth accounts (single account, multi-account)
-  - Privacy warnings display correctly
-  - Backup/restore seed phrase → recover NanoNyms and balances
-  - Archive/reactivate NanoNyms
-- Test environment:
-  - Nano testnet (real blockchain verification)
-  - Multiple Nostr relay connections
-  - Browser automation (headless Chrome)
-- Success criteria:
-  - All critical paths pass without manual intervention
-  - Test suite runs in < 5 minutes
-  - Can run in CI/CD pipeline
-
-**Current Testing Approach (Pre-E2E):**
-- Unit tests: Jasmine/Karma for crypto, services, pipes
-- Manual testing: Two browser tabs, send/receive verification on testnet
-- Verified: Notifications decrypt correctly, stealth addresses funded on-chain
-
-### Phase 7: Launch
-**Deliverable:** Public release
-
-- Security review (if budget permits)
-- Final documentation (user guides, API docs)
-- Community launch announcement
-- **Ongoing monitoring:**
-  - E2E test suite runs on every deployment
-  - Monitor Nostr relay health
-  - Track success metrics (Section 13)
+Design stance:
+- Receive-side privacy is strong and protocol-enforced.
+- Spend-side privacy is constrained by Nano’s account model; the wallet mitigates via warnings, selection strategies, and optional timing randomization, and is explicit about these limits.
 
 ---
 
-## 13. Success Metrics
+## 12. Implementation Roadmap (Status-Oriented)
 
-**Technical:**
-- Notification delivery: > 99.9% (with 5 relays)
-- Notification latency: < 2 seconds (median)
-- Privacy: Zero correlation detectable
-- Derivation speed: < 100ms
+Current status (as of 2025-11-15):
+- Phase 1 – Crypto core: complete.
+- Phase 2 – Nostr integration: complete.
+- Phase 3 – Send UI and spend-from-NanoNyms:
+    - Detect`nnym_` addresses and perform stealth send + Nostr notification.
+    - Implement stealth account selection algorithm + unit tests.
+    - Implement privacy warnings and multi-account sending.
+    - Show privacy impact.
+- Phase 4 – Receive UI: in progress.
+    - Multi-NanoNym management (generation, listing, balances).
+    - Background Nostr monitoring and history reconstruction.
+- Later phases:
+    - UX polish and documentation.
+    - Privacy Mode and advanced spend options.
+    - Automated E2E tests (Playwright or similar).
+    - Community beta and hardening.
 
-**User Experience:**
-- Time to send: < 10 seconds
-- Time to receive: < 5 seconds (wallet running)
-- User comprehension: > 80% understand privacy benefits
-
-**Adoption:**
-- 100 users in first month
-- 1000 users in first 6 months
-- At least one merchant using for donations
-
----
-
-## 14. Known Limitations
-
-1. **Sender must use compliant wallet:** Non-compliant wallets cannot send to `nnym_` addresses (fallback `nano_` address provided for compatibility)
-2. **Nostr infrastructure for fast recovery:** While Tier 1 & 2 recovery relies on Nostr relays, Tier 3 blockchain scanning provides guaranteed seed-only recovery as fallback
-3. **Recovery time trade-off:** Fast recovery (< 30s) requires Nostr relay availability; guaranteed recovery from seed alone via blockchain scanning takes 5-30 minutes
-4. **Account proliferation:** Each payment creates new stealth account on-chain (managed via unified balance UI; optional consolidation feature planned)
-5. **Spending privacy limitation:** When spending from multiple stealth accounts to the same destination, those accounts become publicly linked on-chain (fundamental limitation of Nano's account model; mitigated via privacy warnings, randomized send order, and optional Privacy Mode delays)
-6. **No post-quantum security:** Same as Nano itself (will upgrade when Nano does)
-7. **Encrypted backup storage:** Tier 2 recovery stores encrypted backup data on Nostr relays (user can self-host relay for guaranteed retention)
-
----
-
-## 15. Future Enhancements
-
-**Wallet Features (v1.x):**
-
-### Stealth Account Consolidation (Sweep Feature)
-
-**Use Case:** User wants to consolidate multiple stealth accounts into a single account for easier spending or management.
-
-**Important Note:** This is a **separate use case** from wallet recovery. Recovery is guaranteed via multi-tier strategy (Section 7.5). Consolidation is an **optional convenience feature** for users who want to trade some privacy for simpler account management.
-
-**Feature Design:**
-
-```
-UI: "Consolidate Stealth Accounts"
-
-User Flow:
-1. User navigates to NanoNym details page
-2. Clicks "Consolidate Accounts" button
-3. Wallet shows privacy warning:
-
-   ┌─────────────────────────────────────────────┐
-   │  ⚠️  Privacy Warning                        │
-   ├─────────────────────────────────────────────┤
-   │  Consolidating stealth accounts will        │
-   │  LINK them on the blockchain.               │
-   │                                             │
-   │  Privacy Impact:                            │
-   │  • Anyone can see these accounts belong     │
-   │    to the same owner                        │
-   │  • Reduces unlinkability benefits           │
-   │                                             │
-   │  Only consolidate if you need to spend      │
-   │  or prefer convenience over privacy.        │
-   │                                             │
-   │  [Cancel]  [I Understand - Proceed]         │
-   └─────────────────────────────────────────────┘
-
-4. User selects consolidation options:
-   • Select accounts to consolidate (checkboxes)
-   • Choose destination:
-     - Standard nano_ account (user's choice)
-     - Specific NanoNym fallback address
-     - New deterministic account (index-based)
-   • Preview total amount and fee estimate
-
-5. User confirms and wallet sends transactions
-6. Update UI to reflect consolidated balance
-```
-
-**Implementation Options:**
-
-**Option A: Consolidate to Standard Account**
-- Send all stealth account balances → user's main `nano_` address
-- Maximum convenience, minimum privacy
-- Good for: Users who want to spend from standard wallet
-
-**Option B: Consolidate to Predictable Index**
-- Send all stealth accounts → deterministic account at index N
-- Example: `m/44'/165'/0'/2000'/0` (consolidation range)
-- Recoverable during wallet restore (scan indices 2000-2999)
-- Balances privacy vs recoverability
-
-**Option C: Scheduled Auto-Consolidation**
-- User sets rules: "Consolidate stealth accounts older than 90 days"
-- Runs automatically in background
-- Optional: Only consolidate if balance > threshold
-
-**Technical Considerations:**
-- Each consolidation = on-chain transaction (minimal fee)
-- Timing patterns: Add random delays between sends to reduce correlation
-- Amount patterns: Consider splitting into multiple destinations for better privacy
-- User education: Clear warnings about privacy trade-offs
-
-**Recommended Implementation:**
-- Phase 1: Manual consolidation (Option A + B)
-- Phase 2: Add scheduling/automation (Option C) based on user feedback
-- Always show privacy warnings and require explicit confirmation
+Manual and automated tests:
+- Unit tests around:
+    - Address encoding/decoding.
+    - Key derivation paths.
+    - Account selection algorithm (already has multiple passing tests).
+- Integration tests:
+    - Nostr send/receive with mocked or test relays.
+- Planned E2E:
+    - Full flows on Nano testnet + real Nostr relays.
 
 ---
 
-**Protocol v2 considerations:**
-- ACK messages (notification delivery confirmation)
-- Nostr key rotation (address format v2)
-- Cross-currency standardization (propose as NIP)
-- Light client view key delegation
-- Compact filters for efficient scanning
-- Encrypted metadata storage (transaction labels, notes)
+## 13. Known Limitations
+
+1. Sender compatibility:
+    - Only wallets that understand`nnym_` can use full privacy features.
+    - Fallback`nano_` address remains non-private.
+2. Nostr reliance for fast recovery:
+    - Tiers 1 and 2 depend on relays; Tier 3 and seed-only guarantees rely on archival infra plus heuristics.
+3. Trade-off between speed and guaranteed recovery:
+    - Fast (seconds) recovery via Nostr vs slower, more complex fallback strategies.
+4. Account proliferation:
+    - Each payment creates a new Nano account.
+    - UI and potential consolidation tools must handle many small accounts.
+5. Spend-side privacy:
+    - Multi-account sends link accounts on-chain.
+    - This is a fundamental limit of Nano; mitigated via warnings, selection, and timing options.
+6. Post-quantum:
+    - Same as Nano: not PQ-safe yet; will track Nano’s evolution.
+7. Encrypted backup data:
+    - Tier 2 uses Nostr as encrypted storage.
+    - Users can add self-hosted relays for stronger guarantees.
 
 ---
 
-## 16. Conclusion
+## 14. Future Enhancements (Key Ideas)
 
-NanoNymNault provides **practical privacy** for Nano users who want to share reusable payment addresses without revealing their transaction history.
+Stealth account consolidation (sweep):
+- Use case: reduce many small stealth accounts into one or a few accounts for easier management.
+- Trade-off: consolidation links these accounts publicly.
+- Options:
+    - Consolidate into:
+        - A standard`nano_` account.
+        - A deterministic “consolidation” account (e.g. dedicated derivation range).
+- Requirements:
+    - Clear privacy warnings before consolidation.
+    - User must explicitly choose destination and set filters (e.g. “older than X days”).
 
-**Key innovations:**
-- Combines proven CamoNano cryptography with modern Nostr messaging
-- Solves on-chain notification problems (cost, timing correlation, sender linkability)
-- Supports unlimited NanoNyms from single seed
-- All NanoNyms are identical and reusable (users decide how to deploy)
-- No Nano protocol changes required
-
-**This is achievable, scalable, and ready to implement.** 🚀
+Advanced features:
+- Privacy scoring and per-send impact summary.
+- More sophisticated spend selection strategies.
+- Scheduled or rules-based consolidation (opt-in).
+- Protocol v2 ideas:
+    - Notification ACKs.
+    - Nostr key rotation and updated NanoNym address version.
+    - Cross-currency / cross-chain standardization.
+    - Light-client view key delegation.
+    - Compact filters or partial indexes to improve recovery efficiency.
 
 ---
 
-**Document Version:** 2.2 (Added comprehensive spending specification with privacy-aware account selection)
-**Date:** 2025-11-15
-**Currency:** XNO
-**Address Prefix:** nnym_
-**Status:** Specification Complete - Ready for Implementation
+## 15. Summary and Guardrails
 
-**Version History:**
-- v2.2 (2025-11-15): Added Section 8: Spending from Stealth Accounts - complete specification for privacy-aware multi-account spending with warnings and user controls
-- v2.1 (2025-11-15): Added comprehensive recovery strategy and stealth account consolidation
-- v2.0: Initial complete specification
-- Never allow this critical path to be broken
+NanoNymNault:
+- Provides reusable, privacy-preserving Nano payment identifiers (`nnym_`).
+- Uses CamoNano-style stealth addresses + Nostr NIP-17 notifications.
+- Requires no changes to Nano nodes or protocol.
+- Guarantees seed-based recovery via multi-tier strategies.
+- Is explicit about spend-side privacy limitations and mitigations.
+
+Critical invariant:
+The core path
+“Send to NanoNym → Receive via Nostr → Stealth funds spendable and recoverable from seed alone”
+must remain correct, test-covered, and never be broken by future changes.
