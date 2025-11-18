@@ -1,6 +1,6 @@
 <div class="uk-animation-slide-left-small" uk-grid>
   <div class="uk-width-1-1">
-    
+
     <div class="uk-margin-bottom" uk-grid>
       <div class="uk-width-expand@s uk-width-1-1">
         <h2 class="uk-heading-divider uk-text-truncate">
@@ -148,7 +148,7 @@
     <div class="uk-margin-large-top" uk-grid *ngIf="nanoNymAccounts.length > 0 || true">
       <div class="uk-width-expand@s uk-width-1-1">
         <h2 class="uk-heading-divider uk-text-truncate">
-          NanoNym Accounts <span class="uk-badge" style="font-size: 12px; vertical-align: middle;">Privacy</span>
+          NanoNyms <span class="uk-badge" style="font-size: 12px; vertical-align: middle;">Privacy</span>
         </h2>
       </div>
       <div class="uk-width-auto@m uk-width-1-1 uk-text-right">
@@ -219,7 +219,7 @@
         </tr>
         <tr *ngIf="!nanoNymAccounts.length">
           <td colspan="3" style="text-align: center;">
-            No NanoNyms yet. <a [routerLink]="'/receive/nanonyms'">Generate your first NanoNym</a> for private, reusable payment addresses.
+            No NanoNyms yet. <a [routerLink]="'/receive/nanonyms'">Generate your first NanoNym</a> for a private, reusable payment code.
           </td>
         </tr>
         </tbody>
