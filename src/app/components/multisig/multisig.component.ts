@@ -5,6 +5,7 @@ import { NotificationService } from '../../services/notification.service';
 import { RemoteSignService } from '../../services/remote-sign.service';
 import { QrModalService } from '../../services/qr-modal.service';
 import { MusigService } from '../../services/musig.service';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-multisig',
@@ -12,6 +13,7 @@ import { MusigService } from '../../services/musig.service';
   styleUrls: ['./multisig.component.css']
 })
 export class MultisigComponent implements OnInit {
+  readonly testIds = TestIds;
   accountAdd = '';
   showAddBox = false;
   storedAccounts = [];

@@ -7,6 +7,7 @@ import {AppSettingsService} from '../../services/app-settings.service';
 import * as QRCode from 'qrcode';
 import * as bip from 'bip39';
 import {formatDate} from '@angular/common';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-manage-wallet',
@@ -14,6 +15,7 @@ import {formatDate} from '@angular/common';
   styleUrls: ['./manage-wallet.component.css']
 })
 export class ManageWalletComponent implements OnInit {
+  readonly testIds = TestIds;
 
   wallet = this.walletService.wallet;
   accounts = this.walletService.wallet.accounts;

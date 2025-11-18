@@ -1,4 +1,4 @@
-<div class="uk-animation-slide-left-small" uk-grid *transloco="let t">
+<div class="uk-animation-slide-left-small" uk-grid *transloco="let t" [attr.data-testid]="testIds.addressBook.pageRoot">
   <div class="uk-width-1-1" id="address-book-sortable">
     
     <div class="uk-margin-bottom" uk-grid>
@@ -9,7 +9,7 @@
         </h2>
       </div>
       <div class="uk-width-auto@s uk-width-1-1 uk-text-right">
-        <button class="uk-button uk-button-secondary uk-align-right uk-width-auto@s" (click)="addEntry()" *ngIf="activePanel === 0">{{ 'address-book.add-new-entry' | transloco }}</button>
+        <button class="uk-button uk-button-secondary uk-align-right uk-width-auto@s" (click)="addEntry()" *ngIf="activePanel === 0" [attr.data-testid]="testIds.addressBook.addContactButton">{{ 'address-book.add-new-entry' | transloco }}</button>
       </div>
     </div>
 
@@ -80,7 +80,7 @@
           </ul>
 
           <ul class="uk-list uk-list-striped" style="margin-top: 0;" uk-sortable="handle: .uk-sortable-handle; cls-custom: uk-box-shadow-small uk-background uk-background-default;">
-            <li class="" *ngFor="let addressBook of addressBook$ | async;" [attr.data-account]="addressBook.account">
+            <li class="" *ngFor="let addressBook of addressBook$ | async;" [attr.data-account]="addressBook.account" [attr.data-testid]="testIds.addressBook.addressBookRow">
               <div uk-grid>
                 <div class="uk-width-2-5 uk-text-truncate uk-visible-toggle">
                   <div uk-grid>
@@ -88,7 +88,7 @@
                       {{ addressBook.name }}
                     </div>
                     <ul class="uk-iconnav uk-width-auto">
-                      <li><a (click)="editEntry(addressBook)" title="Edit Entry" uk-tooltip uk-icon="icon: pencil;" class="edit-name-icon"></a></li>
+                      <li><a (click)="editEntry(addressBook)" title="Edit Entry" uk-tooltip uk-icon="icon: pencil;" class="edit-name-icon" [attr.data-testid]="testIds.addressBook.addressBookRowEditButton"></a></li>
                       <li><a class="uk-sortable-handle uk-margin-small-right" uk-icon="icon: table"></a></li>
                     </ul>
                   </div>
@@ -129,7 +129,7 @@
                   </div>
                 </div>
                 <div class="uk-width-1-6 uk-text-center" style="padding-left: 0;">
-                  <a (click)="deleteAddress(addressBook.account)" class="uk-text-danger" title="Remove From Address Book" uk-tooltip><span uk-icon="icon: trash;"></span></a>
+                  <a (click)="deleteAddress(addressBook.account)" class="uk-text-danger" title="Remove From Address Book" uk-tooltip [attr.data-testid]="testIds.addressBook.addressBookRowDeleteButton"><span uk-icon="icon: trash;"></span></a>
                 </div>
               </div>
 
@@ -203,7 +203,7 @@
           <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
             <div class="js-upload uk-text-left uk-width-auto@s uk-width-1-1" style="display: inline-block;" uk-form-custom>
               <input type="file" id="import-from-file" (change)="importFromFile($event.target.files)" multiple>
-              <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" type="button" tabindex="-1">{{ 'address-book.import-address-book' | transloco }}</button>
+              <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" type="button" tabindex="-1" [attr.data-testid]="testIds.addressBook.importAddressBookButton">{{ 'address-book.import-address-book' | transloco }}</button>
             </div>
           </div>
         </div>

@@ -4,6 +4,7 @@ import {NotificationService} from '../../services/notification.service';
 import * as CryptoJS from 'crypto-js';
 import {WalletService, WalletType} from '../../services/wallet.service';
 import {UtilService} from '../../services/util.service';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-import-wallet',
@@ -11,6 +12,7 @@ import {UtilService} from '../../services/util.service';
   styleUrls: ['./import-wallet.component.css']
 })
 export class ImportWalletComponent implements OnInit {
+  readonly testIds = TestIds;
   activePanel = 'error';
 
   walletPassword = '';

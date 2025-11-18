@@ -5,6 +5,7 @@ import { BarcodeFormat } from '@zxing/library';
 import { BehaviorSubject } from 'rxjs';
 import { UtilService } from '../../services/util.service';
 import * as bip39 from 'bip39';
+import { TestIds } from '../../testing/test-ids';
 
 export type QRType = 'account' | 'hash' | 'mnemonic' | 'generic';
 
@@ -14,7 +15,7 @@ export type QRType = 'account' | 'hash' | 'mnemonic' | 'generic';
   styleUrls: ['./qr-modal.component.css']
 })
 export class QrModalComponent implements OnInit {
-
+  readonly testIds = TestIds;
   @Input() title = 'QR Scanner';
   @Input() reference: string;
   @Input() type: QRType;

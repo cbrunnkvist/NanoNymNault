@@ -26,6 +26,7 @@ import {
   formatSpendableAccountLabel
 } from "../../types/spendable-account.types";
 import { NanoNymAccountSelectionService } from "../../services/nanonym-account-selection.service";
+import { TestIds } from '../../testing/test-ids';
 
 const nacl = window["nacl"];
 
@@ -35,6 +36,7 @@ const nacl = window["nacl"];
   styleUrls: ["./send.component.css"],
 })
 export class SendComponent implements OnInit {
+  readonly testIds = TestIds;
   nano = 1000000000000000000000000;
 
   activePanel = "send";

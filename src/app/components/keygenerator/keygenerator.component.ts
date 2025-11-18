@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import {UtilService} from '../../services/util.service';
 import * as bip39 from 'bip39';
 import {NotificationService} from '../../services/notification.service';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-keygenerator',
@@ -9,6 +10,7 @@ import {NotificationService} from '../../services/notification.service';
   styleUrls: ['./keygenerator.component.css']
 })
 export class KeygeneratorComponent implements OnInit {
+  readonly testIds = TestIds;
   seed = '';
   mnemonic = '';
   privateKey = '';

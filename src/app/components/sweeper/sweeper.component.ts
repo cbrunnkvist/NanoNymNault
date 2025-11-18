@@ -11,6 +11,7 @@ import * as nanocurrency from 'nanocurrency';
 import { wallet } from 'nanocurrency-web';
 import * as bip39 from 'bip39';
 import {Router} from '@angular/router';
+import { TestIds } from '../../testing/test-ids';
 
 const INDEX_MAX = 4294967295; // seed index
 const SWEEP_MAX_INDEX = 100; // max index keys to sweep
@@ -23,6 +24,7 @@ const SWEEP_MAX_PENDING = 100; // max pending blocks to process per run
 })
 
 export class SweeperComponent implements OnInit {
+  readonly testIds = TestIds;
   accounts = this.walletService.wallet.accounts;
   indexMax = INDEX_MAX;
   incomingMax = SWEEP_MAX_PENDING;

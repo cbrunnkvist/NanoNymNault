@@ -19,6 +19,7 @@ import hermes from 'hermes-channel';
 import * as nanocurrency from 'nanocurrency';
 import { MusigService } from '../../services/musig.service';
 import { environment } from 'environments/environment';
+import { TestIds } from '../../testing/test-ids';
 
 const INDEX_MAX = 4294967295;
 // navigation source for cancel command (excluding camera source because too complicated to fix)
@@ -30,6 +31,7 @@ enum navSource {'remote', 'multisig'}
 })
 
 export class SignComponent implements OnInit {
+  readonly testIds = TestIds;
   paramsString = '';
   activePanel = 'error';
   shouldSign: boolean = null; // if a block has been scanned for signing (or if it is a block to process)

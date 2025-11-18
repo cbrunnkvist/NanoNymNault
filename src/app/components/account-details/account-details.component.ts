@@ -17,6 +17,7 @@ import * as nanocurrency from 'nanocurrency';
 import {NinjaService} from '../../services/ninja.service';
 import { QrModalService } from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-account-details',
@@ -24,6 +25,7 @@ import { TranslocoService } from '@ngneat/transloco';
   styleUrls: ['./account-details.component.css']
 })
 export class AccountDetailsComponent implements OnInit, OnDestroy {
+  readonly testIds = TestIds;
   nano = 1000000000000000000000000;
   zeroHash = '0000000000000000000000000000000000000000000000000000000000000000';
 

@@ -7,6 +7,7 @@ import {AppSettingsService} from '../../services/app-settings.service';
 import BigNumber from 'bignumber.js';
 import {AddressBookService} from '../../services/address-book.service';
 import { TranslocoService } from '@ngneat/transloco';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-transaction-details',
@@ -14,6 +15,7 @@ import { TranslocoService } from '@ngneat/transloco';
   styleUrls: ['./transaction-details.component.css']
 })
 export class TransactionDetailsComponent implements OnInit {
+  readonly testIds = TestIds;
   nano = 1000000000000000000000000;
 
   routerSub = null;

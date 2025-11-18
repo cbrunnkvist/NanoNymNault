@@ -1,4 +1,4 @@
-<div class="uk-animation-slide-left-small" uk-grid>
+<div class="uk-animation-slide-left-small" uk-grid [attr.data-testid]="testIds.receive.pageRoot">
   <div class="uk-width-1-1">
     <h2 class="uk-heading-divider">Receive</h2>
 
@@ -148,7 +148,7 @@
                   </tr>
                 </thead>
                 <tbody>
-                  <tr *ngFor="let nanoNym of nanonyms">
+                  <tr *ngFor="let nanoNym of nanonyms" [attr.data-testid]="testIds.receive.nanoNymRow" [attr.data-nanonym-index]="nanoNym.index">
                     <td>
                       <strong>{{ nanoNym.label }}</strong>
                     </td>
@@ -232,6 +232,7 @@
                         (click)="viewNanoNymDetails(nanoNym)"
                         uk-tooltip
                         title="View Details"
+                        [attr.data-testid]="testIds.receive.nanoNymRowDetailsButton"
                       >
                         <span uk-icon="icon: info; ratio: 0.8"></span>
                       </button>
@@ -273,6 +274,7 @@
           class="uk-button uk-button-primary uk-button-large"
           type="button"
           (click)="openGenerateNanoNymModal()"
+          [attr.data-testid]="testIds.receive.createNanoNymButton"
         >
           <span uk-icon="icon: plus; ratio: 1.2"></span>
           Generate New NanoNym
@@ -729,6 +731,7 @@
                       class="uk-button uk-button-primary uk-text-center uk-width-auto"
                       type="button"
                       (click)="receiveReceivableBlock(pending)"
+                      [attr.data-testid]="testIds.receive.receiveAllButton"
                     >
                       RECEIVE
                     </button>

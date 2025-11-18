@@ -2,7 +2,7 @@
     <div class="modal-content">
         <div class="modal-header">
             <h4 class="modal-title">Scan a QR</h4>
-            <button class="uk-modal-close-default" type="button" uk-close (click)="activeModal.dismiss('QR scanner dismissed')"></button>
+            <button class="uk-modal-close-default" type="button" uk-close (click)="activeModal.dismiss('QR scanner dismissed')" [attr.data-testid]="testIds.qrModal.closeButton"></button>
         </div>
         <div class="modal-body">
             <ng-content></ng-content>

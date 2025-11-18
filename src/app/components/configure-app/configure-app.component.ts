@@ -16,6 +16,7 @@ import {NinjaService} from '../../services/ninja.service';
 import {QrModalService} from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
 import {NanoNymManagerService} from '../../services/nanonym-manager.service';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-configure-app',
@@ -24,6 +25,7 @@ import {NanoNymManagerService} from '../../services/nanonym-manager.service';
 })
 
 export class ConfigureAppComponent implements OnInit {
+  readonly testIds = TestIds;
 
   constructor(
     private walletService: WalletService,

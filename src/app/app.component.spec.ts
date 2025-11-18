@@ -1,36 +1,39 @@
-import { TestBed, waitForAsync } from "@angular/core/testing";
-import { AppComponent } from "./app.component";
-describe("AppComponent", () => {
-  beforeEach(waitForAsync(() => {
-    TestBed.configureTestingModule({
-      declarations: [AppComponent],
-    }).compileComponents();
-  }));
-  // SKIPPED: Test fails due to missing DI providers in TestBed configuration.
-  // To fix: Add mock providers for all component/service dependencies.
-  // See NAULT-TESTS.md for details on test infrastructure issues.
-  xit("should create the app", waitForAsync(() => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.debugElement.componentInstance;
-    expect(app).toBeTruthy();
-  }));
-  // SKIPPED: Test fails due to missing DI providers in TestBed configuration.
-  // To fix: Add mock providers for all component/service dependencies.
-  // See NAULT-TESTS.md for details on test infrastructure issues.
-  xit(`should have as title 'app'`, waitForAsync(() => {
-    const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.debugElement.componentInstance;
-    expect(app.title).toEqual("app");
-  }));
-  // SKIPPED: Test fails due to missing DI providers in TestBed configuration.
-  // To fix: Add mock providers for all component/service dependencies.
-  // See NAULT-TESTS.md for details on test infrastructure issues.
-  xit("should render title in a h1 tag", waitForAsync(() => {
-    const fixture = TestBed.createComponent(AppComponent);
-    fixture.detectChanges();
-    const compiled = fixture.debugElement.nativeElement;
-    expect(compiled.querySelector("h1").textContent).toContain(
-      "Welcome to app!",
-    );
-  }));
-});
+// src/test.ts
+// This file is required by karma.conf.js and loads recursively all the .spec and framework files
+
+import 'zone.js/dist/long-stack-trace-zone';
+import 'zone.js/dist/proxy.js';
+import 'zone.js/dist/sync-test';
+import 'zone.js/dist/jasmine-patch';
+import 'zone.js/dist/async-test';
+import 'zone.js/dist/fake-async-test';
+
+import { getTestBed } from '@angular/core/testing';
+import {
+  BrowserDynamicTestingModule,
+  platformBrowserDynamicTesting
+} from '@angular/platform-browser-dynamic/testing';
+
+// Unfortunately there's no typing for the `__karma__` variable. Just declare it as any.
+declare const __karma__: any;
+declare const require: any;
+
+// Prevent Karma from running prematurely.
+__karma__.loaded = function () {};
+
+// First, initialize the Angular testing environment.
+getTestBed().initTestEnvironment(
+  BrowserDynamicTestingModule,
+  platformBrowserDynamicTesting(),
+  {
+    teardown: { destroyAfterEach: false }
+  }
+);
+
+// Then we find all the tests.
+const context = require.context('./', true, /\.spec\.ts$/);
+// And load the modules.
+context.keys().map(context);
+
+// Finally, start Karma to run the tests.
+__karma__.start();

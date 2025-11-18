@@ -35,7 +35,7 @@
         </div>
       </div>
       <div class="uk-card-footer uk-text-right">
-        <button (click)="decryptWallet()" class="uk-button uk-button-secondary">Import Wallet</button>
+        <button (click)="decryptWallet()" class="uk-button uk-button-secondary" [attr.data-testid]="testIds.importWallet.importWalletButton">Import Wallet</button>
       </div>
     </div>
 
@@ -47,7 +47,7 @@
         <p>Your wallet has been successfully imported!</p>
       </div>
       <div class="uk-card-footer uk-text-right">
-        <button routerLink="/accounts" class="uk-button uk-button-secondary">View Accounts</button>
+        <button routerLink="/accounts" class="uk-button uk-button-secondary" [attr.data-testid]="testIds.importWallet.viewAccountsButton">View Accounts</button>
       </div>
     </div>
 

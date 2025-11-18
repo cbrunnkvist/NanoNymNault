@@ -18,6 +18,7 @@ import { NanoNymManagerService } from "../../services/nanonym-manager.service";
 import { NanoNymStorageService } from "../../services/nanonym-storage.service";
 import { NanoNym } from "../../types/nanonym.types";
 import { Subscription } from "rxjs";
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: "app-receive",
@@ -25,6 +26,7 @@ import { Subscription } from "rxjs";
   styleUrls: ["./receive.component.css"],
 })
 export class ReceiveComponent implements OnInit, OnDestroy {
+  readonly testIds = TestIds;
   nano = 1000000000000000000000000;
   accounts = this.walletService.wallet.accounts;
 

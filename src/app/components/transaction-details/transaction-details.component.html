@@ -81,7 +81,7 @@
                 </a>
                 <div class="snippet-address-actions uk-width-auto uk-flex uk-flex-bottom">
                   <ul class="uk-iconnav">
-                    <li><a ngxClipboard [cbContent]="fromAccountID" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip></a></li>
+                    <li><a ngxClipboard [cbContent]="fromAccountID" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copyFromAccountIdButton"></a></li>
                   </ul>
                 </div>
               </div>
@@ -104,7 +104,7 @@
                 </a>
                 <div class="snippet-address-actions uk-width-auto uk-flex uk-flex-bottom">
                   <ul class="uk-iconnav">
-                    <li><a ngxClipboard [cbContent]="toAccountID" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip></a></li>
+                    <li><a ngxClipboard [cbContent]="toAccountID" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Account Address" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copyToAccountIdButton"></a></li>
                   </ul>
                 </div>
               </div>
@@ -126,7 +126,7 @@
               <div class="uk-width-auto block-hash-monospace uk-text-truncate" style="max-width: calc(100% - 35px);">{{ hashID }}</div>
               <div class="uk-width-auto block-hash-actions">
                 <ul class="uk-iconnav">
-                  <li><a ngxClipboard [cbContent]="hashID" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Block Hash" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="hashID" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Block Hash" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copyHashIdButton"></a></li>
                 </ul>
               </div>
             </div>
@@ -185,7 +185,7 @@
               >{{ transaction?.contents?.previous }}</a>
               <div class="uk-width-auto block-hash-actions">
                 <ul class="uk-iconnav">
-                  <li><a ngxClipboard [cbContent]="transaction?.contents?.previous" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Previous Block Hash" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="transaction?.contents?.previous" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Previous Block Hash" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copyPreviousHashButton"></a></li>
                 </ul>
               </div>
             </div>
@@ -204,7 +204,7 @@
               >{{ successorHash }}</a>
               <div class="uk-width-auto block-hash-actions">
                 <ul class="uk-iconnav">
-                  <li><a ngxClipboard [cbContent]="successorHash" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Successor Block Hash" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="successorHash" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Successor Block Hash" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copySuccessorHashButton"></a></li>
                 </ul>
               </div>
             </div>
@@ -227,7 +227,7 @@
               >{{ transaction?.contents?.link }}</a>
               <div class="uk-width-auto block-hash-actions">
                 <ul class="uk-iconnav">
-                  <li><a ngxClipboard [cbContent]="(transaction?.contents?.link || transaction?.contents?.source)" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Source Block Hash" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="(transaction?.contents?.link || transaction?.contents?.source)" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Source Block Hash" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copySourceHashButton"></a></li>
                 </ul>
               </div>
             </div>
@@ -253,7 +253,7 @@
               >{{ transaction?.contents?.work }}</div>
               <div class="uk-width-auto block-hash-actions">
                 <ul class="uk-iconnav">
-                  <li><a ngxClipboard [cbContent]="transaction?.contents?.work" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Work Value" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="transaction?.contents?.work" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Work Value" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copyWorkButton"></a></li>
                 </ul>
               </div>
             </div>
@@ -266,7 +266,7 @@
               <div class="uk-width-auto block-hash-monospace block-signature">{{ transaction?.contents?.signature }}</div>
               <div class="uk-width-auto block-hash-actions">
                 <ul class="uk-iconnav">
-                  <li><a ngxClipboard [cbContent]="transaction?.contents?.signature" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Signature" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="transaction?.contents?.signature" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy Signature" uk-tooltip [attr.data-testid]="testIds.transactionDetails.copySignatureButton"></a></li>
                 </ul>
               </div>
             </div>

@@ -1,4 +1,4 @@
-<div class="uk-animation-slide-left-small" uk-grid>
+<div class="uk-animation-slide-left-small" uk-grid [attr.data-testid]="testIds.accounts.pageRoot">
   <div class="uk-width-1-1">
     
     <div class="uk-margin-bottom" uk-grid>
@@ -14,7 +14,7 @@
             <input type="number" class="uk-input uk-form-width-small uk-width-1-1@m" [(ngModel)]="newAccountIndex" placeholder="Account #" *ngIf="viewAdvanced">
           </div>
           <div class="uk-width-auto@m">
-            <button class="uk-button uk-button-secondary uk-width-1-1@m" (click)="createAccount()">
+            <button class="uk-button uk-button-secondary uk-width-1-1@m" (click)="createAccount()" [attr.data-testid]="testIds.accounts.createAccountButton">
               {{ 'accounts.add-new-account' | transloco }}
             </button>
           </div>
@@ -41,7 +41,7 @@
         </tr>
         </thead>
         <tbody>
-        <tr *ngFor="let account of accounts" class="uk-visible-toggle">
+        <tr *ngFor="let account of accounts" class="uk-visible-toggle" [attr.data-testid]="testIds.accounts.accountRow" [attr.data-account-id]="account.id">
           <ng-template #accountAmounts>
             <ng-container *ngIf="(walletService.wallet.updatingBalance === false) else balanceLoading">
               <div class="account-amounts-primary uk-width-1-1">
@@ -81,6 +81,7 @@
                 (click)="navigateToAccount(account); $event.stopPropagation()"
                 [routerLink]="( '/account/' + account.id )" [queryParams]="{ compact: '1' }"
                 [class]="[ 'uk-width-auto', 'uk-text-truncate', 'account-container', !isLedgerWallet ? 'narrow' : 'wide' ]"
+                [attr.data-testid]="testIds.accounts.accountRowDetailsButton"
               >
                 <div class="uk-flex">
                   <app-nano-identicon scale="12" [accountID]="account.id" [settingIdenticonsStyle]="settings.settings.identiconsStyle" class="nano-identicon" *ngIf="(settings.settings.identiconsStyle !== 'none')"></app-nano-identicon>
@@ -105,7 +106,7 @@
               </a>
               <div class="nano-address-actions uk-width-auto copy-container">
                 <ul class="uk-iconnav copy-icons">
-                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" uk-icon="icon: copy" [title]="'general.copy' | transloco" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" uk-icon="icon: copy" [title]="'general.copy' | transloco" uk-tooltip [attr.data-testid]="testIds.accounts.copyAccountIdButton"></a></li>
                   <li *ngIf="isLedgerWallet"><a uk-icon="icon: commenting" [title]="'accounts.confirm-address-on-ledger' | transloco" (click)="showLedgerAddress(account)" uk-tooltip></a></li>
                 </ul>
               </div>

@@ -6,6 +6,7 @@ import { RemoteSignService } from '../../services/remote-sign.service';
 import { QrModalService } from '../../services/qr-modal.service';
 import { AddressBookService } from 'app/services/address-book.service';
 import {BehaviorSubject} from 'rxjs';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-send',
@@ -13,6 +14,7 @@ import {BehaviorSubject} from 'rxjs';
   styleUrls: ['./remote-signing.component.css']
 })
 export class RemoteSigningComponent implements OnInit {
+  readonly testIds = TestIds;
   toAccountID = '';
   toAccountStatus: number = null;
   unsignedBlock = '';

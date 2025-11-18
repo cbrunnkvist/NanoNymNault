@@ -4,6 +4,7 @@ import {NotificationService} from '../../services/notification.service';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import {PowService} from '../../services/pow.service';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-wallet-widget',
@@ -11,6 +12,7 @@ import {PowService} from '../../services/pow.service';
   styleUrls: ['./wallet-widget.component.css']
 })
 export class WalletWidgetComponent implements OnInit {
+  readonly testIds = TestIds;
   wallet = this.walletService.wallet;
 
   ledgerStatus = {

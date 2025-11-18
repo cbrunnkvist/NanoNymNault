@@ -17,6 +17,7 @@ import { DeeplinkService } from './services/deeplink.service';
 import { TranslocoService } from '@ngneat/transloco';
 import { version } from 'environments/version';
 import { NanoNymManagerService } from './services/nanonym-manager.service';
+import { TestIds } from './testing/test-ids';
 
 
 @Component({
@@ -25,6 +26,7 @@ import { NanoNymManagerService } from './services/nanonym-manager.service';
   styleUrls: ['./app.component.less']
 })
 export class AppComponent implements OnInit {
+  readonly testIds = TestIds;
 
   constructor(
     public walletService: WalletService,

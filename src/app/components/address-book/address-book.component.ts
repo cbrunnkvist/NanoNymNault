@@ -12,6 +12,7 @@ import {ApiService} from '../../services/api.service';
 import {PriceService} from '../../services/price.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import {TranslocoService} from '@ngneat/transloco';
+import { TestIds } from '../../testing/test-ids';
 
 export interface BalanceAccount {
   balance: BigNumber;
@@ -27,6 +28,7 @@ export interface BalanceAccount {
 })
 
 export class AddressBookComponent implements OnInit, AfterViewInit, OnDestroy {
+  readonly testIds = TestIds;
 
   nano = 1000000000000000000000000;
   activePanel = 0;

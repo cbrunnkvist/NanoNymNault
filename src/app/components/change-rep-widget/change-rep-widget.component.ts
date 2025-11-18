@@ -3,6 +3,7 @@ import {WalletService} from '../../services/wallet.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import {RepresentativeService} from '../../services/representative.service';
 import {Router} from '@angular/router';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-change-rep-widget',
@@ -10,7 +11,7 @@ import {Router} from '@angular/router';
   styleUrls: ['./change-rep-widget.component.css']
 })
 export class ChangeRepWidgetComponent implements OnInit {
-
+  readonly testIds = TestIds;
   changeableRepresentatives = this.repService.changeableReps;
   displayedRepresentatives = [];
   representatives = [];

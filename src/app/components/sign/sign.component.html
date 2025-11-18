@@ -299,10 +299,10 @@
               <div class="uk-inline uk-width-1-1">
                 <div uk-grid>
                   <div class="uk-width-1-2@l" style="max-width: 350px; margin-top: 20px !important;">
-                    <a class="uk-button uk-button-primary uk-width-1-1" ngxClipboard [cbContent]="multisigLink" (cbOnSuccess)="copied()">COPY SIGNING LINK</a>
+                    <a class="uk-button uk-button-primary uk-width-1-1" ngxClipboard [cbContent]="multisigLink" (cbOnSuccess)="copied()" [attr.data-testid]="testIds.sign.copySigningLinkButton">COPY SIGNING LINK</a>
                   </div>
                   <div class="uk-width-1-2@l" style="max-width: 350px; margin-top: 20px !important;">
-                    <button class="uk-button uk-button-primary uk-width-1-1" (click)="resetMultisig()">RESET MULTISIG</button>
+                    <button class="uk-button uk-button-primary uk-width-1-1" (click)="resetMultisig()" [attr.data-testid]="testIds.sign.resetMultisigButton">RESET MULTISIG</button>
                   </div>
                 </div>
               </div>
@@ -331,17 +331,17 @@
           </div>
 
           <br>
-          <a *ngIf="processedHash" [routerLink]="'/account/' + signatureAccount" [queryParams]="{ sign: 1 }" class="uk-button uk-button-primary uk-width-auto" title="Account detail view" uk-tooltip>Account Detail View</a>
+          <a *ngIf="processedHash" [routerLink]="'/account/' + signatureAccount" [queryParams]="{ sign: 1 }" class="uk-button uk-button-primary uk-width-auto" title="Account detail view" uk-tooltip [attr.data-testid]="testIds.sign.accountDetailViewButton">Account Detail View</a>
         </div>
 
         <div *ngIf="!processedHash">
           <div class="nlt-button-group uk-width-1-1 uk-text-right">
-            <button class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m" (click)="cancel()">Cancel</button>
-            <button *ngIf="!confirmingTransaction && shouldSign && signTypeSelected !== signTypes[3]" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="confirmTransaction()">Confirm & Sign</button>
-            <button *ngIf="!confirmingTransaction && shouldSign && signTypeSelected === signTypes[3]" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="startMultisig()" [disabled]="!this.validPrivkey || !this.validParticipants || finalSignature || (this.activeStep > 1 && !this.isInputAddDisabled)">{{this.activeStep !== 4 ? (this.activeStep === 1 ? 'Start Multi-signing' : 'Step '+ (this.activeStep - 1) + '/3 | Next') : 'Step '+ (this.activeStep - 1) + '/3 | Final Step'}}</button>
-            <button *ngIf="confirmingTransaction && shouldSign" class="uk-button uk-button-primary uk-disabled uk-width-1-1"><span class="uk-margin-right" uk-spinner></span> Loading</button>
-            <button *ngIf="!confirmingTransaction && !shouldSign" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="confirmBlock()">Confirm & Process</button>
-            <button *ngIf="confirmingTransaction && !shouldSign" class="uk-button uk-button-primary uk-disabled uk-width-1-1"><span class="uk-margin-right" uk-spinner></span> Loading</button>
+            <button class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m" (click)="cancel()" [attr.data-testid]="testIds.sign.cancelButton">Cancel</button>
+            <button *ngIf="!confirmingTransaction && shouldSign && signTypeSelected !== signTypes[3]" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="confirmTransaction()" [attr.data-testid]="testIds.sign.confirmAndSignButton">Confirm & Sign</button>
+            <button *ngIf="!confirmingTransaction && shouldSign && signTypeSelected === signTypes[3]" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="startMultisig()" [disabled]="!this.validPrivkey || !this.validParticipants || finalSignature || (this.activeStep > 1 && !this.isInputAddDisabled)" [attr.data-testid]="testIds.sign.multisigNextStepButton">{{this.activeStep !== 4 ? (this.activeStep === 1 ? 'Start Multi-signing' : 'Step '+ (this.activeStep - 1) + '/3 | Next') : 'Step '+ (this.activeStep - 1) + '/3 | Final Step'}}</button>
+            <button *ngIf="confirmingTransaction && shouldSign" class="uk-button uk-button-primary uk-disabled uk-width-1-1" [attr.data-testid]="testIds.sign.loadingSignButton"><span class="uk-margin-right" uk-spinner></span> Loading</button>
+            <button *ngIf="!confirmingTransaction && !shouldSign" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" (click)="confirmBlock()" [attr.data-testid]="testIds.sign.confirmAndProcessButton">Confirm & Process</button>
+            <button *ngIf="confirmingTransaction && !shouldSign" class="uk-button uk-button-primary uk-disabled uk-width-1-1" [attr.data-testid]="testIds.sign.loadingProcessButton"><span class="uk-margin-right" uk-spinner></span> Loading</button>
           </div>
         </div>
       </div>
@@ -361,9 +361,8 @@
 
 <!-- Modal for result QR -->
 <div class="modal-position-bottom" id="signed-modal" uk-modal>
-  <div class="uk-modal-dialog uk-modal-body modal-qr">
-    <button class="uk-modal-close-default" type="button" uk-close></button>
-    <div class="uk-modal-header">
+      <div class="uk-modal-dialog uk-modal-body modal-qr">
+        <button class="uk-modal-close-default" type="button" uk-close [attr.data-testid]="testIds.sign.signedModalCloseButton"></button>    <div class="uk-modal-header">
         <h2 class="uk-modal-title">Signed Block</h2>
     </div>
     <div class="uk-modal-body modal-qr-body">
@@ -390,7 +389,7 @@
 <!-- Modal for output data QR -->
 <div class="modal-position-bottom" id="qr-code-modal" uk-modal>
   <div class="uk-modal-dialog uk-margin-auto-vertical">
-    <button class="uk-modal-close-default" type="button" uk-close></button>
+    <button class="uk-modal-close-default" type="button" uk-close [attr.data-testid]="testIds.sign.outputDataQrModalCloseButton"></button>
     <div class="uk-modal-body">
       <div class="uk-width-1-1 uk-text-center">
         <img *ngIf="qrCodeImageOutput else qrCodeGenerating" [src]="qrCodeImageOutput" class="qr-code" title="Output Data">

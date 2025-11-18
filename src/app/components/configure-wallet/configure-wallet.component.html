@@ -17,7 +17,7 @@
   <div class="uk-card-body">
     <div class="landing-container uk-grid-divider" uk-grid>
       <div class="uk-width-auto@l uk-width-1-1@m">
-        <button class="wallet-option" (click)="setPasswordInit()">
+        <button class="wallet-option" (click)="setPasswordInit()" [attr.data-testid]="testIds.configureWallet.newWalletButton">
           <div class="icon">
             <svg width="120" height="120" version="1.1" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
               <path d="m132.03 98.355v26.667c0 1.662-1.338 3-3 3h-112.4c-1.662 0-3-1.338-3-3v-78.19c0-1.662 1.338-3 3-3h112.4c1.662 0 3 1.338 3 3v26.132" fill="none" stroke="#000" stroke-linejoin="round" stroke-width="2"/>
@@ -41,7 +41,7 @@
         </button>
       </div>
       <div class="uk-width-expand">
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'ledger';">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'ledger';" [attr.data-testid]="testIds.configureWallet.useLedgerButton">
           <div class="icon">
             <svg width="120" height="120" version="1.1" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
               <g>
@@ -56,14 +56,14 @@
           <h2>Use<br>Ledger</h2>
           <p>Nano S / Nano X</p>
         </button>
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'seed';">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'seed';" [attr.data-testid]="testIds.configureWallet.importSeedButton">
           <div class="icon">
             <div class="seed">{{ exampleSeed }}</div>
           </div>
           <h2>Import<br>Seed</h2>
           <p>64 hex<br>characters</p>
         </button>
-        <button class="wallet-option" (click)="setPanel(panels.mnemonicTypeSelection);">
+        <button class="wallet-option" (click)="setPanel(panels.mnemonicTypeSelection);" [attr.data-testid]="testIds.configureWallet.importMnemonicButton">
           <div class="icon">
             <div class="mnemonic">
               <div class="mnemonic-row">
@@ -87,14 +87,14 @@
           <h2>Import<br>Mnemonic</h2>
           <p>12, 15, 18, 21<br>or 24 words</p>
         </button>
-        <button class="wallet-option more-options" (click)="showMoreImportOptions = true;" *ngIf="!showMoreImportOptions">
+        <button class="wallet-option more-options" (click)="showMoreImportOptions = true;" *ngIf="!showMoreImportOptions" [attr.data-testid]="testIds.configureWallet.moreOptionsButton">
           <div class="icon">
             <div class="more-options">···</div>
           </div>
           <h2>More<br>Options</h2>
           <p>Import from file<br>or a private key</p>
         </button>
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'file';" *ngIf="showMoreImportOptions">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'file';" *ngIf="showMoreImportOptions" [attr.data-testid]="testIds.configureWallet.importFileButton">
           <div class="icon">
             <svg width="120" height="120" version="1.1" viewBox="0 0 160 160" xmlns="http://www.w3.org/2000/svg">
               <path d="m111.24 21.503c6.0699 1.9309 10.664 6.5178 13.516 14.24m-88.044-14.24h74.527l0.32099 14.165 13.195 0.07558v99.871c0 1.5009-1.2083 2.7092-2.7092 2.7092h-85.334c-1.5009 0-2.7092-1.2083-2.7092-2.7092v-111.4c0-1.5009 1.2083-2.7092 2.7092-2.7092z" fill="none" stroke="#000" stroke-width="2"/>
@@ -103,14 +103,14 @@
           <h2>Import<br>File</h2>
           <p>exported<br>Nault wallet</p>
         </button>
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'privateKey';" *ngIf="showMoreImportOptions">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'privateKey';" *ngIf="showMoreImportOptions" [attr.data-testid]="testIds.configureWallet.importPrivateKeyButton">
           <div class="icon">
             <div class="seed">{{ examplePrivateKey }}</div>
           </div>
           <h2>Import<br>Private Key</h2>
           <p>64 hex<br>characters</p>
         </button>
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'expandedKey';" *ngIf="showMoreImportOptions">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'expandedKey';" *ngIf="showMoreImportOptions" [attr.data-testid]="testIds.configureWallet.importExpandedKeyButton">
           <div class="icon">
             <div class="seed">{{ exampleExpandedPrivateKey }}</div>
           </div>
@@ -144,7 +144,7 @@
   <div class="uk-card-body">
     <div class="landing-container uk-grid-divider" uk-grid>
       <div>
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'mnemonic';">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'mnemonic';" [attr.data-testid]="testIds.configureWallet.nanoMnemonicButton">
           <div class="icon">
             <div class="mnemonic">
               <div class="mnemonic-row">
@@ -170,7 +170,7 @@
         </button>
       </div>
       <div>
-        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'bip39-mnemonic';">
+        <button class="wallet-option" (click)="setPanel(panels.import); selectedImportOption = 'bip39-mnemonic';" [attr.data-testid]="testIds.configureWallet.bip39MnemonicButton">
           <div class="icon">
             <div class="mnemonic">
               <div class="mnemonic-row">
@@ -408,16 +408,16 @@
   <div class="uk-card-footer uk-text-right nlt-button-group">
     <div *ngIf="selectedImportOption === 'file'" class="js-upload uk-width-auto@s uk-width-1-1" uk-form-custom style="display: inline-block;">
       <input type="file" id="import-from-file" (change)="importFromFile($event.target.files)" multiple>
-      <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" type="button" tabindex="-1">Import From File</button>
+      <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" type="button" tabindex="-1" [attr.data-testid]="testIds.configureWallet.importFromFileButton">Import From File</button>
     </div>
-    <button *ngIf="selectedImportOption === 'mnemonic'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Mnemonic</button>
-    <button *ngIf="selectedImportOption === 'bip39-mnemonic'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="!validIndex" (click)="setPasswordInit()">Import From Mnemonic</button>
-    <button *ngIf="selectedImportOption === 'seed'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Seed</button>
-    <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED" [disabled]="!ledgerService.supportsUSB" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByUsb()">Connect via USB</button>
-    <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED" [disabled]="!ledgerService.supportsBluetooth" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByBluetooth()">Connect via Bluetooth</button>
-    <button *ngIf="selectedImportOption === 'ledger' && ledger.status !== ledgerStatus.NOT_CONNECTED" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="importLedgerWallet(true)">Refresh Ledger Status</button>
-    <button *ngIf="selectedImportOption === 'privateKey'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Private Key</button>
-    <button *ngIf="selectedImportOption === 'expandedKey'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()">Import From Expanded Private Key</button>
+    <button *ngIf="selectedImportOption === 'mnemonic'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()" [attr.data-testid]="testIds.configureWallet.importFromNanoMnemonicButton">Import From Mnemonic</button>
+    <button *ngIf="selectedImportOption === 'bip39-mnemonic'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="!validIndex" (click)="setPasswordInit()" [attr.data-testid]="testIds.configureWallet.importFromBip39MnemonicButton">Import From Mnemonic</button>
+    <button *ngIf="selectedImportOption === 'seed'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()" [attr.data-testid]="testIds.configureWallet.importFromSeedButton">Import From Seed</button>
+    <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED" [disabled]="!ledgerService.supportsUSB" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByUsb()" [attr.data-testid]="testIds.configureWallet.connectUsbButton">Connect via USB</button>
+    <button *ngIf="selectedImportOption === 'ledger' && ledger.status === ledgerStatus.NOT_CONNECTED" [disabled]="!ledgerService.supportsBluetooth" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="connectLedgerByBluetooth()" [attr.data-testid]="testIds.configureWallet.connectBluetoothButton">Connect via Bluetooth</button>
+    <button *ngIf="selectedImportOption === 'ledger' && ledger.status !== ledgerStatus.NOT_CONNECTED" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="importLedgerWallet(true)" [attr.data-testid]="testIds.configureWallet.refreshLedgerStatusButton">Refresh Ledger Status</button>
+    <button *ngIf="selectedImportOption === 'privateKey'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()" [attr.data-testid]="testIds.configureWallet.importFromPrivateKeyButton">Import From Private Key</button>
+    <button *ngIf="selectedImportOption === 'expandedKey'" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" (click)="setPasswordInit()" [attr.data-testid]="testIds.configureWallet.importFromExpandedKeyButton">Import From Expanded Private Key</button>
   </div>
 </div>
 
@@ -452,6 +452,7 @@
           ngxClipboard
           [cbContent]="newWalletSeed"
           (cbOnSuccess)="copiedNewWalletSeed()"
+          [attr.data-testid]="testIds.configureWallet.copySeedButton"
         >
           <span class="nlt-icon" uk-icon="icon: copy;"></span>
           {{ 'configure-wallet.new-wallet.copy-secret-recovery-seed' | transloco }}
@@ -471,6 +472,7 @@
           ngxClipboard
           [cbContent]="newWalletMnemonic"
           (cbOnSuccess)="copiedNewWalletMnemonic()"
+          [attr.data-testid]="testIds.configureWallet.copyMnemonicButton"
         >
           <span class="nlt-icon" uk-icon="icon: copy;"></span>
           {{ 'configure-wallet.new-wallet.copy-secret-recovery-mnemonic' | transloco }}
@@ -483,7 +485,7 @@
     </div>
   </div>
   <div class="uk-card-footer uk-text-right nlt-button-group">
-    <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" id="create-wallet" [disabled]="!hasConfirmedBackup" (click)="confirmNewSeed()">{{ 'configure-wallet.new-wallet.create-wallet' | transloco }}</button>
+    <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" id="create-wallet" [disabled]="!hasConfirmedBackup" (click)="confirmNewSeed()" [attr.data-testid]="testIds.configureWallet.createWalletButton">{{ 'configure-wallet.new-wallet.create-wallet' | transloco }}</button>
   </div>
 </div>
 
@@ -509,7 +511,7 @@
     </div>
   </div>
   <div class="uk-card-footer uk-text-right">
-    <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="walletPasswordModel.length < 6 || (walletPasswordModel !== walletPasswordConfirmModel)" (click)="saveWalletPassword()">{{isNewWallet ? 'Next':'Import Wallet'}}</button>
+    <button class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [disabled]="walletPasswordModel.length < 6 || (walletPasswordModel !== walletPasswordConfirmModel)" (click)="saveWalletPassword()" [attr.data-testid]="testIds.configureWallet.passwordNextButton">{{isNewWallet ? 'Next':'Import Wallet'}}</button>
   </div>
 </div>
 
@@ -524,7 +526,7 @@
     </p>
   </div>
   <div class="uk-card-footer uk-text-right">
-    <button routerLink="/accounts" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1">View Accounts</button>
+    <button routerLink="/accounts" class="uk-button uk-button-primary uk-width-auto@s uk-width-1-1" [attr.data-testid]="testIds.configureWallet.viewAccountsButton">View Accounts</button>
   </div>
 </div>
 

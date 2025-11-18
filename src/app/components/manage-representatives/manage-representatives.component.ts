@@ -9,6 +9,7 @@ import {ApiService} from '../../services/api.service';
 import {Router} from '@angular/router';
 import {RepresentativeService} from '../../services/representative.service';
 import {UtilService} from '../../services/util.service';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-manage-representatives',
@@ -16,6 +17,7 @@ import {UtilService} from '../../services/util.service';
   styleUrls: ['./manage-representatives.component.css']
 })
 export class ManageRepresentativesComponent implements OnInit, AfterViewInit {
+  readonly testIds = TestIds;
 
   activePanel = 0;
   creatingNewEntry = false;

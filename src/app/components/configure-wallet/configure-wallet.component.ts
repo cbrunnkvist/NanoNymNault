@@ -7,6 +7,7 @@ import { QrModalService } from '../../services/qr-modal.service';
 import {UtilService} from '../../services/util.service';
 import { wallet } from 'nanocurrency-web';
 import { TranslocoService } from '@ngneat/transloco';
+import { TestIds } from '../../testing/test-ids';
 
 enum panels {
   'landing',
@@ -25,6 +26,7 @@ const INDEX_MAX = 4294967295; // seed index
   styleUrls: ['./configure-wallet.component.css']
 })
 export class ConfigureWalletComponent implements OnInit {
+  readonly testIds = TestIds;
   panels = panels;
   activePanel = panels.landing;
   wallet = this.walletService.wallet;

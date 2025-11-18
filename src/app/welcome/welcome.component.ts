@@ -2,6 +2,7 @@ import { Component, OnInit } from '@angular/core';
 import { environment } from 'environments/environment';
 import {WalletService} from '../services/wallet.service';
 import {AppSettingsService} from '../services/app-settings.service';
+import { TestIds } from '../testing/test-ids';
 
 @Component({
   selector: 'app-welcome',
@@ -9,6 +10,7 @@ import {AppSettingsService} from '../services/app-settings.service';
   styleUrls: ['./welcome.component.css']
 })
 export class WelcomeComponent implements OnInit {
+  readonly testIds = TestIds;
 
   donationAccount = environment.donationAddress;
 

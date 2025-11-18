@@ -65,8 +65,8 @@
       <div class="uk-card-footer">
         <div uk-grid>
           <div class="nlt-button-group uk-width-1-1 uk-text-right">
-            <button routerLink="/address-book" class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m">Cancel</button>
-            <button (click)="confirmImport()" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m">Import Entries</button>
+            <button routerLink="/address-book" class="uk-button uk-button-danger uk-width-1-1@s uk-width-auto@m" [attr.data-testid]="testIds.importAddressBook.cancelButton">Cancel</button>
+            <button (click)="confirmImport()" class="uk-button uk-button-primary uk-width-1-1@s uk-width-auto@m" [attr.data-testid]="testIds.importAddressBook.importEntriesButton">Import Entries</button>
           </div>
         </div>
       </div>

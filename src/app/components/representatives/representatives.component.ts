@@ -16,6 +16,7 @@ import {
   NinjaService
 } from '../../services';
 import { TranslocoService } from '@ngneat/transloco';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-representatives',
@@ -23,6 +24,7 @@ import { TranslocoService } from '@ngneat/transloco';
   styleUrls: ['./representatives.component.css']
 })
 export class RepresentativesComponent implements OnInit {
+  readonly testIds = TestIds;
   @ViewChild('repInput') repInput;
 
   changeAccountID: any = null;

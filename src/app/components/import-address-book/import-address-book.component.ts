@@ -3,6 +3,7 @@ import {NotificationService} from '../../services/notification.service';
 import {ActivatedRoute} from '@angular/router';
 import {AddressBookService} from '../../services/address-book.service';
 import {Router} from '@angular/router';
+import { TestIds } from '../../testing/test-ids';
 
 @Component({
   selector: 'app-import-address-book',
@@ -10,6 +11,7 @@ import {Router} from '@angular/router';
   styleUrls: ['./import-address-book.component.css']
 })
 export class ImportAddressBookComponent implements OnInit {
+  readonly testIds = TestIds;
   activePanel = 'error';
 
   validImportData = false;
