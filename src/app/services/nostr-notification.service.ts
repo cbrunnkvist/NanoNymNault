@@ -106,11 +106,11 @@ export class NostrNotificationService {
     const receiverPublicHex = this.bytesToHex(receiverNostrPublic);
     const receiverNpub = nip19.npubEncode(receiverPublicHex);
 
-    console.log(
-      "[Nostr Send] Receiver Nostr public key (hex):",
+    console.debug(
+      "[Nostr Send] Receiver public key (hex):",
       receiverPublicHex,
     );
-    console.log("[Nostr Send] Receiver Nostr public key (npub):", receiverNpub);
+    console.debug("[Nostr Send] Receiver public key (npub):", receiverNpub);
 
     // Serialize notification payload
     const payloadJson = JSON.stringify(notification);
@@ -132,7 +132,7 @@ export class NostrNotificationService {
         receiverPublicHex,
       );
 
-      console.log(`[Nostr Send] Gift-wrap created:`, {
+      console.debug(`[Nostr Send] Gift-wrap created:`, {
         id: giftWrap.id,
         kind: giftWrap.kind,
         pubkey: giftWrap.pubkey.slice(0, 16) + "...",
@@ -141,12 +141,14 @@ export class NostrNotificationService {
         content_length: giftWrap.content.length,
       });
 
+      console.log(`[Nostr Send] 📤 Publishing payment notification to ${this.defaultRelays.length} relays...`);
+
       // Publish to all relays and wait for confirmation
       const acceptedRelays: string[] = [];
 
       for (const relay of this.defaultRelays) {
         try {
-          console.log(`[Nostr Send] Publishing to ${relay}...`);
+          console.debug(`[Nostr Send] Publishing to ${relay}...`);
           const publishPromise = this.pool.publish([relay], giftWrap);
 
           // Wait for the promise and check if relay accepted it
@@ -157,17 +159,17 @@ export class NostrNotificationService {
             ),
           ]);
 
-          console.log(`[Nostr Send] ✅ ${relay} accepted event`);
+          console.debug(`[Nostr Send] ✅ ${relay} accepted`);
           acceptedRelays.push(relay);
           this.updateRelayStatus(relay, true);
         } catch (error) {
-          console.error(`[Nostr Send] ❌ ${relay} rejected or timeout:`, error);
+          console.warn(`[Nostr Send] ⚠️ ${relay} rejected or timeout`);
           this.updateRelayStatus(relay, false, error);
         }
       }
 
       console.log(
-        `[Nostr Send] Final: ${acceptedRelays.length}/${this.defaultRelays.length} relays accepted`,
+        `[Nostr Send] ✅ Published to ${acceptedRelays.length}/${this.defaultRelays.length} relays`,
       );
       return acceptedRelays;
     } catch (error) {
@@ -189,12 +191,12 @@ export class NostrNotificationService {
     const nostrPublicHex = this.bytesToHex(nostrPublic);
     const nostrNpub = nip19.npubEncode(nostrPublicHex);
 
-    console.log("[Nostr Subscribe] Nostr public key (hex):", nostrPublicHex);
-    console.log("[Nostr Subscribe] Nostr public key (npub):", nostrNpub);
+    console.debug("[Nostr] Nostr public key (hex):", nostrPublicHex);
+    console.debug("[Nostr] Nostr public key (npub):", nostrNpub);
 
     // Don't create duplicate subscriptions
     if (this.subscriptions.has(nostrPublicHex)) {
-      console.log("Already subscribed to notifications for npub:", nostrNpub);
+      console.debug("[Nostr] Already subscribed to:", nostrNpub);
       return;
     }
 
@@ -209,11 +211,11 @@ export class NostrNotificationService {
       since: Math.floor(Date.now() / 1000) - 4 * 86400, // Last 4 days
     };
 
-    console.log(
-      "[Nostr] Creating subscription with filter:",
+    console.debug(
+      "[Nostr] Subscription filter:",
       JSON.stringify(filter),
     );
-    console.log("[Nostr] Connecting to relays:", this.defaultRelays);
+    console.log(`[Nostr] 📡 Starting subscription to ${this.defaultRelays.length} relays for npub: ${nostrNpub.substring(0, 16)}...`);
 
     // Track relay sync events
     let eoseCount = 0;
@@ -233,7 +235,7 @@ export class NostrNotificationService {
         // Only log on first event from each relay (connection confirmation)
         if (!this.relayFirstSeen.has(relayUrl)) {
           this.relayFirstSeen.set(relayUrl, Date.now());
-          console.log(`[Nostr] ✅ ${relayUrl} connected and responding`);
+          console.log(`[Nostr] 🔌 Connected: ${relayUrl}`);
           this.updateRelayStatus(relayUrl, true);
         }
 
@@ -245,26 +247,21 @@ export class NostrNotificationService {
       oneose: () => {
         // oneose fires when a relay finishes sending stored events
         eoseCount++;
-        console.log(
-          `[Nostr] EOSE received (${eoseCount}/${this.defaultRelays.length}) - ${eventCount} total events so far`,
+        console.debug(
+          `[Nostr] EOSE ${eoseCount}/${this.defaultRelays.length} - ${eventCount} events received`,
         );
         if (eoseCount === this.defaultRelays.length) {
           console.log(
-            `[Nostr] All ${this.defaultRelays.length} relays synced - Total events: ${eventCount}`,
+            `[Nostr] 🔄 Sync complete - ${eventCount} total events from ${this.defaultRelays.length} relays`,
           );
           this.logRelayStats();
-        } else {
-          console.log(
-            `[Nostr] Still waiting for ${this.defaultRelays.length - eoseCount} more relays...`,
-          );
         }
       },
     });
 
     this.subscriptions.set(nostrPublicHex, sub);
     console.log(
-      "Subscribed to Nostr notifications for NanoNym:",
-      nostrPublicHex,
+      `[Nostr] ✅ Subscription active for ${nostrNpub.substring(0, 16)}...`,
     );
   }
 
@@ -275,12 +272,13 @@ export class NostrNotificationService {
    */
   unsubscribeFromNotifications(nostrPublic: Uint8Array): void {
     const nostrPublicHex = this.bytesToHex(nostrPublic);
+    const nostrNpub = nip19.npubEncode(nostrPublicHex);
     const sub = this.subscriptions.get(nostrPublicHex);
 
     if (sub) {
       sub.close();
       this.subscriptions.delete(nostrPublicHex);
-      console.log("Unsubscribed from Nostr notifications for", nostrPublicHex);
+      console.log(`[Nostr] 🔌 Disconnected: Stopped subscription for ${nostrNpub.substring(0, 16)}...`);
     }
   }
 
@@ -368,14 +366,14 @@ export class NostrNotificationService {
    */
   private logRelayStats(): void {
     if (this.relayFirstSeen.size === 0) {
-      console.warn("[Nostr] No relays responded");
+      console.warn("[Nostr] ⚠️ No relays responded");
       return;
     }
 
-    console.log("[Nostr] Relay Statistics:");
+    console.debug("[Nostr] Relay Statistics:");
     this.relayFirstSeen.forEach((timestamp, url) => {
       const eventCount = this.relayEventCount.get(url) || 0;
-      console.log(`  ${url}: ${eventCount} events received`);
+      console.debug(`  ${url}: ${eventCount} events`);
     });
   }
 
@@ -383,6 +381,8 @@ export class NostrNotificationService {
    * Clean up all subscriptions and connections
    */
   destroy(): void {
+    const subscriptionCount = this.subscriptions.size;
+
     // Close all subscriptions
     this.subscriptions.forEach((sub) => sub.close());
     this.subscriptions.clear();
@@ -394,7 +394,7 @@ export class NostrNotificationService {
     // Close pool connections
     this.pool.close(this.defaultRelays);
 
-    console.log("NostrNotificationService destroyed");
+    console.log(`[Nostr] 🔌 Service destroyed - Closed ${subscriptionCount} subscriptions`);
   }
 
   /**

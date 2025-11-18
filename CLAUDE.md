@@ -12,9 +12,17 @@ Live preview: [NanoNymNault Developer Preview](https://cbrunnkvist.github.io/Nan
 
 Problem: A standard`nano_` address links all incoming transactions and history on-chain, breaking receiver privacy.
 
-Solution: NanoNyms are reusable pseudonyms (prefix`nnym_`) that encode keys for stealth-address receiving and off-chain notifications. Each inbound payment creates a unique stealth Nano account that cannot be linked on-chain to other payments or to the NanoNym.
+Solution: NanoNyms are reusable payment codes (prefix`nnym_`) that encode keys for stealth-address receiving and off-chain notifications. Each inbound payment creates a unique stealth Nano account that cannot be linked on-chain to other payments or to the NanoNym.
 
-NanoNym properties:
+### Terminology
+
+- **NanoNym**: A reusable payment code (the`nnym_...` address string). Conceptually represents an account; saying "NanoNym account" is acceptable but not required.
+- **Aggregated account**: From the wallet implementation's perspective, each NanoNym is treated as an aggregated account that sums the balances of its underlying stealth accounts.
+- **Stealth accounts**: The individual`nano_` addresses created for each payment received to a NanoNym. These are regular Nano accounts, but managed separately from standard accounts to maintain the aggregated account abstraction.
+- **Standard accounts**: Regular Nano accounts managed by the wallet's standard account manager (not part of NanoNym aggregation).
+
+### NanoNym Properties
+
 - String format:`nnym_...` (≈160 chars, Nano-style base32).
 - Encodes three public keys:
     - Spend public key`B_spend` (Ed25519).
@@ -440,7 +448,18 @@ Trade-offs:
 
 ## 9. NanoNym and Multi-Account Management
 
-All NanoNyms are structurally identical; “usage style” is purely convention.
+### Aggregated Account Model
+
+From the wallet implementation perspective, each NanoNym functions as an **aggregated account**:
+- **Conceptual representation**: A NanoNym is a single account with one balance.
+- **Implementation**: That balance is the sum of multiple underlying stealth accounts.
+- **Stealth accounts**: Individual`nano_` addresses (regular Nano accounts) created per payment.
+- **Differentiation**: Stealth accounts are managed separately from standard accounts to maintain the aggregated account abstraction.
+- **User experience**: User sees one account per NanoNym with aggregated balance; stealth accounts are implementation details (though visible in advanced views).
+
+### Usage Patterns
+
+All NanoNyms are structurally identical; "usage style" is purely convention.
 
 Typical use patterns:
 - Long-term public NanoNym:
@@ -450,22 +469,25 @@ Typical use patterns:
 - Per-department NanoNyms:
     - For accounting separation (Sales, Donations, Support, etc.).
 
-UI requirements:
+### UI Requirements
+
 - Ability to:
     - Generate new NanoNym with label.
     - List NanoNyms with:
         - Label.
-        - Aggregated balance.
-        - Payment count.
+        - Aggregated balance (sum of all stealth accounts).
+        - Payment count (number of stealth accounts).
         - Status: Active (listening to Nostr) vs Archived (not listening).
-    - View per-NanoNym history.
+    - View per-NanoNym history (optionally showing individual stealth accounts).
     - Copy address / show QR.
     - Archive/reactivate NanoNyms:
         - Archiving stops Nostr monitoring but does not affect recoverability or spending.
 
-Aggregated view:
-- Show total wallet balance and per-NanoNym balances.
-- Stealth accounts are grouped under their parent NanoNym.
+### Wallet-Level Integration
+
+- **Accounts page**: NanoNyms appear alongside standard accounts as "NanoNym Accounts" section.
+- **Total wallet balance**: Includes both standard accounts and NanoNym aggregated balances.
+- **Stealth accounts**: Grouped under their parent NanoNym in the UI; not shown as separate top-level accounts.
 
 ---
 
@@ -543,19 +565,31 @@ Design stance:
 
 ## 12. Implementation Roadmap (Status-Oriented)
 
-Current status (as of 2025-11-15):
-- Phase 1 – Crypto core: complete.
-- Phase 2 – Nostr integration: complete.
-- Phase 3 – Send UI and spend-from-NanoNyms:
+Current status (as of 2025-11-18):
+- Phase 1 – Crypto core: ✅ complete.
+- Phase 2 – Nostr integration: ✅ complete.
+- Phase 3 – Send UI and spend-from-NanoNyms: ✅ complete.
     - Detect`nnym_` addresses and perform stealth send + Nostr notification.
-    - Implement stealth account selection algorithm + unit tests.
+    - Implement stealth account selection algorithm + 15 passing unit tests.
     - Implement privacy warnings and multi-account sending.
     - Show privacy impact.
-- Phase 4 – Receive UI: in progress.
-    - Multi-NanoNym management (generation, listing, balances).
-    - Background Nostr monitoring and history reconstruction.
+    - Balance persistence and spending fixes (Nov 18, 2025).
+- Phase 4 – Accounts page integration: ✅ complete.
+    - NanoNyms treated as aggregated accounts on Accounts page.
+    - Reactive balance updates with automatic Nano node verification.
+    - Grouped display: Regular Accounts + NanoNym Accounts sections.
+    - Balance aggregation and stealth account management.
+- Phase 5 – Receive UI: 🚧 in progress.
+    - Multi-NanoNym management (generation, listing, balances) - ✅ working.
+    - Background Nostr monitoring and history reconstruction - ✅ working.
+    - Deprecation notice added; migration to Accounts page underway.
+- Phase 6 – Observability and logging: ✅ complete (Nov 18, 2025).
+    - Improved Nostr relay logging with appropriate log levels.
+    - MAC-check match logging.
+    - Relay connection/disconnection lifecycle logging.
+    - Derivation path debug logging for both account types.
 - Later phases:
-    - UX polish and documentation.
+    - Complete Receive page NanoNym tab removal.
     - Privacy Mode and advanced spend options.
     - Automated E2E tests (Playwright or similar).
     - Community beta and hardening.

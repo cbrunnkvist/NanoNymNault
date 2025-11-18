@@ -696,6 +696,7 @@ export class WalletService {
   }
 
   async createSeedAccount(index) {
+    console.debug(`[Derivation] Regular Nano account - Index: ${index} (BLAKE2b derivation)`);
     const accountBytes = this.util.account.generateAccountSecretKeyBytes(this.wallet.seedBytes, index);
     const accountKeyPair = this.util.account.generateAccountKeyPair(accountBytes);
     return this.createKeyedAccount(index, accountBytes, accountKeyPair);

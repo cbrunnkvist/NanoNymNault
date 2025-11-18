@@ -60,6 +60,11 @@ export class NanoNymCryptoService {
       .concat(this.uint32ToBytes(1000 | 0x80000000)) // 1000' (NanoNym)
       .concat(this.uint32ToBytes(accountIndex | 0x80000000)); // account_index'
 
+    console.debug(`[Derivation] NanoNym keys for index ${accountIndex} (BIP-44 style with BLAKE2b):`);
+    console.debug(`  → Spend:  m/44'/165'/0'/1000'/${accountIndex}'/0`);
+    console.debug(`  → View:   m/44'/165'/0'/1000'/${accountIndex}'/1`);
+    console.debug(`  → Nostr:  m/44'/165'/0'/1000'/${accountIndex}'/2 (Secp256k1)`);
+
     // Derive spend key (key_type = 0)
     const spendSeed = this.deriveChildKey(
       seedBytes,
