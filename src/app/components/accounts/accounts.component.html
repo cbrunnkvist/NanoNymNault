@@ -41,7 +41,7 @@
         </tr>
         </thead>
         <tbody>
-        <tr *ngFor="let account of accounts" class="uk-visible-toggle">
+        <tr *ngFor="let account of regularAccounts" class="uk-visible-toggle">
           <ng-template #accountAmounts>
             <ng-container *ngIf="(walletService.wallet.updatingBalance === false) else balanceLoading">
               <div class="account-amounts-primary uk-width-1-1">
@@ -130,7 +130,7 @@
             </div>
           </td>
         </tr>
-        <tr *ngIf="!accounts.length">
+        <tr *ngIf="!regularAccounts.length">
           <td colspan="4" style="text-align: center;">{{ 'accounts.you-dont-have-any-accounts-yet.1' | transloco }} <a (click)="createAccount()">{{ 'accounts.you-dont-have-any-accounts-yet.2-link' | transloco }}</a> {{ 'accounts.you-dont-have-any-accounts-yet.3' | transloco }}</td>
         </tr>
         </tbody>
@@ -141,6 +141,88 @@
             <td colspan="4" style="text-align: center;"><span uk-icon="icon: info"></span> {{ 'accounts.missing-accounts.1' | transloco }} <a class="hint-action" (click)="createAccount()">{{ 'accounts.missing-accounts.2-link' | transloco }}</a> {{ 'accounts.missing-accounts.3' | transloco }}</td>
           </tr>
         </thead>
+      </table>
+    </div>
+
+    <!-- NanoNym Accounts Section -->
+    <div class="uk-margin-large-top" uk-grid *ngIf="nanoNymAccounts.length > 0 || true">
+      <div class="uk-width-expand@s uk-width-1-1">
+        <h2 class="uk-heading-divider uk-text-truncate">
+          NanoNym Accounts <span class="uk-badge" style="font-size: 12px; vertical-align: middle;">Privacy</span>
+        </h2>
+      </div>
+      <div class="uk-width-auto@m uk-width-1-1 uk-text-right">
+        <button class="uk-button uk-button-secondary uk-width-1-1@m" disabled>
+          + Add NanoNym (Coming Soon)
+        </button>
+      </div>
+    </div>
+
+    <div class="uk-card uk-overflow-hidden" *ngIf="nanoNymAccounts.length > 0 || true">
+      <table class="accounts-list uk-table uk-table-striped uk-table-small">
+        <thead>
+        <tr>
+          <th scope="col" class="account-column uk-width-3-5@m uk-width-1-2">
+            NanoNym
+          </th>
+          <th scope="col" class="account-amounts-column uk-width-1-5@m uk-width-1-4 uk-text-right">Balance</th>
+          <th scope="col" class="account-actions-column uk-width-1-5@m uk-width-1-4 uk-text-right">Actions</th>
+        </tr>
+        </thead>
+        <tbody>
+        <tr *ngFor="let account of nanoNymAccounts" class="uk-visible-toggle">
+          <td class="account-column uk-visible-toggle uk-text-truncate">
+            <div uk-grid>
+              <a class="uk-width-auto uk-text-truncate account-container narrow">
+                <div class="uk-flex">
+                  <div class="uk-width-expand">
+                    <div class="uk-width-1-1">
+                      <div class="account-label">
+                        {{ account.label }}
+                        <span class="uk-badge uk-badge-success" style="font-size: 10px; margin-left: 8px;" *ngIf="account.nanoNym.status === 'active'">Active</span>
+                        <span class="uk-badge" style="font-size: 10px; margin-left: 8px; background-color: #999;" *ngIf="account.nanoNym.status === 'archived'">Archived</span>
+                      </div>
+                      <div class="uk-text-meta" style="font-size: 11px;">
+                        {{ account.nanoNym.paymentCount }} {{ account.nanoNym.paymentCount === 1 ? 'payment' : 'payments' }}
+                      </div>
+                    </div>
+                    <div class="nano-address-clickable nano-address-monospace uk-text-truncate" style="color: #9C27B0;">
+                      {{ account.truncatedAddress }}
+                    </div>
+                  </div>
+                </div>
+              </a>
+              <div class="nano-address-actions uk-width-auto copy-container">
+                <ul class="uk-iconnav copy-icons">
+                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy NanoNym Address" uk-tooltip></a></li>
+                </ul>
+              </div>
+            </div>
+          </td>
+          <td class="account-amounts-column uk-text-right">
+            <div class="account-amounts-primary uk-width-1-1">
+              <span class="amounts">
+                <span class="amount-integer">{{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}</span>
+                <span class="amount-fractional">{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }}</span>
+                <span class="currency-name">XNO</span>
+              </span>
+            </div>
+            <div class="account-amounts-converted uk-width-1-1 text-half-muted">
+              {{ account.balanceFiat | fiat: settings.settings.displayCurrency }}
+            </div>
+          </td>
+          <td class="account-actions-column uk-text-right">
+            <button class="uk-button uk-button-small uk-button-default" disabled>
+              Details
+            </button>
+          </td>
+        </tr>
+        <tr *ngIf="!nanoNymAccounts.length">
+          <td colspan="3" style="text-align: center;">
+            No NanoNyms yet. <a [routerLink]="'/receive/nanonyms'">Generate your first NanoNym</a> for private, reusable payment addresses.
+          </td>
+        </tr>
+        </tbody>
       </table>
     </div>
 

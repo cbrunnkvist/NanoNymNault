@@ -189,6 +189,10 @@ export class NanoNymStorageService {
   
         const parsed: StoredNanoNym[] = JSON.parse(stored);
         const nanonyms = parsed.map((stored) => this.deserializeNanoNym(stored));
+        // Recalculate aggregated balances from stealth accounts
+        nanonyms.forEach(nn => {
+          nn.balance = this.calculateAggregatedBalance(nn.stealthAccounts);
+        });
         this.nanonymsSubject.next(nanonyms);
         console.log(
           `[NanoNymStorage] Loaded ${nanonyms.length} NanoNyms from localStorage`,

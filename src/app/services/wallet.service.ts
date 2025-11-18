@@ -14,6 +14,10 @@ import {PriceService} from './price.service';
 import {LedgerService} from './ledger.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
 import { NanoNymManagerService } from './nanonym-manager.service';
+import { NanoNymStorageService } from './nanonym-storage.service';
+import { SpendableAccount, RegularAccount, NanoNymAccount } from '../types/spendable-account.types';
+import { combineLatest, Observable } from 'rxjs';
+import { map } from 'rxjs/operators';
 
 export type WalletType = 'seed' | 'ledger' | 'privateKey' | 'expandedKey';
 
@@ -140,6 +144,7 @@ export class WalletService {
     private ledgerService: LedgerService,
     private noZerosPipe: NoPaddingZerosPipe,
     private notifications: NotificationService,
+    private nanoNymStorage: NanoNymStorageService,
     private injector: Injector) {
     this.websocket.newTransactions$.subscribe(async (transaction) => {
       if (!transaction) return; // Not really a new transaction
@@ -1245,6 +1250,76 @@ export class WalletService {
             }
           });
       }
+    );
+  }
+
+  /**
+   * Get all spendable accounts (regular wallet accounts + NanoNym aggregate accounts)
+   * Returns a unified view for display on Accounts page and other UIs
+   */
+  getSpendableAccounts(): SpendableAccount[] {
+    const nano = new BigNumber(this.nano);
+
+    // Convert regular wallet accounts to RegularAccount format
+    const regularAccounts: RegularAccount[] = this.wallet.accounts.map(account => ({
+      type: 'regular' as const,
+      id: account.id,
+      label: account.addressBookName || `Account #${account.index}`,
+      balance: account.balance,
+      balanceRaw: account.balanceRaw,
+      pending: account.pending,
+      balanceFiat: account.balanceFiat,
+      index: account.index,
+      walletAccount: account
+    }));
+
+    // Get NanoNym accounts from storage
+    const nanoNyms = this.nanoNymStorage.getAllNanoNyms();
+    const nanoNymAccounts: NanoNymAccount[] = nanoNyms.map(nn => {
+      const balanceInNano = this.util.nano.rawToMnano(nn.balance);
+      const truncatedAddress = nn.nnymAddress.substring(0, 12) + '...' + nn.nnymAddress.substring(nn.nnymAddress.length - 8);
+
+      return {
+        type: 'nanonym' as const,
+        id: nn.nnymAddress,
+        label: nn.label,
+        balance: nn.balance,
+        balanceRaw: nn.balance, // NanoNyms already store in raw
+        pending: new BigNumber(0), // Stealth accounts auto-receive
+        balanceFiat: balanceInNano.times(this.price.price.lastPrice).toNumber(),
+        index: nn.index,
+        nanoNym: nn,
+        truncatedAddress: truncatedAddress
+      };
+    });
+
+    return [...regularAccounts, ...nanoNymAccounts];
+  }
+
+  /**
+   * Get total wallet balance including all NanoNym balances
+   * Used for sidebar display and overall balance calculations
+   */
+  getTotalBalanceIncludingNanoNyms(): BigNumber {
+    const regularBalance = this.wallet.balance;
+    const nanoNyms = this.nanoNymStorage.getAllNanoNyms();
+    const nanoNymBalance = nanoNyms.reduce(
+      (sum, nn) => sum.plus(nn.balance),
+      new BigNumber(0)
+    );
+    return regularBalance.plus(nanoNymBalance);
+  }
+
+  /**
+   * Reactive observable of all spendable accounts
+   * Auto-updates when wallet accounts or NanoNyms change
+   */
+  get spendableAccounts$(): Observable<SpendableAccount[]> {
+    return combineLatest([
+      this.wallet.refresh$,
+      this.nanoNymStorage.nanonyms$
+    ]).pipe(
+      map(() => this.getSpendableAccounts())
     );
   }
 }

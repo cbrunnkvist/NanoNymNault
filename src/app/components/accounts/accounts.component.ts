@@ -1,5 +1,5 @@
-import { Component, OnInit } from '@angular/core';
-import {Subject, timer} from 'rxjs';
+import { Component, OnInit, OnDestroy } from '@angular/core';
+import {Subject, timer, Subscription} from 'rxjs';
 import {debounce} from 'rxjs/operators';
 import {Router} from '@angular/router';
 import {
@@ -12,13 +12,17 @@ import {
   WalletService
 } from '../../services';
 import { TranslocoService } from '@ngneat/transloco';
+import { SpendableAccount, RegularAccount, NanoNymAccount } from '../../types/spendable-account.types';
+import { NanoNymStorageService } from '../../services/nanonym-storage.service';
+import { NanoNymManagerService } from '../../services/nanonym-manager.service';
+import { NanoNym } from '../../types/nanonym.types';
 
 @Component({
   selector: 'app-accounts',
   templateUrl: './accounts.component.html',
   styleUrls: ['./accounts.component.css']
 })
-export class AccountsComponent implements OnInit {
+export class AccountsComponent implements OnInit, OnDestroy {
   accounts = this.walletService.wallet.accounts;
   isLedgerWallet = this.walletService.isLedgerWallet();
   isSingleKeyWallet = this.walletService.isSingleKeyWallet();
@@ -29,6 +33,12 @@ export class AccountsComponent implements OnInit {
   accountsChanged$ = new Subject();
   reloadRepWarning$ = this.accountsChanged$.pipe(debounce(() => timer(5000)));
 
+  // Spendable accounts (unified view of regular + NanoNym accounts)
+  spendableAccounts: SpendableAccount[] = [];
+  regularAccounts: RegularAccount[] = [];
+  nanoNymAccounts: NanoNymAccount[] = [];
+  spendableAccountsSub: Subscription | null = null;
+
   constructor(
     private walletService: WalletService,
     private notificationService: NotificationService,
@@ -37,13 +47,32 @@ export class AccountsComponent implements OnInit {
     private representatives: RepresentativeService,
     private router: Router,
     private ledger: LedgerService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    private nanoNymStorage: NanoNymStorageService,
+    private nanoNymManager: NanoNymManagerService) { }
 
   async ngOnInit() {
     this.reloadRepWarning$.subscribe(a => {
       this.representatives.detectChangeableReps();
     });
     this.sortAccounts();
+
+    // Subscribe to spendable accounts (regular + NanoNyms)
+    // Auto-updates when balances change
+    this.spendableAccountsSub = this.walletService.spendableAccounts$.subscribe(
+      (accounts) => {
+        this.spendableAccounts = accounts;
+        // Split into regular and NanoNym for grouped display
+        this.regularAccounts = accounts.filter(a => a.type === 'regular') as RegularAccount[];
+        this.nanoNymAccounts = accounts.filter(a => a.type === 'nanonym') as NanoNymAccount[];
+      }
+    );
+  }
+
+  ngOnDestroy() {
+    if (this.spendableAccountsSub) {
+      this.spendableAccountsSub.unsubscribe();
+    }
   }
 
   async createAccount() {

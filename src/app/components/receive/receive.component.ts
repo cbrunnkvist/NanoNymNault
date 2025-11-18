@@ -65,6 +65,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
   routerSub = null;
   notificationSub: Subscription | null = null;
+  nanoNymsSub: Subscription | null = null;
 
   // Tab state
   activeReceiveTab: "standard" | "nanonym" = "standard";
@@ -134,8 +135,14 @@ export class ReceiveComponent implements OnInit, OnDestroy {
       }
     });
 
-    // Load NanoNyms and start monitoring
-    await this.loadNanoNyms();
+    // Subscribe to NanoNyms observable for reactive updates
+    // This ensures UI auto-updates when balances change from polling or new payments
+    await this.nanoNymStorage.whenLoaded();
+    this.nanoNymsSub = this.nanoNymStorage.nanonyms$.subscribe(
+      (nanonyms) => {
+        this.nanonyms = nanonyms;
+      }
+    );
 
     // Subscribe to notification processing events
     this.notificationSub = this.nanoNymManager.notificationProcessed$.subscribe(
@@ -148,12 +155,8 @@ export class ReceiveComponent implements OnInit, OnDestroy {
           { length: 5000 },
         );
 
-        // Refresh NanoNym list to update balances
-        await this.loadNanoNyms();
-
-        // Refresh balances for the specific NanoNym
+        // Refresh balances for the specific NanoNym (triggers reactive update via nanonyms$)
         await this.nanoNymManager.refreshBalances(event.nanoNymIndex);
-        await this.loadNanoNyms();
       },
     );
 
@@ -218,6 +221,9 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     }
     if (this.notificationSub) {
       this.notificationSub.unsubscribe();
+    }
+    if (this.nanoNymsSub) {
+      this.nanoNymsSub.unsubscribe();
     }
   }
 

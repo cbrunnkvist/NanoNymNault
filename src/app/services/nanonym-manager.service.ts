@@ -195,6 +195,9 @@ export class NanoNymManagerService {
     for (const nanoNym of activeNanoNyms) {
       await this.startMonitoring(nanoNym);
     }
+    // Verify all stealth account balances against Nano node
+    // Ensures we have accurate on-chain balances on startup
+    await this.refreshAllBalances();
   }
 
   /**

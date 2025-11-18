@@ -1242,6 +1242,13 @@ export class SendComponent implements OnInit {
   loadSpendableAccounts(): void {
     const nano = new BigNumber(this.nano);
 
+    // Trigger background refresh of NanoNym balances from Nano node
+    // This ensures we have up-to-date on-chain balances
+    // Non-blocking: UI shows current balances and updates when refresh completes
+    this.nanoNymManager.refreshAllBalances().catch(err => {
+      console.error('[Send] Failed to refresh NanoNym balances:', err);
+    });
+
     // Convert regular wallet accounts to SpendableAccount format
     const regularAccounts: RegularAccount[] = this.accounts.map(account => ({
       type: 'regular' as const,

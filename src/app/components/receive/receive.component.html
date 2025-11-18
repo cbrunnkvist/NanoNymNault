@@ -47,6 +47,18 @@
       *ngIf="activeReceiveTab === 'nanonym'"
       class="uk-animation-slide-left-small"
     >
+      <!-- Deprecation Notice -->
+      <div class="uk-alert uk-alert-primary uk-margin" uk-alert>
+        <a class="uk-alert-close" uk-close></a>
+        <p>
+          <span uk-icon="icon: info; ratio: 1.2" style="vertical-align: middle; margin-right: 8px;"></span>
+          <strong>NanoNym management has moved!</strong>
+          You can now manage all your NanoNym accounts on the
+          <a [routerLink]="'/accounts'" class="uk-link-text" style="text-decoration: underline; font-weight: bold;">Accounts page</a>,
+          alongside your regular accounts. This page will remain functional for now.
+        </p>
+      </div>
+
       <!-- Total NanoNym Balance Card -->
       <div
         *ngIf="nanonyms.length > 0"
