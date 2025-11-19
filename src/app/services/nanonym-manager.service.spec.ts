@@ -11,6 +11,7 @@ import { BehaviorSubject, of } from 'rxjs';
 import BigNumber from 'bignumber.js';
 import { NotificationService } from './notification.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
+import { NanoNymAccountSelectionService } from './nanonym-account-selection.service';
 
 class MockNanoNymStorageService {
   getNextIndex = jasmine.createSpy('getNextIndex').and.returnValue(0);
@@ -92,6 +93,7 @@ class MockWalletService {
 
 class MockNanoBlockService {
   generateReceive = jasmine.createSpy('generateReceive').and.returnValue(Promise.resolve('tx_hash_receive'));
+  generateSend = jasmine.createSpy('generateSend').and.returnValue(Promise.resolve('tx_hash_send'));
 }
 
 class MockUtilService {
@@ -114,6 +116,14 @@ class MockNotificationService {
 
 class MockNoPaddingZerosPipe {
   transform = jasmine.createSpy('transform').and.callFake(value => value);
+}
+
+class MockNanoNymAccountSelectionService {
+  selectAccountsForSend = jasmine.createSpy('selectAccountsForSend').and.returnValue(Promise.resolve({
+    selectedAccounts: [],
+    totalSelectedAmount: new BigNumber(0),
+    privacyImpact: { numberOfSources: 0, warningLevel: 'none' }
+  }));
 }
 
 describe('NanoNymManagerService', () => {
@@ -152,6 +162,7 @@ describe('NanoNymManagerService', () => {
         { provide: UtilService, useClass: MockUtilService },
         { provide: NotificationService, useClass: MockNotificationService },
         { provide: NoPaddingZerosPipe, useClass: MockNoPaddingZerosPipe },
+        { provide: NanoNymAccountSelectionService, useClass: MockNanoNymAccountSelectionService },
       ],
     });
 
@@ -367,6 +378,103 @@ describe('NanoNymManagerService', () => {
       // Verify pending blocks are cleared
       const pendingStealthBlocks = (service as any).pendingStealthBlocks;
       expect(pendingStealthBlocks.length).toBe(0);
+    });
+  });
+
+  describe('send from NanoNym', () => {
+    let nanoNymAccountSelectionService: MockNanoNymAccountSelectionService;
+    let notificationService: MockNotificationService;
+    let noPaddingZerosPipe: MockNoPaddingZerosPipe;
+
+    beforeEach(() => {
+      nanoNymAccountSelectionService = TestBed.inject(NanoNymAccountSelectionService) as unknown as MockNanoNymAccountSelectionService;
+      notificationService = TestBed.inject(NotificationService) as unknown as MockNotificationService;
+      noPaddingZerosPipe = TestBed.inject(NoPaddingZerosPipe) as unknown as MockNoPaddingZerosPipe;
+    });
+
+    it('should call account selection service when sending from NanoNym', async () => {
+      const nanoNym = {
+        index: 0,
+        label: 'TestNym',
+        nnymAddress: 'nnym_testaddress',
+        balance: new BigNumber('1000000000000000000000000000000'), // 1 XNO
+        stealthAccounts: [
+          {
+            address: 'nano_stealth1',
+            privateKey: new Uint8Array(32).fill(1),
+            publicKey: new Uint8Array(32).fill(1),
+            ephemeralPublicKey: new Uint8Array(32).fill(1),
+            txHash: 'tx_hash_value_1',
+            amountRaw: '500000000000000000000000000000',
+            receivedAt: Date.now(),
+            parentNanoNymIndex: 0,
+            balance: new BigNumber('500000000000000000000000000000'), // 0.5 XNO
+          },
+          {
+            address: 'nano_stealth2',
+            privateKey: new Uint8Array(32).fill(2),
+            publicKey: new Uint8Array(32).fill(2),
+            ephemeralPublicKey: new Uint8Array(32).fill(2),
+            txHash: 'tx_hash_value_2',
+            amountRaw: '600000000000000000000000000000',
+            receivedAt: Date.now(),
+            parentNanoNymIndex: 0,
+            balance: new BigNumber('600000000000000000000000000000'), // 0.6 XNO
+          },
+        ]
+      };
+      nanoNymStorageService.getNanoNym.and.returnValue(nanoNym);
+      nanoNymStorageService.getAllNanoNyms.and.returnValue([nanoNym]);
+
+      const amountToSend = new BigNumber('0.8').times('1000000000000000000000000000000'); // 0.8 XNO in raw
+      const destinationAddress = 'nano_destination';
+
+      // Mock the selection service to return specific accounts
+      const selectedStealthAccounts = [
+        { ...nanoNym.stealthAccounts[0], amountRaw: new BigNumber('0.5').times('1000000000000000000000000000000') },
+        { ...nanoNym.stealthAccounts[1], amountRaw: new BigNumber('0.3').times('1000000000000000000000000000000') },
+      ];
+      nanoNymAccountSelectionService.selectAccountsForSend.and.returnValue(Promise.resolve({
+        selectedAccounts: selectedStealthAccounts,
+        totalSelectedAmount: new BigNumber('0.8').times('1000000000000000000000000000000'),
+        privacyImpact: { numberOfSources: 2, warningLevel: 'medium' }
+      }));
+
+      // In a real scenario, a component would get this result and then call the NanoBlockService.
+      // Here, we simulate that part.
+      for (const account of selectedStealthAccounts) {
+        const pseudoWalletAccount = {
+          id: account.address,
+          frontier: null, // Will be fetched by generateSend
+          secret: account.privateKey,
+          keyPair: (window as any).nacl.sign.keyPair.fromSecretKey(account.privateKey),
+          index: -1, // Not applicable for stealth accounts
+          balance: account.balance,
+          pending: new BigNumber(0),
+          balanceRaw: account.balance,
+          pendingRaw: new BigNumber(0),
+          balanceFiat: 0,
+          pendingFiat: 0,
+          addressBookName: nanoNym.label,
+          receivePow: false,
+        };
+        await nanoBlockService.generateSend(pseudoWalletAccount, destinationAddress, account.amountRaw.toString(), false);
+      }
+
+      // Assert generateSend was called for each selected account
+      expect(nanoBlockService.generateSend).toHaveBeenCalledTimes(2);
+      expect(nanoBlockService.generateSend).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'nano_stealth1' }),
+        destinationAddress,
+        selectedStealthAccounts[0].amountRaw.toString(),
+        false
+      );
+      expect(nanoBlockService.generateSend).toHaveBeenCalledWith(
+        jasmine.objectContaining({ id: 'nano_stealth2' }),
+        destinationAddress,
+        selectedStealthAccounts[1].amountRaw.toString(),
+        false
+      );
     });
   });
 });

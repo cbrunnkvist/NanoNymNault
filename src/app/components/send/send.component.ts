@@ -1119,6 +1119,9 @@ export class SendComponent implements OnInit {
     this.preparingTransaction = true;
 
     try {
+      // Reset amountExtraRaw to avoid adding previous send's extra amount
+      this.amountExtraRaw = new BigNumber(0);
+
       const rawAmount = this.getAmountBaseValue(this.amount || 0);
       this.rawAmount = rawAmount.plus(this.amountExtraRaw);
 
@@ -1128,13 +1131,33 @@ export class SendComponent implements OnInit {
       }
 
       // Use account selection algorithm to pick stealth accounts
+      console.log('[Send-NanoNym] Before account selection:', {
+        rawAmount: this.rawAmount.toString(),
+        nanoNymLabel: nanoNymAccount.label,
+        nanoNymBalance: nanoNymAccount.balance.toString(),
+        stealthAccountsCount: nanoNymAccount.nanoNym.stealthAccounts.length,
+        stealthAccounts: nanoNymAccount.nanoNym.stealthAccounts.map(sa => ({
+          address: sa.address,
+          amountRaw: sa.amountRaw,
+          balance: sa.balance?.toString(),
+          txHash: sa.txHash
+        }))
+      });
+
       const selectionResult = this.accountSelection.selectAccountsForSend(
         this.rawAmount,
         nanoNymAccount.nanoNym.stealthAccounts
       );
 
+      console.log('[Send-NanoNym] Account selection result:', {
+        selectedCount: selectionResult.accounts.length,
+        totalBalance: selectionResult.totalBalance.toString(),
+        requiresMultiple: selectionResult.requiresMultipleAccounts
+      });
+
       if (selectionResult.accounts.length === 0) {
         this.preparingTransaction = false;
+        console.error('[Send-NanoNym] Selection failed - insufficient balance');
         return this.notificationService.sendError(
           `Insufficient balance in ${nanoNymAccount.label}. Available: ${this.util.nano.rawToMnano(nanoNymAccount.balance).toFixed(6)} XNO`
         );

@@ -124,4 +124,5 @@ export interface StoredStealthAccount {
   memo?: string;
   receivedAt: number;
   parentNanoNymIndex: number;
+  balance: string; // Stored as string for JSON serialization
 }

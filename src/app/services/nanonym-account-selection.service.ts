@@ -40,13 +40,33 @@ export class NanoNymAccountSelectionService {
     availableStealthAccounts: StealthAccount[]
   ): AccountSelectionResult {
 
+    console.log('[AccountSelection] selectAccountsForSend called', {
+      requestedAmount: amount.toString(),
+      availableAccountsCount: availableStealthAccounts.length,
+      accounts: availableStealthAccounts.map(a => ({
+        address: a.address,
+        amountRaw: a.amountRaw,
+        balance: a.balance?.toString(),
+        balanceGt0: a.balance?.gt(0) || (typeof a.amountRaw === 'string' ? a.amountRaw !== '0' : false)
+      }))
+    });
+
     // 1. Filter accounts with non-zero balance
     const funded = availableStealthAccounts.filter(a => {
       const balance = new BigNumber(a.amountRaw || a.balance || 0);
       return balance.gt(0);
     });
 
+    console.log('[AccountSelection] Filtered funded accounts:', {
+      fundedCount: funded.length,
+      funded: funded.map(a => ({
+        address: a.address,
+        balance: new BigNumber(a.amountRaw || a.balance || 0).toString()
+      }))
+    });
+
     if (funded.length === 0) {
+      console.log('[AccountSelection] No funded accounts found, returning empty');
       return {
         accounts: [],
         totalBalance: new BigNumber(0),
@@ -61,12 +81,20 @@ export class NanoNymAccountSelectionService {
     });
 
     if (singleAccount) {
+      const singleBalance = new BigNumber(singleAccount.amountRaw || singleAccount.balance || 0);
+      console.log('[AccountSelection] Single account sufficient', {
+        address: singleAccount.address,
+        balance: singleBalance.toString(),
+        requested: amount.toString()
+      });
       return {
         accounts: [singleAccount],
-        totalBalance: new BigNumber(singleAccount.amountRaw || singleAccount.balance || 0),
+        totalBalance: singleBalance,
         requiresMultipleAccounts: false
       };
     }
+
+    console.log('[AccountSelection] No single account sufficient, trying multiple accounts');
 
     // 3. Need multiple accounts - use minimum with greedy algorithm
     // Sort by balance descending (largest first)
@@ -94,8 +122,19 @@ export class NanoNymAccountSelectionService {
       return sum.plus(balance);
     }, new BigNumber(0));
 
+    console.log('[AccountSelection] Multiple accounts result', {
+      selectedCount: selected.length,
+      totalBalance: totalBalance.toString(),
+      requested: amount.toString(),
+      sufficient: totalBalance.gte(amount)
+    });
+
     if (totalBalance.lt(amount)) {
       // Insufficient funds even with all accounts
+      console.log('[AccountSelection] Insufficient funds, returning empty', {
+        totalBalance: totalBalance.toString(),
+        requested: amount.toString()
+      });
       return {
         accounts: [],
         totalBalance: new BigNumber(0),
@@ -105,6 +144,12 @@ export class NanoNymAccountSelectionService {
 
     // 5. Randomize order of sends (reduces timing correlation)
     const randomized = this.shuffleArray(selected);
+
+    console.log('[AccountSelection] Selection successful', {
+      selectedCount: randomized.length,
+      totalBalance: totalBalance.toString(),
+      requiresMultiple: true
+    });
 
     return {
       accounts: randomized,

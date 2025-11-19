@@ -288,6 +288,7 @@ export class NanoNymStorageService {
       memo: sa.memo,
       receivedAt: sa.receivedAt,
       parentNanoNymIndex: sa.parentNanoNymIndex,
+      balance: sa.balance.toString(), // Convert BigNumber to string for JSON serialization
     };
   }
 
@@ -307,7 +308,7 @@ export class NanoNymStorageService {
       memo: stored.memo,
       receivedAt: stored.receivedAt,
       parentNanoNymIndex: stored.parentNanoNymIndex,
-      balance: new BigNumber(0), // Will be queried from node
+      balance: new BigNumber(stored.balance || 0), // Restore from storage, or 0 if not present
     };
   }
 
