@@ -1,33 +1,35 @@
 # NanoNyms
 
-**Privacy-preserving payments for Nano using stealth addresses and off-chain coordination**
+**Privacy-preserving, reusable, payments codes for [Nano](https://www.nano.org/) using stealth addresses and off-chain coordination**
 
 
 ---
 
 ## Elevator Pitch
 
-NanoNymNault is a fork of **Nault** (the popular web-based Nano wallet) with an integrated lightweight **Nostr client** that enables **private, unlinkable payments** using a new type of reusable pseudonym called a **NanoNym** (address format: `nnym_`).
+NanoNymNault is a fork of **[Nault](https://github.com/Nault/Nault)** (the popular web-based Nano wallet) integrating a lightweight **Nostr client** that enables **private, unlinkable payments** over the regular Nano blockchain, using a new type of reusable pseudonym called a **NanoNym** (address prefix: `nnym_`).
 
 ### What does it do for users?
 
 **For Recipients (merchants, streamers, donation pages):**
 1. Generate one or more **NanoNyms** (displayed as `nnym_abc123...xyz` addresses)
 2. Share publicly (on website, social media, stream overlay, printed invoices, etc.)
-3. Receive unlimited payments that:
-   - All go to different blockchain addresses (unlinkable)
+3. Receive unlimited number of payments through the NanoNym, all that:
+   - Go to different blockchain addresses (unlinkable)
    - Don't reveal your balance
    - Don't show your payment history
 4. Your wallet automatically detects incoming payments and shows a unified balance
 
 **For Senders:**
-1. Paste recipient's NanoNym (`nnym_` address) into the send field
+1. Paste recipient's NanoNym (`nnym_` address) into the send field (or scan a QR code)
 2. Enter amount and send (just like a normal Nano transaction)
 3. Behind the scenes:
    - Wallet derives a unique stealth address for this payment
    - Sends XNO on Nano blockchain (looks like any other transaction)
    - Sends encrypted notification via Nostr (free, instant, private)
 4. Recipient automatically receives and can spend funds
+
+It's a true _win-win_ for both senders and receivers: both gain significantly enhanced privacy protection, without any involvement of third-party payment processors or fees.
 
 ---
 
