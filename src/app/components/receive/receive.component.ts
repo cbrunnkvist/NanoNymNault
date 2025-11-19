@@ -17,6 +17,7 @@ import { TranslocoService } from "@ngneat/transloco";
 import { NanoNymManagerService } from "../../services/nanonym-manager.service";
 import { NanoNymStorageService } from "../../services/nanonym-storage.service";
 import { NanoNym } from "../../types/nanonym.types";
+import { SpendableAccount, NanoNymAccount } from "../../types/spendable-account.types";
 import { Subscription } from "rxjs";
 
 @Component({
@@ -27,6 +28,8 @@ import { Subscription } from "rxjs";
 export class ReceiveComponent implements OnInit, OnDestroy {
   nano = 1000000000000000000000000;
   accounts = this.walletService.wallet.accounts;
+  nanoNymAccounts: NanoNymAccount[] = [];
+  isSelectedAccountNanoNym = false;
 
   timeoutIdClearingRecentlyCopiedState: any = null;
   mobileTransactionMenuModal: any = null;
@@ -66,9 +69,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   routerSub = null;
   notificationSub: Subscription | null = null;
   nanoNymsSub: Subscription | null = null;
-
-  // Tab state
-  activeReceiveTab: "standard" | "nanonym" = "standard";
+  spendableAccountsSub: Subscription | null = null;
 
   // NanoNym state
   nanonyms: NanoNym[] = [];
@@ -79,9 +80,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   generatedNanoNymQR: string | null = null;
   generatedFallbackQR: string | null = null;
   generateNanoNymModal: any = null;
-  selectedNanoNym: NanoNym | null = null;
-  detailsNanoNymQR: string | null = null;
-  nanoNymDetailsModal: any = null;
 
   constructor(
     private route: Router,
@@ -102,14 +100,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   ) {}
 
   async ngOnInit() {
-    // Set active tab based on current route
-    const currentUrl = this.route.url;
-    if (currentUrl.includes("/receive/nanonyms")) {
-      this.activeReceiveTab = "nanonym";
-    } else {
-      this.activeReceiveTab = "standard";
-    }
-
     const UIkit = window["UIkit"];
 
     const mobileTransactionMenuModal = UIkit.modal(
@@ -123,15 +113,11 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     const generateNanoNymModal = UIkit.modal("#generate-nanonym-modal");
     this.generateNanoNymModal = generateNanoNymModal;
 
-    const nanoNymDetailsModal = UIkit.modal("#nanonym-details-modal");
-    this.nanoNymDetailsModal = nanoNymDetailsModal;
-
     this.routerSub = this.route.events.subscribe((event) => {
       if (event instanceof ChildActivationEnd) {
         this.mobileTransactionMenuModal.hide();
         this.merchantModeModal.hide();
         this.generateNanoNymModal.hide();
-        this.nanoNymDetailsModal.hide();
       }
     });
 
@@ -141,6 +127,15 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     this.nanoNymsSub = this.nanoNymStorage.nanonyms$.subscribe(
       (nanonyms) => {
         this.nanonyms = nanonyms;
+      }
+    );
+
+    // Subscribe to spendable accounts for unified account dropdown
+    this.spendableAccountsSub = this.walletService.spendableAccounts$.subscribe(
+      (accounts) => {
+        this.nanoNymAccounts = accounts.filter(
+          (acc) => acc.type === "nanonym"
+        ) as NanoNymAccount[];
       }
     );
 
@@ -214,8 +209,12 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   ngOnDestroy() {
-    this.mobileTransactionMenuModal.hide();
-    this.merchantModeModal.hide();
+    if (this.mobileTransactionMenuModal) {
+      this.mobileTransactionMenuModal.hide();
+    }
+    if (this.merchantModeModal) {
+      this.merchantModeModal.hide();
+    }
     if (this.routerSub) {
       this.routerSub.unsubscribe();
     }
@@ -224,6 +223,9 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     }
     if (this.nanoNymsSub) {
       this.nanoNymsSub.unsubscribe();
+    }
+    if (this.spendableAccountsSub) {
+      this.spendableAccountsSub.unsubscribe();
     }
   }
 
@@ -375,6 +377,9 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     this.selectedAccountAddressBookName =
       this.addressBook.getAccountName(accountID) ||
       this.getAccountLabel(accountID, "Account");
+
+    // Detect if selected account is a NanoNym
+    this.isSelectedAccountNanoNym = accountID.startsWith("nnym_");
 
     this.changeQRAccount(accountID);
     this.filterPendingBlocksForDestinationAccount(accountID);
@@ -667,17 +672,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     this.inMerchantModeQR = false;
   }
 
-  // Tab methods
-  setActiveReceiveTab(tab: "standard" | "nanonym") {
-    this.activeReceiveTab = tab;
-    // Update route to match the selected tab
-    if (tab === "nanonym") {
-      this.route.navigate(["/receive/nanonyms"]);
-    } else {
-      this.route.navigate(["/receive"]);
-    }
-  }
-
   // NanoNym methods
   openGenerateNanoNymModal() {
     this.newNanoNymLabel = "";
@@ -775,28 +769,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     // TODO: Implement QR code display modal
     // For now, just show a notification
     this.notificationService.sendInfo(`QR code for: ${nanoNym.label}`);
-  }
-
-  async viewNanoNymDetails(nanoNym: NanoNym) {
-    this.selectedNanoNym = nanoNym;
-
-    // Generate QR code for the NanoNym address
-    try {
-      this.detailsNanoNymQR = await QRCode.toDataURL(nanoNym.nnymAddress, {
-        scale: 7,
-      });
-    } catch (error) {
-      console.error("Failed to generate QR code:", error);
-      this.detailsNanoNymQR = null;
-    }
-
-    this.nanoNymDetailsModal.show();
-  }
-
-  closeDetailsModal() {
-    this.selectedNanoNym = null;
-    this.detailsNanoNymQR = null;
-    this.nanoNymDetailsModal.hide();
   }
 
   copyToClipboard(text: string, type: string) {

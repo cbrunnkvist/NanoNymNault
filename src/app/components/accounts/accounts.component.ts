@@ -1,7 +1,8 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } from '@angular/core';
 import {Subject, timer, Subscription} from 'rxjs';
 import {debounce} from 'rxjs/operators';
 import {Router} from '@angular/router';
+import * as QRCode from 'qrcode';
 import {
   AppSettingsService,
   LedgerService,
@@ -22,7 +23,7 @@ import { NanoNym } from '../../types/nanonym.types';
   templateUrl: './accounts.component.html',
   styleUrls: ['./accounts.component.css']
 })
-export class AccountsComponent implements OnInit, OnDestroy {
+export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
   accounts = this.walletService.wallet.accounts;
   isLedgerWallet = this.walletService.isLedgerWallet();
   isSingleKeyWallet = this.walletService.isSingleKeyWallet();
@@ -38,6 +39,12 @@ export class AccountsComponent implements OnInit, OnDestroy {
   regularAccounts: RegularAccount[] = [];
   nanoNymAccounts: NanoNymAccount[] = [];
   spendableAccountsSub: Subscription | null = null;
+
+  // NanoNym Details Modal
+  @ViewChild('nanoNymDetailsModal') nanoNymDetailsModalRef!: ElementRef;
+  nanoNymDetailsModal: any = null;
+  selectedNanoNym: NanoNym | null = null;
+  detailsNanoNymQR: string | null = null;
 
   constructor(
     private walletService: WalletService,
@@ -72,6 +79,14 @@ export class AccountsComponent implements OnInit, OnDestroy {
   ngOnDestroy() {
     if (this.spendableAccountsSub) {
       this.spendableAccountsSub.unsubscribe();
+    }
+  }
+
+  ngAfterViewInit() {
+    // Initialize NanoNym details modal
+    if (this.nanoNymDetailsModalRef) {
+      const UIkit = window['UIkit'];
+      this.nanoNymDetailsModal = UIkit.modal(this.nanoNymDetailsModalRef.nativeElement);
     }
   }
 
@@ -178,6 +193,56 @@ export class AccountsComponent implements OnInit, OnDestroy {
       this.notificationService.sendError(this.translocoService.translate('accounts.account-address-denied-if-it-is-wrong-do-not-use-the-wallet'));
     }
     this.notificationService.removeNotification('ledger-account');
+  }
+
+  // NanoNym Methods
+  async viewNanoNymDetails(nanoNym: NanoNym) {
+    this.selectedNanoNym = nanoNym;
+
+    // Generate QR code for the NanoNym address
+    try {
+      this.detailsNanoNymQR = await QRCode.toDataURL(nanoNym.nnymAddress, {
+        scale: 7,
+      });
+    } catch (error) {
+      console.error('Failed to generate QR code:', error);
+      this.detailsNanoNymQR = null;
+    }
+
+    if (this.nanoNymDetailsModal) {
+      this.nanoNymDetailsModal.show();
+    }
+  }
+
+  closeDetailsModal() {
+    this.selectedNanoNym = null;
+    this.detailsNanoNymQR = null;
+    if (this.nanoNymDetailsModal) {
+      this.nanoNymDetailsModal.hide();
+    }
+  }
+
+  async toggleNanoNymStatus(index: number) {
+    const nanoNym = this.nanoNymAccounts.find(acc => acc.nanoNym.index === index)?.nanoNym;
+    if (!nanoNym) return;
+
+    try {
+      if (nanoNym.status === 'active') {
+        await this.nanoNymManager.archiveNanoNym(index);
+        this.notificationService.sendInfo(`NanoNym archived: ${nanoNym.label}`);
+      } else {
+        await this.nanoNymManager.reactivateNanoNym(index);
+        this.notificationService.sendSuccess(`NanoNym reactivated: ${nanoNym.label}`);
+      }
+    } catch (error) {
+      this.notificationService.sendError(`Failed to update NanoNym: ${error.message}`);
+    }
+  }
+
+  copyToClipboard(text: string, type: string) {
+    navigator.clipboard.writeText(text).then(() => {
+      this.notificationService.sendSuccess(`${type} copied to clipboard!`);
+    });
   }
 
 }

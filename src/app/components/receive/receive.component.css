@@ -297,3 +297,14 @@
   border: 2px solid #e5e5e5;
   border-radius: 10px;
 }
+
+/* NanoNym Badge Styles */
+.account-label.nanonym {
+  background-color: #7c3aed;
+  color: white;
+  padding: 4px 12px;
+  border-radius: 4px;
+  font-size: 0.875rem;
+  font-weight: 500;
+  display: inline-block;
+}
