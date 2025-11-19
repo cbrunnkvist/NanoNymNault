@@ -13,8 +13,14 @@ import { NanoNymStorageService } from "./nanonym-storage.service";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
 import { ApiService } from "./api.service";
-import { WalletService } from "./wallet.service";
+import { WalletService, WalletAccount } from "./wallet.service";
 import { Subscription, Subject } from "rxjs";
+import { NanoBlockService } from "./nano-block.service";
+import { UtilService } from "./util.service";
+import { NotificationService } from "./notification.service";
+import { NoPaddingZerosPipe } from "app/pipes/no-padding-zeros.pipe";
+import { tools as nanocurrencyWebTools } from "nanocurrency-web";
+const nacl = window["nacl"];
 
 @Injectable({
   providedIn: "root",
@@ -23,6 +29,7 @@ export class NanoNymManagerService {
   private notificationSubscription: Subscription | null = null;
   // Map nostr private key hex -> NanoNym index for fast notification routing
   private nostrPrivateToIndexMap = new Map<string, number>();
+  private pendingStealthBlocks: StealthAccount[] = [];
 
   // Observable for notification processing events
   public notificationProcessed$ = new Subject<{
@@ -39,9 +46,20 @@ export class NanoNymManagerService {
     private nostr: NostrNotificationService,
     private api: ApiService,
     private wallet: WalletService,
+    private nanoBlock: NanoBlockService,
+    private util: UtilService,
+    private notifications: NotificationService,
+    private noZerosPipe: NoPaddingZerosPipe,
   ) {
     // Subscribe to incoming Nostr notifications
     this.setupNotificationListener();
+
+    // Subscribe to wallet unlock events to process any pending stealth receives
+    this.wallet.wallet.locked$.subscribe(isLocked => {
+      if (!isLocked) { // Wallet is unlocked
+        this.processPendingStealthBlocks();
+      }
+    });
   }
 
   /**
@@ -250,7 +268,7 @@ export class NanoNymManagerService {
       console.log(`[Manager] 💰 Processing payment for "${nanoNym.label}" (tx: ${notification.tx_hash})`);
 
       // 1. Parse ephemeral public key R from notification
-      const R = this.hexToUint8Array(notification.R);
+      const R = this.util.hex.toUint8(notification.R);
       console.debug(`[Manager] Ephemeral key R: ${notification.R}`);
 
       // 2. Generate shared secret using view key
@@ -288,7 +306,7 @@ export class NanoNymManagerService {
       }
 
       // 5. Derive private key for spending
-      const privateKey = this.crypto.deriveStealthPrivateKey(
+      const privateKeyBytes = this.crypto.deriveStealthPrivateKey(
         nanoNym.keys.spendPrivate,
         sharedSecret,
         R,
@@ -300,8 +318,8 @@ export class NanoNymManagerService {
       const stealthAccount: StealthAccount = {
         address: stealth.address,
         publicKey: stealth.publicKey,
-        privateKey: privateKey,
-        ephemeralPublicKey: R,
+        privateKey: privateKeyBytes,
+        ephemeralPublicKey: this.util.hex.toUint8(notification.R),
         txHash: notification.tx_hash,
         amountRaw: notification.amount_raw || "0",
         memo: notification.memo,
@@ -314,8 +332,8 @@ export class NanoNymManagerService {
       this.storage.addStealthAccount(nanoNymIndex, stealthAccount);
       console.log(`[Manager] ✅ Stealth account created: ${stealth.address}`);
 
-      // 8. Import into wallet for spending capability
-      await this.importStealthAccountToWallet(stealthAccount);
+      // 8. Initiate receive process for the stealth account
+      await this.receiveStealthFunds(stealthAccount, nanoNym);
 
       // 9. Emit event for UI updates
       this.notificationProcessed$.next({
@@ -340,20 +358,74 @@ export class NanoNymManagerService {
   }
 
   /**
-   * Import stealth account into wallet for spending
+   * Receive funds for a stealth account by publishing a receive block.
+   * Handles wallet locking and queues if necessary.
    */
-  private async importStealthAccountToWallet(
+  private async receiveStealthFunds(
     stealthAccount: StealthAccount,
+    nanoNym: NanoNym,
   ): Promise<void> {
+    const pseudoWalletAccount: WalletAccount = {
+      id: stealthAccount.address,
+      frontier: null, // Will be fetched by generateReceive
+      secret: stealthAccount.privateKey,
+      keyPair: nacl.sign.keyPair.fromSecretKey(stealthAccount.privateKey),
+      index: -1, // Not applicable for stealth accounts
+      balance: new BigNumber(0),
+      pending: new BigNumber(0),
+      balanceRaw: new BigNumber(0),
+      pendingRaw: new BigNumber(0),
+      balanceFiat: 0,
+      pendingFiat: 0,
+      addressBookName: nanoNym.label,
+      receivePow: false,
+    };
+
+    if (this.wallet.wallet.locked) {
+      console.log(`[Manager] 🔒 Wallet locked, queuing receive for ${stealthAccount.address}`);
+      // Add to pending for later processing when unlocked
+      this.addPendingStealthBlock(stealthAccount);
+      return;
+    }
+
     try {
-      // TODO: Add stealth account to WalletService
-      // This will require modifying WalletService to support imported accounts
-      // For now, we'll just log it
-      console.log(
-        `TODO: Import stealth account ${stealthAccount.address} to wallet`,
+      console.log(`[Manager] Publishing receive block for ${stealthAccount.address}`);
+      const newHash = await this.nanoBlock.generateReceive(
+        pseudoWalletAccount,
+        stealthAccount.txHash,
+        false, // Not using Ledger for stealth accounts
       );
+
+      if (newHash) {
+        console.log(`[Manager] ✅ Receive block published for ${stealthAccount.address}. Hash: ${newHash}`);
+
+        const receiveAmount = new BigNumber(stealthAccount.amountRaw);
+        this.notifications.removeNotification('success-receive-nanonym');
+        this.notifications.sendSuccess(`Successfully received ${this.noZerosPipe.transform(this.util.nano.rawToMnano(receiveAmount).toFixed(6)) } XNO to ${nanoNym.label}!`, { identifier: 'success-receive-nanonym' });
+
+        // Update the stealth account's balance and the parent NanoNym's balance
+        const accountInfo = await this.api.accountInfo(stealthAccount.address);
+        const newBalance = new BigNumber(accountInfo.balance || 0);
+
+        this.storage.updateStealthAccountBalance(
+          nanoNym.index,
+          stealthAccount.address,
+          newBalance,
+        );
+        this.storage.updateNanoNym(nanoNym.index, {
+          balance: nanoNym.balance.plus(newBalance),
+          paymentCount: nanoNym.paymentCount + 1,
+        });
+
+        // Remove from pending if it was queued
+        this.removePendingStealthBlock(stealthAccount.address);
+      } else {
+        console.error(`[Manager] ❌ Failed to publish receive block for ${stealthAccount.address}`);
+      }
     } catch (error) {
-      console.error("Failed to import stealth account to wallet:", error);
+      console.error(`[Manager] ❌ Error publishing receive block for ${stealthAccount.address}:`, error);
+      // If error, re-add to pending to retry
+      this.addPendingStealthBlock(stealthAccount);
     }
   }
 
@@ -441,16 +513,7 @@ export class NanoNymManagerService {
     };
   }
 
-  /**
-   * Convert hex string to Uint8Array
-   */
-  private hexToUint8Array(hex: string): Uint8Array {
-    const bytes = new Uint8Array(hex.length / 2);
-    for (let i = 0; i < hex.length; i += 2) {
-      bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
-    }
-    return bytes;
-  }
+
 
   /**
    * Set up listener for incoming Nostr notifications
@@ -509,6 +572,49 @@ export class NanoNymManagerService {
   ngOnDestroy(): void {
     if (this.notificationSubscription) {
       this.notificationSubscription.unsubscribe();
+    }
+  }
+
+  /**
+   * Add a stealth account to the pending list for later processing.
+   */
+  private addPendingStealthBlock(stealthAccount: StealthAccount): void {
+    if (!this.pendingStealthBlocks.find(b => b.txHash === stealthAccount.txHash && b.address === stealthAccount.address)) {
+      this.pendingStealthBlocks.push(stealthAccount);
+    }
+  }
+
+  /**
+   * Remove a stealth account from the pending list.
+   */
+  private removePendingStealthBlock(address: string): void {
+    this.pendingStealthBlocks = this.pendingStealthBlocks.filter(b => b.address !== address);
+  }
+
+  /**
+   * Process all queued pending stealth blocks when the wallet is unlocked.
+   */
+  private async processPendingStealthBlocks(): Promise<void> {
+    if (this.wallet.wallet.locked) {
+      console.debug('[Manager] Wallet is still locked, cannot process pending stealth blocks.');
+      return;
+    }
+    if (this.pendingStealthBlocks.length === 0) {
+      console.debug('[Manager] No pending stealth blocks to process.');
+      return;
+    }
+
+    console.log(`[Manager] Processing ${this.pendingStealthBlocks.length} pending stealth blocks...`);
+    // Create a copy of the array to avoid issues if blocks are added/removed during processing
+    const blocksToProcess = [...this.pendingStealthBlocks];
+    for (const stealthAccount of blocksToProcess) {
+      const nanoNym = this.storage.getNanoNym(stealthAccount.parentNanoNymIndex);
+      if (nanoNym) {
+        await this.receiveStealthFunds(stealthAccount, nanoNym);
+      } else {
+        console.warn(`[Manager] NanoNym not found for pending stealth account ${stealthAccount.address}, removing from queue.`);
+        this.removePendingStealthBlock(stealthAccount.address);
+      }
     }
   }
 }
