@@ -46,6 +46,12 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
   selectedNanoNym: NanoNym | null = null;
   detailsNanoNymQR: string | null = null;
 
+  // Generate NanoNym Modal
+  @ViewChild('generateNanoNymModal') generateNanoNymModalRef!: ElementRef;
+  generateNanoNymModal: any = null;
+  newNanoNymLabel = '';
+  generatingNanoNym = false;
+
   constructor(
     private walletService: WalletService,
     private notificationService: NotificationService,
@@ -83,10 +89,16 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
   }
 
   ngAfterViewInit() {
+    const UIkit = window['UIkit'];
+
     // Initialize NanoNym details modal
     if (this.nanoNymDetailsModalRef) {
-      const UIkit = window['UIkit'];
       this.nanoNymDetailsModal = UIkit.modal(this.nanoNymDetailsModalRef.nativeElement);
+    }
+
+    // Initialize Generate NanoNym modal
+    if (this.generateNanoNymModalRef) {
+      this.generateNanoNymModal = UIkit.modal(this.generateNanoNymModalRef.nativeElement);
     }
   }
 
@@ -243,6 +255,47 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
     navigator.clipboard.writeText(text).then(() => {
       this.notificationService.sendSuccess(`${type} copied to clipboard!`);
     });
+  }
+
+  // Generate NanoNym Modal Methods
+  openGenerateNanoNymModal() {
+    this.newNanoNymLabel = '';
+    this.generatingNanoNym = false;
+    if (this.generateNanoNymModal) {
+      this.generateNanoNymModal.show();
+    }
+  }
+
+  closeGenerateNanoNymModal() {
+    this.newNanoNymLabel = '';
+    this.generatingNanoNym = false;
+    if (this.generateNanoNymModal) {
+      this.generateNanoNymModal.hide();
+    }
+  }
+
+  async generateNanoNym() {
+    if (this.generatingNanoNym) return;
+
+    this.generatingNanoNym = true;
+
+    try {
+      const label = this.newNanoNymLabel.trim() || undefined;
+      const nanoNym = await this.nanoNymManager.createNanoNym(label);
+
+      this.notificationService.sendSuccess(`NanoNym created: ${nanoNym.label}`);
+      this.closeGenerateNanoNymModal();
+
+      // Note: The spendableAccounts$ subscription will auto-update
+      // when storage emits changes, so the new NanoNym will appear
+      // in the table automatically
+    } catch (error) {
+      this.notificationService.sendError(
+        `Failed to create NanoNym: ${(error as Error).message}`
+      );
+    } finally {
+      this.generatingNanoNym = false;
+    }
   }
 
 }

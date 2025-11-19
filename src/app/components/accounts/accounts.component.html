@@ -152,8 +152,8 @@
         </h2>
       </div>
       <div class="uk-width-auto@m uk-width-1-1 uk-text-right">
-        <button class="uk-button uk-button-secondary uk-width-1-1@m" disabled>
-          + Add NanoNym (Coming Soon)
+        <button class="uk-button uk-button-secondary uk-width-1-1@m" (click)="openGenerateNanoNymModal()">
+          ADD NEW NANONYM
         </button>
       </div>
     </div>
@@ -224,7 +224,7 @@
         </tr>
         <tr *ngIf="!nanoNymAccounts.length">
           <td colspan="3" style="text-align: center;">
-            No NanoNyms yet. <a [routerLink]="'/receive/nanonyms'">Generate your first NanoNym</a> for a private, reusable payment code.
+            You don't have any NanoNyms yet. Click the button above to create your first private, reusable payment code.
           </td>
         </tr>
         </tbody>
@@ -429,5 +429,53 @@
         </button>
       </div>
     </ng-container>
+  </div>
+</div>
+
+<!-- Generate NanoNym Modal -->
+<div id="generate-nanonym-modal" #generateNanoNymModal uk-modal>
+  <div class="uk-modal-dialog uk-modal-body">
+    <button class="uk-modal-close-default" type="button" uk-close></button>
+
+    <h2 class="uk-modal-title">Generate New NanoNym</h2>
+    <p class="uk-text-meta">
+      Create a reusable private payment address. You can generate as many NanoNyms as you need for different purposes.
+    </p>
+
+    <div class="uk-margin">
+      <label class="uk-form-label" for="nanonym-label">
+        Label <span class="uk-text-muted">(optional)</span>
+      </label>
+      <input
+        id="nanonym-label"
+        class="uk-input"
+        type="text"
+        placeholder="e.g., Donations, Sales Q1 2025, Customer #123"
+        [(ngModel)]="newNanoNymLabel"
+        [disabled]="generatingNanoNym"
+        maxlength="50"
+      />
+    </div>
+
+    <div class="uk-margin uk-text-right">
+      <button
+        class="uk-button uk-button-default uk-modal-close uk-margin-small-right"
+        type="button"
+        [disabled]="generatingNanoNym"
+      >
+        Cancel
+      </button>
+      <button
+        class="uk-button uk-button-primary"
+        type="button"
+        (click)="generateNanoNym()"
+        [disabled]="generatingNanoNym"
+      >
+        <span *ngIf="!generatingNanoNym">Generate NanoNym</span>
+        <span *ngIf="generatingNanoNym">
+          <span uk-spinner="ratio: 0.6"></span> Generating...
+        </span>
+      </button>
+    </div>
   </div>
 </div>
