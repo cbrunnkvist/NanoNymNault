@@ -239,7 +239,7 @@
                     </div>
                     <div class="uk-width-auto uk-text-right">
                       <span class="uk-text-muted uk-text-small">
-                        {{ (account.balance || account.amountRaw | rai: 'mnano,true') | amountsplit: 0 }}<span class="amount-fractional">.{{ (account.balance || account.amountRaw | rai: 'mnano,true') | amountsplit: 1 }}</span> XNO
+                        {{ ((account.balance || account.amountRaw) | rai: 'mnano,true') | amountsplit: 0 }}<span class="amount-fractional">.{{ ((account.balance || account.amountRaw) | rai: 'mnano,true') | amountsplit: 1 }}</span> XNO
                       </span>
                     </div>
                   </div>
@@ -345,7 +345,7 @@
                     <span class="nano-address-monospace uk-text-truncate uk-display-block">{{account.address}}</span>
                   </div>
                   <div class="uk-width-auto uk-text-right">
-                    <span class="uk-text-muted">{{ (account.amountRaw || account.balance) | rai: 'mnano,true' }} XNO</span>
+                    <span class="uk-text-muted">{{ ((account.amountRaw || account.balance) | rai: 'mnano,true') }} XNO</span>
                   </div>
                 </div>
               </li>
