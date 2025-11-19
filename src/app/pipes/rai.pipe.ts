@@ -1,4 +1,5 @@
 import { Pipe, PipeTransform } from '@angular/core';
+import BigNumber from 'bignumber.js';
 
 @Pipe({
   name: 'rai'
@@ -9,6 +10,31 @@ export class RaiPipe implements PipeTransform {
   mrai = 1000000000000000000000000000000;
   krai = 1000000000000000000000000000;
   rai  = 1000000000000000000000000;
+
+  /**
+   * Convert value to plain decimal string without scientific notation
+   * Handles BigNumber, number, and string inputs
+   */
+  private toPlainString(value: any): string {
+    // If it's a BigNumber instance, use toFixed(0) to avoid scientific notation
+    if (value instanceof BigNumber) {
+      return value.toFixed(0);
+    }
+    // If it's a string, check if it's in scientific notation and expand it
+    if (typeof value === 'string') {
+      // Check if it's scientific notation
+      if (value.includes('e') || value.includes('E')) {
+        return new BigNumber(value).toFixed(0);
+      }
+      return value;
+    }
+    // For numbers, convert to string and handle potential scientific notation
+    const str = value.toString();
+    if (str.includes('e') || str.includes('E')) {
+      return new BigNumber(value).toFixed(0);
+    }
+    return str.split('.')[0]; // Get integer part only
+  }
 
   transform(value: any, args?: any): any {
     // Handle null/undefined gracefully
@@ -28,8 +54,8 @@ export class RaiPipe implements PipeTransform {
         // 10^28 raw = 0.01 XNO, so anything < 10^28 raw is < 0.01 XNO
         // Use BigInt for precise comparison of large numbers
         const rawThreshold = BigInt('10000000000000000000000000000'); // 0.01 XNO in raw
-        // Convert to string first to preserve precision, then to BigInt
-        const valueStr = typeof value === 'string' ? value : value.toString().split('.')[0];
+        // Convert to plain string (no scientific notation) then to BigInt
+        const valueStr = this.toPlainString(value);
         const valueBigInt = BigInt(valueStr);
         if (valueBigInt > 0 && valueBigInt < rawThreshold) {
           return hideText ? '<0.01' : '<0.01\u00A0XNO';
@@ -38,8 +64,8 @@ export class RaiPipe implements PipeTransform {
       case 'mnano':
         const hasRawValue = (value / this.rai) % 1;
         const rawThresholdMnano = BigInt('10000000000000000000000000000'); // 0.01 XNO in raw
-        // Convert to string first to preserve precision, then to BigInt
-        const valueStrMnano = typeof value === 'string' ? value : value.toString().split('.')[0];
+        // Convert to plain string (no scientific notation) then to BigInt
+        const valueStrMnano = this.toPlainString(value);
         const valueBigIntMnano = BigInt(valueStrMnano);
         if (hasRawValue) {
           // Handle negligible amounts: show "<0.01 XNO" instead of rounding to 0
@@ -66,8 +92,8 @@ export class RaiPipe implements PipeTransform {
         // Check for negligible amounts first (applies to all denominations)
         // Check raw value directly using BigInt to avoid floating point precision loss
         const rawThresholdDynamic = BigInt('10000000000000000000000000000'); // 0.01 XNO in raw
-        // Convert to string first to preserve precision, then to BigInt
-        const valueStrDynamic = typeof value === 'string' ? value : value.toString().split('.')[0];
+        // Convert to plain string (no scientific notation) then to BigInt
+        const valueStrDynamic = this.toPlainString(value);
         const valueBigIntDynamic = BigInt(valueStrDynamic);
         if (valueBigIntDynamic > 0 && valueBigIntDynamic < rawThresholdDynamic) {
           return hideText ? '<0.01' : '<0.01\u00A0XNO';
