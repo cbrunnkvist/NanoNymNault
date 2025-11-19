@@ -23,6 +23,36 @@ export class WebsocketService {
 
   constructor(private appSettings: AppSettingsService) { }
 
+  /**
+   * Normalize websocket timestamp to milliseconds.
+   *
+   * Workaround for Nano node server-side inconsistency:
+   * - 'subscribe' acks return time in Unix seconds (10 digits)
+   * - 'pong' acks return time in Unix milliseconds (13 digits)
+   *
+   * Per Nano websocket spec, all timestamps should be in milliseconds.
+   */
+  private normalizeTimestamp(time: string | undefined, messageType: string): {
+    normalized: string | undefined,
+    wasConverted: boolean
+  } {
+    if (!time) {
+      return { normalized: time, wasConverted: false };
+    }
+
+    const timeNum = parseInt(time, 10);
+
+    // If time looks like seconds (10 digits or less), convert to milliseconds
+    if (timeNum < 10000000000) {
+      return {
+        normalized: (timeNum * 1000).toString(),
+        wasConverted: true
+      };
+    }
+
+    return { normalized: time, wasConverted: false };
+  }
+
   forceReconnect() {
     console.log('Reconnecting Websocket...');
     if (this.socket.connected && this.socket.ws) {
@@ -79,6 +109,23 @@ export class WebsocketService {
     ws.onmessage = event => {
       try {
         const newEvent = JSON.parse(event.data);
+
+        // Normalize timestamp if present (workaround for Nano node inconsistency)
+        if (newEvent.time) {
+          const messageType = newEvent.ack || newEvent.topic || 'unknown';
+          const { normalized, wasConverted } = this.normalizeTimestamp(newEvent.time, messageType);
+
+          if (wasConverted) {
+            console.warn(
+              `Websocket timestamp normalization: Nano node at ${this.appSettings.settings.serverWS} ` +
+              `sent '${messageType}' message with time in seconds (${newEvent.time}) instead of milliseconds. ` +
+              `Converted to ${normalized}.`
+            );
+          }
+
+          newEvent.time = normalized;
+        }
+
         console.log('WS', newEvent);
 
         if (newEvent.topic === 'confirmation') {

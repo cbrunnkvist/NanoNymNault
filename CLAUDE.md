@@ -676,3 +676,4 @@ Critical invariant:
 The core path
 “Send to NanoNym → Receive via Nostr → Stealth funds spendable and recoverable from seed alone”
 must remain correct, test-covered, and never be broken by future changes.
+- When writing commit messages, clearly articulate WHAT you intend to change and WHY these changes matter—the purpose or problem being solved—not which files were modified. Begin with a concise subject line that captures the essential change, followed by a brief explanation of the reasoning behind the change if additional context is needed. Reference tickets in the subject line when applicable, but focus the body on the specific intent and value of this particular code change.
