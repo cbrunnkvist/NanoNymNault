@@ -799,12 +799,26 @@ export class SendComponent implements OnInit {
         const stealthAccount = this.selectedStealthAccounts[i];
         this.sendProgress.current = i + 1;
 
-        // Handle balance which can be string (amountRaw), BigNumber (balance), or undefined
+        // Fetch current account info from node to get accurate balance and frontier
+        let accountInfo: any;
+        try {
+          accountInfo = await this.nodeApi.accountInfo(stealthAccount.address);
+        } catch (err) {
+          console.error(`[Send-NanoNym] Failed to fetch account info for ${stealthAccount.address}:`, err);
+          throw new Error(`Cannot fetch stealth account info: ${err.message}`);
+        }
+
+        // Get account balance from node
+        const nodeBalance = new BigNumber(accountInfo.balance || 0);
+
+        // Fallback to stored balance if node returns 0 but we have amountRaw
         let accountBalance: BigNumber;
-        if (stealthAccount.balance instanceof BigNumber) {
-          accountBalance = stealthAccount.balance;
+        if (nodeBalance.gt(0)) {
+          accountBalance = nodeBalance;
         } else if (stealthAccount.amountRaw) {
           accountBalance = new BigNumber(stealthAccount.amountRaw);
+        } else if (stealthAccount.balance instanceof BigNumber) {
+          accountBalance = stealthAccount.balance;
         } else {
           throw new Error(`Stealth account ${stealthAccount.address} has no valid balance data`);
         }
@@ -815,6 +829,8 @@ export class SendComponent implements OnInit {
 
         console.log(`[Send-NanoNym] Account ${this.sendProgress.current}/${this.sendProgress.total}:`, {
           address: stealthAccount.address,
+          nodeBalance: nodeBalance.toString(),
+          storedBalance: stealthAccount.amountRaw || '(none)',
           balance: accountBalance.toString(),
           sending: amountToSend.toString()
         });
@@ -828,10 +844,10 @@ export class SendComponent implements OnInit {
             secretKey: stealthAccount.privateKey
           },
           index: -1, // Special index for stealth accounts
-          frontier: null, // Will be fetched by generateSend
+          frontier: accountInfo.frontier || null, // Use frontier from node
           balance: accountBalance,
           balanceRaw: accountBalance.mod(this.nano),
-          pending: new BigNumber(0),
+          pending: new BigNumber(accountInfo.pending || 0),
           pendingRaw: new BigNumber(0),
           balanceFiat: 0,
           pendingFiat: 0,
