@@ -108,6 +108,7 @@ export class SendComponent implements OnInit {
   privacyWarningShown = false;
   privacyWarningDismissed = false;
   privacyWarningPending = false;
+  sendProgress = { current: 0, total: 0 }; // Track progress during multi-account sends
 
   constructor(
     private route: ActivatedRoute,
@@ -789,16 +790,30 @@ export class SendComponent implements OnInit {
       let successCount = 0;
       const txHashes: string[] = [];
 
+      // Initialize progress tracking
+      this.sendProgress.total = this.selectedStealthAccounts.length;
+      this.sendProgress.current = 0;
+
       // Send from each stealth account sequentially
       for (let i = 0; i < this.selectedStealthAccounts.length; i++) {
         const stealthAccount = this.selectedStealthAccounts[i];
-        const accountBalance = new BigNumber(stealthAccount.amountRaw || stealthAccount.balance);
+        this.sendProgress.current = i + 1;
+
+        // Handle balance which can be string (amountRaw), BigNumber (balance), or undefined
+        let accountBalance: BigNumber;
+        if (stealthAccount.balance instanceof BigNumber) {
+          accountBalance = stealthAccount.balance;
+        } else if (stealthAccount.amountRaw) {
+          accountBalance = new BigNumber(stealthAccount.amountRaw);
+        } else {
+          throw new Error(`Stealth account ${stealthAccount.address} has no valid balance data`);
+        }
 
         // Calculate how much to send from this account
         const remaining = this.rawAmount.minus(totalSent);
         const amountToSend = BigNumber.min(accountBalance, remaining);
 
-        console.log(`[Send-NanoNym] Account ${i + 1}/${this.selectedStealthAccounts.length}:`, {
+        console.log(`[Send-NanoNym] Account ${this.sendProgress.current}/${this.sendProgress.total}:`, {
           address: stealthAccount.address,
           balance: accountBalance.toString(),
           sending: amountToSend.toString()
