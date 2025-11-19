@@ -804,23 +804,33 @@ export class SendComponent implements OnInit {
         try {
           accountInfo = await this.nodeApi.accountInfo(stealthAccount.address);
         } catch (err) {
-          console.error(`[Send-NanoNym] Failed to fetch account info for ${stealthAccount.address}:`, err);
-          throw new Error(`Cannot fetch stealth account info: ${err.message}`);
+          // Account is unopened - skip it
+          console.warn(`[Send-NanoNym] Account unopened (no confirmed blocks): ${stealthAccount.address}. Skipping.`);
+          continue;
+        }
+
+        // Check if account is properly opened (has frontier and balance)
+        if (!accountInfo.frontier) {
+          console.warn(`[Send-NanoNym] Account unopened (no frontier): ${stealthAccount.address}. Skipping.`);
+          continue;
         }
 
         // Get account balance from node
         const nodeBalance = new BigNumber(accountInfo.balance || 0);
 
-        // Fallback to stored balance if node returns 0 but we have amountRaw
+        // For opened accounts, use node balance (always >= 0)
         let accountBalance: BigNumber;
-        if (nodeBalance.gt(0)) {
+        if (nodeBalance.gte(0)) {
           accountBalance = nodeBalance;
-        } else if (stealthAccount.amountRaw) {
-          accountBalance = new BigNumber(stealthAccount.amountRaw);
-        } else if (stealthAccount.balance instanceof BigNumber) {
-          accountBalance = stealthAccount.balance;
         } else {
-          throw new Error(`Stealth account ${stealthAccount.address} has no valid balance data`);
+          // Fallback (shouldn't happen for opened accounts)
+          accountBalance = new BigNumber(stealthAccount.amountRaw || 0);
+        }
+
+        // Skip if account has zero balance
+        if (accountBalance.lte(0)) {
+          console.warn(`[Send-NanoNym] Account has zero balance: ${stealthAccount.address}. Skipping.`);
+          continue;
         }
 
         // Calculate how much to send from this account
@@ -830,7 +840,7 @@ export class SendComponent implements OnInit {
         console.log(`[Send-NanoNym] Account ${this.sendProgress.current}/${this.sendProgress.total}:`, {
           address: stealthAccount.address,
           nodeBalance: nodeBalance.toString(),
-          storedBalance: stealthAccount.amountRaw || '(none)',
+          frontier: accountInfo.frontier,
           balance: accountBalance.toString(),
           sending: amountToSend.toString()
         });
@@ -844,7 +854,7 @@ export class SendComponent implements OnInit {
             secretKey: stealthAccount.privateKey
           },
           index: -1, // Special index for stealth accounts
-          frontier: accountInfo.frontier || null, // Use frontier from node
+          frontier: accountInfo.frontier, // Verified to exist above
           balance: accountBalance,
           balanceRaw: accountBalance.mod(this.nano),
           pending: new BigNumber(accountInfo.pending || 0),
