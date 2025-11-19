@@ -96,6 +96,14 @@ Seed and derivation:
 
 Where`account_index = 0, 1, 2, ...` (unbounded).
 
+**Implementation note (NanoNymNault-specific):**
+- Wallet stores seeds as **64-character hex strings** (32 bytes), not BIP-39 mnemonics.
+- Key derivation code MUST detect seed format:
+  - Hex string (64 hex chars): convert via `hex.toUint8()` → 32 bytes
+  - BIP-39 mnemonic: convert via `bip39.mnemonicToSeedSync()` → 64 bytes
+- **Determinism is critical**: same seed + same index → identical keys (always).
+- Test with both hex seeds (production format) and mnemonics (user import).
+
 Recovery:
 - Single seed recovers all NanoNyms and their keys.
 - Use BIP-44-style gap limit (e.g. 20 unused accounts) to find all active NanoNyms.

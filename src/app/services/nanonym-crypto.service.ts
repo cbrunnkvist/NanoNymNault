@@ -42,10 +42,17 @@ export class NanoNymCryptoService {
     view: { private: Uint8Array; public: Uint8Array };
     nostr: { private: Uint8Array; public: Uint8Array };
   } {
-    // Convert mnemonic to seed if needed
+    // Convert seed to bytes if needed
     let seedBytes: Uint8Array;
     if (typeof seed === "string") {
-      seedBytes = new Uint8Array(bip39.mnemonicToSeedSync(seed));
+      // Check if it's a 64-character hex string (32 bytes)
+      if (/^[0-9A-Fa-f]{64}$/.test(seed)) {
+        // Hex seed - convert directly to bytes
+        seedBytes = this.util.hex.toUint8(seed);
+      } else {
+        // BIP-39 mnemonic - convert using BIP-39 derivation
+        seedBytes = new Uint8Array(bip39.mnemonicToSeedSync(seed));
+      }
     } else {
       seedBytes = seed;
     }

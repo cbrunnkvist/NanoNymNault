@@ -61,6 +61,51 @@ describe("NanoNymCryptoService", () => {
       expect(keys1.view.public).toEqual(keys2.view.public);
       expect(keys1.nostr.public).toEqual(keys2.nostr.public);
     });
+
+    it("should derive keys from hex seed (production format)", () => {
+      const testHexSeed = "71EAB3C81D1259021018A7040D585A41BEDB13932F443207B4D3B76405A106D7";
+      const keys = service.deriveNanoNymKeys(testHexSeed, 0);
+
+      expect(keys.spend.private).toBeTruthy();
+      expect(keys.spend.public).toBeTruthy();
+      expect(keys.view.private).toBeTruthy();
+      expect(keys.view.public).toBeTruthy();
+      expect(keys.nostr.private).toBeTruthy();
+      expect(keys.nostr.public).toBeTruthy();
+
+      // Verify key lengths
+      expect(keys.spend.private.length).toBe(32);
+      expect(keys.spend.public.length).toBe(32);
+      expect(keys.view.private.length).toBe(32);
+      expect(keys.view.public.length).toBe(32);
+      expect(keys.nostr.private.length).toBe(32);
+      expect(keys.nostr.public.length).toBe(32);
+    });
+
+    it("should derive deterministic keys from hex seed", () => {
+      const testHexSeed = "71EAB3C81D1259021018A7040D585A41BEDB13932F443207B4D3B76405A106D7";
+      const keys1 = service.deriveNanoNymKeys(testHexSeed, 0);
+      const keys2 = service.deriveNanoNymKeys(testHexSeed, 0);
+
+      // Keys should be identical for same hex seed and index
+      expect(keys1.spend.public).toEqual(keys2.spend.public);
+      expect(keys1.view.public).toEqual(keys2.view.public);
+      expect(keys1.nostr.public).toEqual(keys2.nostr.public);
+    });
+
+    it("should derive different keys for hex vs mnemonic (different input types)", () => {
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+      const testHexSeed = "71EAB3C81D1259021018A7040D585A41BEDB13932F443207B4D3B76405A106D7";
+
+      const mnemonicKeys = service.deriveNanoNymKeys(testMnemonic, 0);
+      const hexKeys = service.deriveNanoNymKeys(testHexSeed, 0);
+
+      // Keys should be different for different seed types
+      expect(mnemonicKeys.spend.public).not.toEqual(hexKeys.spend.public);
+      expect(mnemonicKeys.view.public).not.toEqual(hexKeys.view.public);
+      expect(mnemonicKeys.nostr.public).not.toEqual(hexKeys.nostr.public);
+    });
   });
 
   describe("nnym_ address encoding/decoding", () => {

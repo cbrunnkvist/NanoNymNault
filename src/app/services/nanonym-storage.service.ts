@@ -165,6 +165,7 @@ export class NanoNymStorageService {
   clearAll(): void {
     this.nanonymsSubject.next([]);
     localStorage.removeItem(STORAGE_KEY);
+    this.loaded = false;
   }
 
   /**
