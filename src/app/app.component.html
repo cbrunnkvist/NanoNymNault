@@ -94,7 +94,13 @@
           <div uk-grid>
             <div class="uk-width-expand">
 
-              <div [class]="[ 'nano-card', (wallet.selectedAccount === null) ? 'is-wallet' : 'is-card' ]">
+              <div [class]="[ 'nano-card', (wallet.selectedAccount === null) ? 'is-wallet' : 'is-card' ]" style="position: relative;">
+                <!-- Developer Preview Sticker -->
+                <div class="dev-preview-sticker">
+                  <div class="sticker-content">
+                    <div class="sticker-text-bottom">NANONYMS DEVELOPER PREVIEW</div>
+                  </div>
+                </div>
                 <div class="logo"></div>
                 <div class="card-contents">
                   <div class="account-name-container">

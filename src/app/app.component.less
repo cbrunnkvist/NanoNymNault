@@ -4,6 +4,72 @@
 	background: #000;
 }
 
+// Developer Preview Sticker
+.dev-preview-sticker {
+	position: absolute;
+	top: -30px;
+	right: -22px;
+	z-index: 999;
+	pointer-events: none;
+
+	.sticker-content {
+		position: relative;
+		width: 120px;
+		height: 120px;
+		background: linear-gradient(135deg, #FFB700 0%, #FFA500 50%, #FF9500 100%);
+		border: 3px dashed #FF7500;
+		border-radius: 50%;
+		display: flex;
+		flex-direction: column;
+		justify-content: center;
+		align-items: center;
+		transform: rotate(-42deg);
+		box-shadow:
+			0 12px 32px rgba(255, 149, 0, 0.5),
+			0 0 60px rgba(255, 165, 0, 0.4),
+			inset 0 1px 0 rgba(255, 255, 255, 0.4);
+		animation: devPreviewPulse 3s ease-in-out infinite;
+		text-shadow: 1px 1px 2px rgba(0, 0, 0, 0.2);
+
+		.sticker-text-top,
+		.sticker-text-bottom {
+			font-family: 'Arial', 'Helvetica', sans-serif;
+			font-weight: 900;
+			font-size: 11px;
+			letter-spacing: 2px;
+			color: #8B4513;
+			text-align: center;
+			line-height: 1;
+			transform: rotate(26deg);
+		}
+
+		.sticker-text-top {
+			margin-bottom: 4px;
+		}
+
+		.sticker-text-bottom {
+			margin-top: 4px;
+		}
+	}
+}
+
+@keyframes devPreviewPulse {
+	0%, 100% {
+		box-shadow:
+			0 8px 24px rgba(255, 149, 0, 0.4),
+			0 0 40px rgba(255, 165, 0, 0.3),
+			inset 0 1px 0 rgba(255, 255, 255, 0.3);
+		filter: drop-shadow(0 0 8px rgba(255, 165, 0, 0.2));
+	}
+	50% {
+		box-shadow:
+			0 12px 32px rgba(255, 149, 0, 0.5),
+			0 0 60px rgba(255, 165, 0, 0.4),
+			inset 0 1px 0 rgba(255, 255, 255, 0.4);
+		filter: drop-shadow(0 0 14px rgba(255, 165, 0, 0.35));
+	}
+}
+
 .wallet-bar a {
 	color: #fff;
 }
