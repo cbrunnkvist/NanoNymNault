@@ -165,7 +165,7 @@ export class WalletService {
 
       // Include stealth account addresses in transaction detection
       const stealthAccountIDs = this.nanoNymStorage.getAllNanoNyms()
-        .flatMap(nn => nn.stealthAccounts.map(sa => sa.address));
+        .reduce((acc, nn) => acc.concat(nn.stealthAccounts.map(sa => sa.address)), [] as string[]);
       const allAccountIDs = [...walletAccountIDs, ...stealthAccountIDs];
 
       const isConfirmedIncomingTransactionForOwnWalletAccount = (
