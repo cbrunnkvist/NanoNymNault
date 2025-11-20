@@ -692,6 +692,15 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   async generateNanoNym() {
     if (this.generatingNanoNym) return;
 
+    // Ensure wallet is unlocked before accessing seed for key derivation
+    if (this.walletService.isLocked()) {
+      const wasUnlocked = await this.walletService.requestWalletUnlock();
+
+      if (wasUnlocked === false) {
+        return;
+      }
+    }
+
     this.generatingNanoNym = true;
 
     try {
