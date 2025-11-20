@@ -170,6 +170,12 @@ export class SendComponent implements OnInit {
       this.updateQueries(queries);
     });
 
+    // Reload spendable accounts (From Account dropdown) when balance is refreshed
+    // This ensures the dropdown shows updated balances after sends, receives, or wallet reload
+    this.walletService.wallet.refresh$.subscribe(() => {
+      this.loadSpendableAccounts();
+    });
+
     // Set the account selected in the sidebar as default
     if (this.walletService.wallet.selectedAccount !== null) {
       this.fromAccountID = this.walletService.wallet.selectedAccount.id;
