@@ -14,8 +14,8 @@ All tests must pass to maintain this invariant.
 |------|-------|--------|---------------|--------------|
 | **E2E Test 1** | Fresh payment to NanoNym | ✅ PASS | Payment sent and Nostr notification received | None |
 | **E2E Test 2** | Spend from opened stealth | ✅ PASS | Full roundtrip nano→nnym→nano works | E2E Test 1 |
-| **E2E Test 3** | Multi-payment aggregation | 🚧 PENDING | 3.5 XNO aggregated correctly from 3 payments | E2E Test 2 |
-| **E2E Test 4** | Balance persistence on reload | 🚧 PENDING | All accounts/balances restored after page reload | E2E Test 3 |
+| **E2E Test 3** | Multi-payment aggregation | ✅ PASS | 0.035 XNO aggregated correctly from 3 payments (0.01 + 0.005 + 0.02) | E2E Test 2 |
+| **E2E Test 4** | Balance persistence on reload | 🚧 IN PROGRESS | All accounts/balances restored after page reload | E2E Test 3 |
 
 ## Phase Summary
 
@@ -62,30 +62,41 @@ All tests must pass to maintain this invariant.
 
 **Key Achievement**: Can now spend from stealth accounts. Full roundtrip confirmed working.
 
-### Phase 6: Advanced Testing 🚧
-**In Progress (Nov 20, 2025)**
-- E2E Test 3: Multi-payment aggregation (this session)
-- E2E Test 4: Balance persistence (this session)
-- Edge case handling
-- Performance benchmarking
+### Phase 6: Multi-Payment Aggregation & UI Improvements ✅
+**Completed (Nov 20, 2025)**
+- E2E Test 3: Multi-payment aggregation (3 stealth accounts, 0.035 XNO total)
+- Implemented reactive `totalBalance$` observable combining regular + NanoNym balances
+- Updated Total Balance card to use async pipe for real-time updates
+- Added balance logging to stealth account event processing
+- All 114 unit tests passing with no regressions
+
+**Key Achievement**: Total Balance card now reactively shows combined balance of all accounts (regular + NanoNym).
+
+### Phase 7: Balance Persistence Testing 🚧
+**In Progress (Nov 20-21, 2025)**
+- E2E Test 4: Balance persistence across wallet reload
+- localStorage data structure verification
+- Seed-based recovery testing
+- Edge case handling (relay unavailability, partial corruption)
 
 ## Execution Instructions
 
 ### For Tester (Manual E2E Tests)
 
-**E2E Test 3: Multi-Payment Scenario**
-1. See `E2E_TEST_3_MULTI_PAYMENT.md` for detailed step-by-step instructions
-2. Send 3 payments (1.0, 0.5, 2.0 XNO) to same NanoNym
-3. Verify 3 stealth accounts created with correct balances
-4. Verify aggregated balance = 3.5 XNO
-5. Verify transaction count = 3 payments
+**E2E Test 3: Multi-Payment Scenario** ✅ COMPLETE
+1. ✅ Sent 3 payments (0.01, 0.005, 0.02 XNO) to same NanoNym
+2. ✅ Created 3 stealth accounts with correct balances
+3. ✅ Verified aggregated balance = 0.035 XNO
+4. ✅ Verified payment count = 3 payments
+5. ✅ All accounts opened successfully with Schnorr-style signatures
 
-**E2E Test 4: Balance Persistence**
+**E2E Test 4: Balance Persistence** 🚧 IN PROGRESS
 1. See `E2E_TEST_4_BALANCE_PERSISTENCE.md` for detailed procedures
-2. Test page reload (soft and hard)
-3. Test localStorage data persistence
-4. Test seed-based recovery on new device
-5. Verify balances restored accurately
+2. Currently executing: Test 4A - Page reload persistence
+3. Verify 3 stealth accounts and balances survive hard reload
+4. Test localStorage data persistence
+5. Test seed-based recovery on new device
+6. Verify balances restored accurately
 
 ### For Developer (Automated Testing)
 
@@ -94,13 +105,17 @@ All tests must pass to maintain this invariant.
   - Address encoding/decoding
   - Key derivation (both standard and NanoNym paths)
   - Account selection algorithm
+- ✅ Observable tests: 6 test cases for `totalBalance$` and `totalBalanceFiat$` (skipped due to DI setup, structure in place)
+- ✅ Total: 114/114 tests passing (68 skipped)
+- ✅ Build: 10.46 MB, no regressions
 
 **Planned Automated Tests**:
 - E2E framework integration (Playwright/Cypress)
-- Full workflow test suite
+- Full workflow test suite with mocked Nostr relays
 - Relay failure scenarios
 - Balance persistence verification
 - Seed recovery validation
+- Stealth account opening/closing lifecycle tests
 
 ## Key Technical Breakthroughs
 
@@ -124,6 +139,19 @@ All tests must pass to maintain this invariant.
 **Solution**: Added `isStealthAccount: true` flag to account objects, routing them to scalar-based Schnorr signing instead of seed-based signing.
 
 **Impact**: Enables full spend-from-stealth workflow.
+
+### Breakthrough 3: Reactive Total Balance Observable (Nov 20)
+**Problem**: Total Balance card only showed regular account balances. When NanoNym stealth payments arrived, the card didn't update; user had to manually reload to see the new balance.
+
+**Root Cause**: Total Balance was bound directly to `wallet.balance` property (non-reactive). NanoNym balances calculated separately and never included in display.
+
+**Solution**:
+- Created `totalBalance$` observable in WalletService that combines `wallet.refresh$` and `nanoNymStorage.nanonyms$`
+- Created `totalBalanceFiat$` observable that adds fiat conversion
+- Updated Total Balance card template to use `async` pipe for reactive updates
+- Updated app.component to expose both observables
+
+**Impact**: Total Balance card now reactively displays combined balance of all wallet funds (regular + NanoNym) in real-time as payments arrive.
 
 ## Known Limitations
 
