@@ -47,6 +47,10 @@ export class NostrNotificationService {
   // Active subscriptions map (nostrPublicHex -> subscription)
   private subscriptions = new Map<string, any>();
 
+  // Track seen event IDs per subscription to deduplicate across relays
+  // Map: nostrPublicHex -> Set of seen event IDs
+  private seenEventIds = new Map<string, Set<string>>();
+
   // Relay connection tracking
   private relayFirstSeen = new Map<string, number>();
   private relayEventCount = new Map<string, number>();
@@ -217,6 +221,9 @@ export class NostrNotificationService {
     );
     console.log(`[Nostr] 📡 Starting subscription to ${this.defaultRelays.length} relays for npub: ${nostrNpub.substring(0, 16)}...`);
 
+    // Initialize seen event IDs for this subscription
+    this.seenEventIds.set(nostrPublicHex, new Set<string>());
+
     // Track relay sync events
     let eoseCount = 0;
     let eventCount = 0;
@@ -225,7 +232,7 @@ export class NostrNotificationService {
       onevent: (event: Event) => {
         eventCount++;
         // Only process event, don't log every single one (too noisy - thousands of events)
-        this.handleIncomingEvent(event, nostrPrivate);
+        this.handleIncomingEvent(event, nostrPrivate, nostrPublicHex);
       },
 
       // Track which relays are responding (uses relay.url from AbstractRelay)
@@ -278,6 +285,7 @@ export class NostrNotificationService {
     if (sub) {
       sub.close();
       this.subscriptions.delete(nostrPublicHex);
+      this.seenEventIds.delete(nostrPublicHex);
       console.log(`[Nostr] 🔌 Disconnected: Stopped subscription for ${nostrNpub.substring(0, 16)}...`);
     }
   }
@@ -288,8 +296,21 @@ export class NostrNotificationService {
   private async handleIncomingEvent(
     event: Event,
     nostrPrivate: Uint8Array,
+    nostrPublicHex: string,
   ): Promise<void> {
     try {
+      // Deduplicate: skip if we've already seen this event from another relay
+      const seenSet = this.seenEventIds.get(nostrPublicHex);
+      if (seenSet && seenSet.has(event.id)) {
+        console.debug(`[Nostr] Duplicate event ${event.id.substring(0, 8)}... (already seen from another relay)`);
+        return;
+      }
+
+      // Mark as seen
+      if (seenSet) {
+        seenSet.add(event.id);
+      }
+
       // Unwrap the gift-wrapped event using NIP-59
       // This may throw an error if the event is not meant for us (wrong key)
       let unwrapped;
