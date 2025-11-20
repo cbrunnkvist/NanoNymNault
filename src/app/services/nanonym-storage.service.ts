@@ -137,14 +137,14 @@ export class NanoNymStorageService {
 
   /**
    * Calculate total balance across all stealth accounts
-   * Uses amountRaw (payment amount) instead of balance (on-chain balance)
-   * since stealth addresses are typically unopened until spent
+   * Uses balance (on-chain balance from node) which reflects actual spendable funds
+   * amountRaw is kept for historical reference but should not be used for current balance
    */
   private calculateAggregatedBalance(
     stealthAccounts: StealthAccount[],
   ): BigNumber {
     return stealthAccounts.reduce(
-      (sum, sa) => sum.plus(sa.amountRaw || sa.balance || 0),
+      (sum, sa) => sum.plus(sa.balance || 0),
       new BigNumber(0),
     );
   }
