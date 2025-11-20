@@ -56,6 +56,8 @@ export class AppComponent implements OnInit {
   wallet = this.walletService.wallet;
   node = this.nodeService.node;
   nanoPrice = this.price.price;
+  totalBalance$ = this.walletService.totalBalance$;
+  totalBalanceFiat$ = this.walletService.totalBalanceFiat$;
   fiatTimeout = 5 * 60 * 1000; // Update fiat prices every 5 minutes
   inactiveSeconds = 0;
   innerWidth = 0;

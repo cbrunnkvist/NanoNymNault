@@ -489,6 +489,17 @@ export class NanoNymManagerService {
       console.log(
         `[Manager] ✅ Payment: ${this.formatAmount(stealthAccount.balance)} XNO → "${nanoNym.label}"`,
       );
+
+      // Log aggregated balance for the NanoNym after the stealth account event
+      const aggregatedBalance = nanoNym.stealthAccounts.reduce(
+        (sum, account) => sum.plus(account.balance),
+        new BigNumber(0),
+      );
+      const paymentCount = nanoNym.stealthAccounts.length;
+      console.log(
+        `[Manager] 📊 ${nanoNym.label} Balance: ${this.formatAmount(aggregatedBalance)} XNO (${paymentCount} payment${paymentCount !== 1 ? 's' : ''})`,
+      );
+
       return stealthAccount;
     } catch (error) {
       console.error(

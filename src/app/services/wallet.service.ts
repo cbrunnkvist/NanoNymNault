@@ -1325,4 +1325,33 @@ export class WalletService {
       map(() => this.getSpendableAccounts())
     );
   }
+
+  /**
+   * Reactive observable of total balance (regular accounts + NanoNyms)
+   * Auto-updates when either regular account balances or NanoNym balances change
+   */
+  get totalBalance$(): Observable<BigNumber> {
+    return combineLatest([
+      this.wallet.refresh$,
+      this.nanoNymStorage.nanonyms$
+    ]).pipe(
+      map(() => this.getTotalBalanceIncludingNanoNyms())
+    );
+  }
+
+  /**
+   * Reactive observable of total balance in fiat currency
+   * Auto-updates when either balance or fiat price changes
+   */
+  get totalBalanceFiat$(): Observable<number> {
+    return combineLatest([
+      this.totalBalance$,
+      this.price.lastPrice$
+    ]).pipe(
+      map(([balance, fiatPrice]) => {
+        if (!balance || !fiatPrice) return 0;
+        return this.util.nano.rawToMnano(balance).times(fiatPrice).toNumber();
+      })
+    );
+  }
 }
