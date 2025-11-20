@@ -173,13 +173,14 @@ export class SendComponent implements OnInit {
 
     // Reload spendable accounts (From Account dropdown) when balance is refreshed
     // This ensures the dropdown shows updated balances after sends, receives, or wallet reload
-    // Use debounceTime to prevent rapid repeated updates from triggering infinite loops
+    // Use debounceTime to prevent rapid repeated updates from triggering extra API calls
+    // Use rebuildSpendableAccountsList (not loadSpendableAccounts) to avoid redundant node queries
     this.walletService.wallet.refresh$
       .pipe(
         debounceTime(300)
       )
       .subscribe(() => {
-        this.loadSpendableAccounts();
+        this.rebuildSpendableAccountsList();
       });
 
     // Set the account selected in the sidebar as default
@@ -1451,10 +1452,9 @@ export class SendComponent implements OnInit {
 
   /**
    * Load all spendable accounts (regular wallet accounts + NanoNyms)
+   * Includes refreshing balances from Nano node
    */
   loadSpendableAccounts(): void {
-    const nano = new BigNumber(this.nano);
-
     // Trigger background refresh of NanoNym balances from Nano node
     // This ensures we have up-to-date on-chain balances
     // Non-blocking: UI shows current balances and updates when refresh completes
@@ -1462,6 +1462,16 @@ export class SendComponent implements OnInit {
       console.error('[Send] Failed to refresh NanoNym balances:', err);
     });
 
+    // Rebuild the spendable accounts list from current data
+    this.rebuildSpendableAccountsList();
+  }
+
+  /**
+   * Rebuild the spendable accounts dropdown list from current storage
+   * Does NOT refresh balances from node (use loadSpendableAccounts for that)
+   * Called when balance updates occur to refresh the UI without extra API calls
+   */
+  private rebuildSpendableAccountsList(): void {
     // Convert regular wallet accounts to SpendableAccount format
     const regularAccounts: RegularAccount[] = this.accounts.map(account => ({
       type: 'regular' as const,
