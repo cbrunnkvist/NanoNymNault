@@ -732,13 +732,12 @@ Manual and automated tests:
 7. Encrypted backup data:
     - Tier 2 uses Nostr as encrypted storage.
     - Users can add self-hosted relays for stronger guarantees.
-8. **[BLOCKING - Nov 20, 2025] Stealth Account Block Signing Issue**:
-    - Stealth private keys are Ed25519 scalars (32 bytes, reduced mod L), derived via `p_masked = b_spend + t (mod l)`.
-    - Current code passes scalar to `nacl.sign.keyPair.fromSecretKey()`, which treats it as a seed and hashes it with BLAKE2b.
-    - This produces an incorrect public key and causes "Bad signature" rejections from Nano node.
-    - Root cause: Difference between seed-based key derivation (standard Nano) vs scalar-based (stealth accounts via ECDH).
-    - Solution: Use `@noble/ed25519` library directly for stealth account signing instead of nacl wrapper.
-    - Tracking: See Phase 1-5 plan in commit history for incremental fix approach.
+8. Representative initialization for new wallets:
+    - When a wallet is created, `defaultRepresentative` is initialized to `null`.
+    - Stealth accounts that open before Account #0 receives a transaction will get a random representative.
+    - Account #0 shows "Representative: NONE" until it receives, then gets a representative (possibly different).
+    - **Not a protocol issue** - each account can have independent representatives on-chain.
+    - **UX improvement** (planned): Initialize `defaultRepresentative` at NanoNym account creation time if wallet default is `null`, ensuring consistent representatives across all accounts (stealth and standard).
 
 ---
 
@@ -782,3 +781,4 @@ The core path
 “Send to NanoNym → Receive via Nostr → Stealth funds spendable and recoverable from seed alone”
 must remain correct, test-covered, and never be broken by future changes.
 - When writing commit messages, clearly articulate WHAT you intend to change and WHY these changes matter—the purpose or problem being solved—not which files were modified. Begin with a concise subject line that captures the essential change, followed by a brief explanation of the reasoning behind the change if additional context is needed. Reference tickets in the subject line when applicable, but focus the body on the specific intent and value of this particular code change.
+- (EXCEPT FOR WHEN IN CI) Always use 'nvm exec npm [args]' (and you might need to source the nvm script if the alias isn't present) when you need to npm something

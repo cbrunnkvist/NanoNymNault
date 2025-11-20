@@ -223,6 +223,25 @@ export class NanoNymCryptoService {
   }
 
   /**
+   * Reduce a 64-byte hash to a scalar mod L without clamping
+   * Used for EdDSA r and k computation (RFC 8032)
+   * Clamping is only for seed-derived scalars, not for hash-based scalars like r and k
+   *
+   * @param hash64 - 64-byte hash output
+   * @returns 32-byte scalar reduced mod L
+   */
+  private hashToScalarModL(hash64: Uint8Array): Uint8Array {
+    // RFC 8032: interpret hash as little-endian integer and reduce mod L
+    // NO clamping - that's only for seed-derived scalars
+    const L = BigInt(
+      "0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed",
+    );
+    const hashInt = this.bytesToBigIntLE(hash64);
+    const reduced = hashInt % L;
+    return this.bigIntToBytesLE(reduced, 32);
+  }
+
+  /**
    * Derive Ed25519 keypair from seed using Blake2b (CamoNano compatible)
    * Matches nanopyrs key derivation: scalar = blake2b_scalar(seed), public = scalar * G
    *
@@ -767,26 +786,23 @@ export class NanoNymCryptoService {
     // - R = [r]B
     // - S = (r + H(R || A || M) * a) mod L
 
-    // Key insight: Since we're signing a *block hash* (not freeform message),
-    // and Nano doesn't use context/domain separators, we can use the scalar's
-    // hash as the prefix for computing r
+    // Key insight: Since we have a pre-computed scalar (not a seed), we need to derive
+    // the prefix for EdDSA signing differently than standard Ed25519.
+    // In RFC 8032, the prefix comes from the first 32 bytes of SHA512(seed).
+    // For scalar-based signing, we derive it from SHA512(scalar) instead.
 
-    // Nano uses ED25519+BLAKE2b signature scheme (not standard RFC 8032 with SHA512)
-    // Since we have a pre-computed scalar (not a seed), derive deterministic prefix using BLAKE2b
-    const prefixInput = new Uint8Array(privateKeyScalar.length + messageHash.length);
-    prefixInput.set(privateKeyScalar, 0);
-    prefixInput.set(messageHash, privateKeyScalar.length);
-    const prefixHash = blake2b(prefixInput, undefined, 64);
-    const prefixBytes = new Uint8Array(prefixHash).slice(32, 64); // Use second 32 bytes as prefix
+    // RFC 8032 EdDSA requires all hash operations to use SHA512 for consistency
+    const scalarHash = sha512(privateKeyScalar);
+    const prefixBytes = new Uint8Array(scalarHash).slice(0, 32); // RFC 8032: Use FIRST 32 bytes as prefix
 
-    console.log('[NanoNymCrypto] Prefix (from SHA512):', bytesToHex(prefixBytes));
+    console.log('[NanoNymCrypto] Prefix (from SHA512(scalar)):', bytesToHex(prefixBytes));
 
     // Compute r = H(prefix || M) mod L using SHA512 (RFC 8032 Ed25519 standard)
     const rInput = new Uint8Array(prefixBytes.length + messageHash.length);
     rInput.set(prefixBytes, 0);
     rInput.set(messageHash, prefixBytes.length);
     const rHash = sha512(rInput); // RFC 8032 uses SHA512
-    const r = this.blake2bToScalar(rHash); // Clamp and reduce mod L (works for any 64-byte hash)
+    const r = this.hashToScalarModL(rHash); // Reduce mod L WITHOUT clamping (clamping is only for seed-derived scalars)
     const rBigInt = this.bytesToBigIntLE(r);
 
     console.log('[NanoNymCrypto] EdDSA r (SHA512):', bytesToHex(r));
@@ -803,7 +819,7 @@ export class NanoNymCryptoService {
     kInput.set(publicKeyBytes, RBytes.length);
     kInput.set(messageHash, RBytes.length + publicKeyBytes.length);
     const kHash = sha512(kInput); // RFC 8032 uses SHA512
-    const k = this.blake2bToScalar(kHash); // Clamp and reduce mod L (works for any 64-byte hash)
+    const k = this.hashToScalarModL(kHash); // Reduce mod L WITHOUT clamping (clamping is only for seed-derived scalars)
     const kBigInt = this.bytesToBigIntLE(k);
 
     console.log('[NanoNymCrypto] EdDSA k (SHA512):', bytesToHex(k));

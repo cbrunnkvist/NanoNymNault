@@ -111,6 +111,7 @@ class MockUtilService {
 
 class MockNotificationService {
   sendSuccess = jasmine.createSpy('sendSuccess');
+  sendInfo = jasmine.createSpy('sendInfo');
   removeNotification = jasmine.createSpy('removeNotification');
 }
 
