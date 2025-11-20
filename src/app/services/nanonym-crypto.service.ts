@@ -791,55 +791,52 @@ export class NanoNymCryptoService {
     // In RFC 8032, the prefix comes from the first 32 bytes of SHA512(seed).
     // For scalar-based signing, we derive it from SHA512(scalar) instead.
 
-    // RFC 8032 EdDSA requires all hash operations to use SHA512 for consistency
-    const scalarHash = sha512(privateKeyScalar);
-    const prefixBytes = new Uint8Array(scalarHash).slice(0, 32); // RFC 8032: Use FIRST 32 bytes as prefix
+    // NANO SCHNORR-STYLE SIGNATURE (based on nanopyrs reference implementation)
+    // NOT RFC 8032 EdDSA - Nano uses a Schnorr variant with BLAKE2B512
 
-    console.log('[NanoNymCrypto] Prefix (from SHA512(scalar)):', bytesToHex(prefixBytes));
-
-    // Compute r = H(prefix || M) mod L using SHA512 (RFC 8032 Ed25519 standard)
-    const rInput = new Uint8Array(prefixBytes.length + messageHash.length);
-    rInput.set(prefixBytes, 0);
-    rInput.set(messageHash, prefixBytes.length);
-    const rHash = sha512(rInput); // RFC 8032 uses SHA512
-    const r = this.hashToScalarModL(rHash); // Reduce mod L WITHOUT clamping (clamping is only for seed-derived scalars)
+    // Step 1: Compute r = BLAKE2B512(scalar || message) mod L (deterministic ephemeral value)
+    const rInput = new Uint8Array(privateKeyScalar.length + messageHash.length);
+    rInput.set(privateKeyScalar, 0);
+    rInput.set(messageHash, privateKeyScalar.length);
+    const rHash = blake2b(rInput, undefined, 64);
+    const r = this.hashToScalarModL(new Uint8Array(rHash));
     const rBigInt = this.bytesToBigIntLE(r);
 
-    console.log('[NanoNymCrypto] EdDSA r (SHA512):', bytesToHex(r));
+    console.log('[NanoNymCrypto] Schnorr r (BLAKE2B512):', bytesToHex(r));
 
-    // Compute R = [r]B
+    // Step 2: Compute R = r * G
     const RPoint = ed25519.ExtendedPoint.BASE.multiply(rBigInt);
     const RBytes = RPoint.toRawBytes();
 
-    console.log('[NanoNymCrypto] EdDSA R:', bytesToHex(RBytes));
+    console.log('[NanoNymCrypto] Schnorr R:', bytesToHex(RBytes));
 
-    // Compute k = H(R || A || M) mod L using SHA512 (RFC 8032 Ed25519 standard)
+    // Step 3: Compute k = BLAKE2B512(R || public_key || message) mod L
     const kInput = new Uint8Array(RBytes.length + publicKeyBytes.length + messageHash.length);
     kInput.set(RBytes, 0);
     kInput.set(publicKeyBytes, RBytes.length);
     kInput.set(messageHash, RBytes.length + publicKeyBytes.length);
-    const kHash = sha512(kInput); // RFC 8032 uses SHA512
-    const k = this.hashToScalarModL(kHash); // Reduce mod L WITHOUT clamping (clamping is only for seed-derived scalars)
+    const kHash = blake2b(kInput, undefined, 64);
+    const k = this.hashToScalarModL(new Uint8Array(kHash));
     const kBigInt = this.bytesToBigIntLE(k);
 
-    console.log('[NanoNymCrypto] EdDSA k (SHA512):', bytesToHex(k));
+    console.log('[NanoNymCrypto] Schnorr k (BLAKE2B512):', bytesToHex(k));
 
-    // Compute S = (r + k*scalar) mod L
+    // Step 4: Compute s = (r + k * a) mod L
     const scalar = this.bytesToBigIntLE(privateKeyScalar);
     const L = BigInt(
       "0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed"
     );
-    const S = (rBigInt + kBigInt * scalar) % L;
-    const SBytes = this.bigIntToBytesLE(S, 32);
+    const s = (rBigInt + kBigInt * scalar) % L;
+    const sBytes = this.bigIntToBytesLE(s, 32);
 
-    console.log('[NanoNymCrypto] EdDSA S:', bytesToHex(SBytes));
+    console.log('[NanoNymCrypto] Schnorr s:', bytesToHex(sBytes));
 
-    // Combine R || S into 64-byte signature
+    // Step 5: Combine R || s into 64-byte signature
     const signature = new Uint8Array(64);
     signature.set(RBytes, 0);
-    signature.set(SBytes, 32);
+    signature.set(sBytes, 32);
 
-    console.log('[NanoNymCrypto] Block signed with stealth scalar. Signature:', bytesToHex(signature));
+    console.log('[NanoNymCrypto] Block signed with Schnorr-style signature:', bytesToHex(signature));
     return signature;
   }
 }
