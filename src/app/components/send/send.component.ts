@@ -983,7 +983,9 @@ export class SendComponent implements OnInit {
           balanceFiat: 0,
           pendingFiat: 0,
           addressBookName: null,
-          receivePow: false
+          receivePow: false,
+          isStealthAccount: true, // ← CRITICAL: Flag to use Schnorr scalar signing, NOT nacl
+          publicKeyHex: this.util.hex.fromUint8(stealthAccount.publicKey) // ← Public key for signature verification
         };
 
         // Send the transaction
