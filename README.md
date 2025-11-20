@@ -134,64 +134,35 @@ NanoNymNault combines three proven technologies:
 
 ---
 
-## Key Management Architecture
+## Key Management: Simple & Secure
 
-### For Nano Users (Current - Recommended)
+### Your Nano Seed is Your Master Key
 
-NanoNymNault uses a **single Nano seed** (BIP-39) to derive all keys:
+NanoNymNault is designed so you only need to manage one secret: **your 24-word Nano seed phrase**.
+
+From this single seed, the wallet securely generates all the necessary components for both your Nano funds and your private Nostr notifications.
 
 ```
-Nano Seed (24 words)
+Your Nano Seed (24 words)
     ↓
-    ├─→ Spend Keys (receive & send XNO)
-    ├─→ View Keys (detect payments privately)
-    └─→ Nostr Keys (receive payment notifications)
+    ├─→ All your Nano accounts & funds
+    └─→ All your private Nostr notifications
 ```
 
-**Backup:** Just your 24-word Nano seed  
-**Recovery:** Fully deterministic - one seed recovers everything
+Think of your seed as a master key. It can create a perfectly matched, but separate, set of keys for different systems (one for Nano, one for Nostr). This means you get the convenience of a single backup without compromising on security.
 
-### For Nostr Users (Future - Advanced)
+**Bottom line: Back up your one Nano seed, and you can always recover everything.**
 
-To preserve your existing Nostr identity while adding NanoNym capabilities:
+### For Advanced Nostr Users (Future Feature)
 
-```
-Your Nostr nsec        +        Nano Seed
-(existing identity)              (new or imported)
-       ↓                              ↓
-   Nostr Keys          +        Nano Keys
-       └─────────────────┬─────────────┘
-                         ↓
-                   NanoNym v2 Address
-```
+We plan to support users who want to connect an existing Nostr identity (an `nsec` key) to the wallet.
 
-**Backup:** BOTH your Nostr nsec AND Nano seed  
-**Recovery:** Requires both seeds
-
-### Why Two Seeds?
-
-Nano uses Ed25519 curves, Nostr uses Secp256k1 (Bitcoin's curve). These are mathematically incompatible - there's no secure way to derive keys from one curve to another.
-
-**We chose security over convenience.**
-
-### Design Principles
-
-1. **NanoNymNault Wallet** (Nano-first)
-   - Never asks for your Nostr nsec
-   - Generates Nostr keys internally from Nano seed
-   - Simple: One seed backup
-   - For users who want a privacy-focused Nano wallet
-
-2. **Future Nostr UIs** (Nostr-first)
-   - Uses your existing Nostr identity
-   - Asks for Nano seed (generate new or import existing)
-   - Advanced: Two seed backup
-   - For Nostr users adding NanoZap receiving capability
+Because Nano and Nostr use different cryptographic systems, the wallet can't guess your existing Nostr key from your Nano seed. In this specific, advanced scenario, you would need to provide both your Nano seed and your Nostr key. For the vast majority of users, this won't be necessary.
 
 ### Current Status
 
-**Phase 1 (Implemented):** Nano-first flow with v1 addresses  
-**Phase 2 (Planned):** Dual-seed support with v2 addresses for Nostr-first users
+**Phase 1 (Implemented):** Simple, one-seed-only model.
+**Phase 2 (Planned):** Optional support for linking an existing Nostr key.
 
 ---
 
