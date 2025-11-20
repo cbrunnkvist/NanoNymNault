@@ -1,11 +1,11 @@
 {
-  "name": "nault",
-  "short_name": "nault",
+  "name": "NanoNymNault",
+  "short_name": "NanoNyms",
   "theme_color": "#1976d2",
   "background_color": "#1f1f24",
   "display": "standalone",
-  "scope": "./",
-  "start_url": "./",
+  "scope": "/NanoNymNault/",
+  "start_url": "/NanoNymNault/",
   "icons": [
     {
       "src": "assets/icons/icon-72x72.png",
