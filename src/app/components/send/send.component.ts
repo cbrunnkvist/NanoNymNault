@@ -175,12 +175,15 @@ export class SendComponent implements OnInit {
     // This ensures the dropdown shows updated balances after sends, receives, or wallet reload
     // Use debounceTime to prevent rapid repeated updates from triggering extra API calls
     // Use rebuildSpendableAccountsList (not loadSpendableAccounts) to avoid redundant node queries
+    // Use setTimeout to defer the update to the next tick to avoid ExpressionChangedAfterItHasBeenCheckedError
     this.walletService.wallet.refresh$
       .pipe(
         debounceTime(300)
       )
       .subscribe(() => {
-        this.rebuildSpendableAccountsList();
+        setTimeout(() => {
+          this.rebuildSpendableAccountsList();
+        }, 0);
       });
 
     // Set the account selected in the sidebar as default
