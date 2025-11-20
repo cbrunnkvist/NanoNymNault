@@ -433,6 +433,9 @@ export class NanoNymManagerService {
       if (accountInfo.error) {
         if (accountInfo.error === "Account not found") {
           console.debug(`[Manager] Unopened stealth account (pending receive block)`);
+          // Use notification amount_raw as expected balance (will be verified when block opens)
+          accountBalance = notification.amount_raw || "0";
+          console.debug(`[Manager] Using notification amount_raw as expected balance: ${accountBalance} raw`);
         } else {
           console.error(
             `[Manager] ❌ Error querying stealth address: ${accountInfo.error}`,

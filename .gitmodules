@@ -10,3 +10,6 @@
 [submodule "references/nanopyrs"]
 	path = references/nanopyrs
 	url = https://github.com/CamoNano/nanopyrs.git
+[submodule "references/nano-docs"]
+	path = references/nano-docs
+	url = https://github.com/nanocurrency/nano-docs.git

@@ -6,6 +6,7 @@ import { UtilService } from "./util.service";
 import { ed25519, edwardsToMontgomeryPub } from "@noble/curves/ed25519";
 import { bytesToHex } from "@noble/curves/abstract/utils";
 import { getPublicKey as getSecpPublicKey } from "@noble/secp256k1";
+import { sha512 } from "@noble/hashes/sha512";
 
 /**
  * NanoNymCryptoService
@@ -706,6 +707,7 @@ export class NanoNymCryptoService {
   ): Uint8Array {
     console.log('[NanoNymCrypto] Signing block with stealth scalar');
     console.log('[NanoNymCrypto] Private scalar:', bytesToHex(privateKeyScalar));
+    console.log('[NanoNymCrypto] Message hash:', bytesToHex(messageHash));
 
     // Verify public key derivation if expected public key hex provided
     if (expectedPublicKeyHex) {
@@ -727,8 +729,99 @@ export class NanoNymCryptoService {
       }
     }
 
-    // Sign using @noble/ed25519 which works with scalars directly
-    const signature = ed25519.sign(bytesToHex(messageHash), privateKeyScalar);
+    // CRITICAL FIX: Must pass messageHash as Uint8Array, NOT as hex string
+    // The original code did: ed25519.sign(bytesToHex(messageHash), privateKeyScalar)
+    // This converted the hash to a hex STRING, which was then treated as the message!
+    // This is wrong - we need to pass the actual message bytes.
+
+    // ed25519.sign() expects (message: Uint8Array, privateKey: Uint8Array)
+    // However, it also expects privateKey to be a SEED (32 bytes), not a pre-computed scalar
+    // It will hash the seed internally, which breaks our stealth account keys
+
+    // Solution: Use nacl.sign.detached() directly with our scalar
+    // nacl.sign() uses the tweetnacl format, which also has this issue
+    // Both libraries expect seeds, not scalars
+
+    // Since @noble/curves ExtendedPoint works with scalars, and nacl doesn't,
+    // we need to implement Ed25519 signing manually using low-level primitives
+
+    // For now, use nacl with a workaround: Nano specifically uses tweetnacl,
+    // so we match that behavior. The issue is that we can't pass a pre-computed scalar.
+    // We need to construct a "seed" that will hash to our scalar.
+
+    // This is impossible without knowledge of the original seed.
+    // CORRECT SOLUTION: Use the ExtendedPoint and implement signing from scratch
+    // following RFC 8032 exactly, using scalar directly (not hashing it)
+
+    // Get public key for the signature
+    const publicKeyPoint = ed25519.ExtendedPoint.BASE.multiply(
+      this.bytesToBigIntLE(privateKeyScalar)
+    );
+    const publicKeyBytes = publicKeyPoint.toRawBytes();
+
+    // For Nano compatibility, we use BLAKE2b like tweetnacl expects
+    // tweetnacl uses SHA512, but Nano doesn't verify that, it just verifies the signature format
+
+    // EdDSA(RFC 8032): sig = R || S where:
+    // - r = H(hash(seed)[0:32] || M)  (but we don't have seed, we have scalar directly)
+    // - R = [r]B
+    // - S = (r + H(R || A || M) * a) mod L
+
+    // Key insight: Since we're signing a *block hash* (not freeform message),
+    // and Nano doesn't use context/domain separators, we can use the scalar's
+    // hash as the prefix for computing r
+
+    // Nano uses ED25519+BLAKE2b signature scheme (not standard RFC 8032 with SHA512)
+    // Since we have a pre-computed scalar (not a seed), derive deterministic prefix using BLAKE2b
+    const prefixInput = new Uint8Array(privateKeyScalar.length + messageHash.length);
+    prefixInput.set(privateKeyScalar, 0);
+    prefixInput.set(messageHash, privateKeyScalar.length);
+    const prefixHash = blake2b(prefixInput, undefined, 64);
+    const prefixBytes = new Uint8Array(prefixHash).slice(32, 64); // Use second 32 bytes as prefix
+
+    console.log('[NanoNymCrypto] Prefix (from SHA512):', bytesToHex(prefixBytes));
+
+    // Compute r = H(prefix || M) mod L using SHA512 (RFC 8032 Ed25519 standard)
+    const rInput = new Uint8Array(prefixBytes.length + messageHash.length);
+    rInput.set(prefixBytes, 0);
+    rInput.set(messageHash, prefixBytes.length);
+    const rHash = sha512(rInput); // RFC 8032 uses SHA512
+    const r = this.blake2bToScalar(rHash); // Clamp and reduce mod L (works for any 64-byte hash)
+    const rBigInt = this.bytesToBigIntLE(r);
+
+    console.log('[NanoNymCrypto] EdDSA r (SHA512):', bytesToHex(r));
+
+    // Compute R = [r]B
+    const RPoint = ed25519.ExtendedPoint.BASE.multiply(rBigInt);
+    const RBytes = RPoint.toRawBytes();
+
+    console.log('[NanoNymCrypto] EdDSA R:', bytesToHex(RBytes));
+
+    // Compute k = H(R || A || M) mod L using SHA512 (RFC 8032 Ed25519 standard)
+    const kInput = new Uint8Array(RBytes.length + publicKeyBytes.length + messageHash.length);
+    kInput.set(RBytes, 0);
+    kInput.set(publicKeyBytes, RBytes.length);
+    kInput.set(messageHash, RBytes.length + publicKeyBytes.length);
+    const kHash = sha512(kInput); // RFC 8032 uses SHA512
+    const k = this.blake2bToScalar(kHash); // Clamp and reduce mod L (works for any 64-byte hash)
+    const kBigInt = this.bytesToBigIntLE(k);
+
+    console.log('[NanoNymCrypto] EdDSA k (SHA512):', bytesToHex(k));
+
+    // Compute S = (r + k*scalar) mod L
+    const scalar = this.bytesToBigIntLE(privateKeyScalar);
+    const L = BigInt(
+      "0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed"
+    );
+    const S = (rBigInt + kBigInt * scalar) % L;
+    const SBytes = this.bigIntToBytesLE(S, 32);
+
+    console.log('[NanoNymCrypto] EdDSA S:', bytesToHex(SBytes));
+
+    // Combine R || S into 64-byte signature
+    const signature = new Uint8Array(64);
+    signature.set(RBytes, 0);
+    signature.set(SBytes, 32);
 
     console.log('[NanoNymCrypto] Block signed with stealth scalar. Signature:', bytesToHex(signature));
     return signature;
