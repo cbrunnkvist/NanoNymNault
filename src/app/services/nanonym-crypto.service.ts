@@ -210,7 +210,9 @@ export class NanoNymCryptoService {
     clamped[31] &= 127; // Clear bit 255
     clamped[31] |= 64; // Set bit 254
 
-    // Step 3: Reduce modulo L (Ed25519 group order)
+    return clamped;
+    /*
+    // Step 3: Reduce modulo L (Ed25519 group order) - NANO DOES NOT DO THIS
     // L = 2^252 + 27742317777372353535851937790883648493
     const L = BigInt(
       "0x1000000000000000000000000000000014def9dea2f79cd65812631a5cf5d3ed",
@@ -219,6 +221,7 @@ export class NanoNymCryptoService {
     const reduced = scalar % L;
 
     return this.bigIntToBytesLE(reduced, 32);
+    */
   }
 
   /**
