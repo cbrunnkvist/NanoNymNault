@@ -289,7 +289,7 @@ npm start
 This project is in early development. Contributions, feedback, and testing are welcome!
 
 **Areas where help is needed:**
-- Cryptography review (CamoNano implementation)
+- Cryptography review
 - Nostr integration testing
 - UI/UX design for privacy features
 - Documentation and tutorials
@@ -319,9 +319,8 @@ See the [LICENSE](LICENSE) document for details.
 
 ## Contact & Community
 
-- **GitHub Issues:** [Report bugs or suggest features](https://github.com/yourusername/NanoNymNault/issues)
-- **Discord:** [Coming soon]
-- **Reddit:** r/nanocurrency
+- **GitHub Issues:** [Report bugs or suggest features](https://github.com/cbrunnkvist/NanoNymNault/issues)
+- **Reddit Thread:** [r/nanocurrency/...](https://www.reddit.com/r/nanocurrency/comments/1owqljy/announcing_nanonyms_a_new_approach_to_nano/)
 
 ---
 
