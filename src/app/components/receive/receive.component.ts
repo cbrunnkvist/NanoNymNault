@@ -673,6 +673,19 @@ export class ReceiveComponent implements OnInit, OnDestroy {
   }
 
   // NanoNym methods
+  async initiateGenerateNanoNymModal() {
+    // Ensure wallet is unlocked BEFORE showing the modal
+    if (this.walletService.isLocked()) {
+      const wasUnlocked = await this.walletService.requestWalletUnlock();
+      if (wasUnlocked === false) {
+        return;
+      }
+    }
+
+    // Only show the modal after successful unlock
+    this.openGenerateNanoNymModal();
+  }
+
   openGenerateNanoNymModal() {
     this.newNanoNymLabel = "";
     this.recentlyGeneratedNanoNym = null;
@@ -691,15 +704,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
   async generateNanoNym() {
     if (this.generatingNanoNym) return;
-
-    // Ensure wallet is unlocked before accessing seed for key derivation
-    if (this.walletService.isLocked()) {
-      const wasUnlocked = await this.walletService.requestWalletUnlock();
-
-      if (wasUnlocked === false) {
-        return;
-      }
-    }
 
     this.generatingNanoNym = true;
 
