@@ -1324,13 +1324,30 @@ export class SendComponent implements OnInit {
         return this.notificationService.sendWarning(`Amount is invalid`);
       }
 
+      // Refresh balances from node to ensure we have current data (fixes stale balance issue)
+      console.log('[Send-NanoNym] Refreshing NanoNym balances from node...');
+      await this.nanoNymManager.refreshBalances(nanoNymAccount.index);
+
+      // Get updated account reference after refresh
+      const updatedAccount = this.spendableAccounts.find(acc =>
+        acc.type === 'nanonym' && (acc as NanoNymAccount).index === nanoNymAccount.index
+      ) as NanoNymAccount;
+
+      if (!updatedAccount) {
+        this.preparingTransaction = false;
+        return this.notificationService.sendError(`NanoNym account not found after refresh`);
+      }
+
+      // Use the updated account for all subsequent operations
+      const currentNanoNymAccount = updatedAccount;
+
       // Use account selection algorithm to pick stealth accounts
       console.log('[Send-NanoNym] Before account selection:', {
         rawAmount: this.rawAmount.toString(),
-        nanoNymLabel: nanoNymAccount.label,
-        nanoNymBalance: nanoNymAccount.balance.toString(),
-        stealthAccountsCount: nanoNymAccount.nanoNym.stealthAccounts.length,
-        stealthAccounts: nanoNymAccount.nanoNym.stealthAccounts.map(sa => ({
+        nanoNymLabel: currentNanoNymAccount.label,
+        nanoNymBalance: currentNanoNymAccount.balance.toString(),
+        stealthAccountsCount: currentNanoNymAccount.nanoNym.stealthAccounts.length,
+        stealthAccounts: currentNanoNymAccount.nanoNym.stealthAccounts.map(sa => ({
           address: sa.address,
           amountRaw: sa.amountRaw,
           balance: sa.balance?.toString(),
@@ -1340,7 +1357,7 @@ export class SendComponent implements OnInit {
 
       const selectionResult = this.accountSelection.selectAccountsForSend(
         this.rawAmount,
-        nanoNymAccount.nanoNym.stealthAccounts
+        currentNanoNymAccount.nanoNym.stealthAccounts
       );
 
       console.log('[Send-NanoNym] Account selection result:', {
@@ -1353,7 +1370,7 @@ export class SendComponent implements OnInit {
         this.preparingTransaction = false;
         console.error('[Send-NanoNym] Selection failed - insufficient balance');
         return this.notificationService.sendError(
-          `Insufficient balance in ${nanoNymAccount.label}. Available: ${this.util.nano.rawToMnano(nanoNymAccount.balance).toFixed(6)} XNO`
+          `Insufficient balance in ${currentNanoNymAccount.label}. Available: ${this.util.nano.rawToMnano(currentNanoNymAccount.balance).toFixed(6)} XNO`
         );
       }
 
@@ -1375,8 +1392,8 @@ export class SendComponent implements OnInit {
 
       // Set from account info (aggregate)
       this.fromAccount = {
-        balance: nanoNymAccount.balance.toString(),
-        balanceBN: nanoNymAccount.balance,
+        balance: currentNanoNymAccount.balance.toString(),
+        balanceBN: currentNanoNymAccount.balance,
       };
 
       // Determine a proper raw amount to show in the UI
@@ -1388,7 +1405,7 @@ export class SendComponent implements OnInit {
         .times(this.price.price.lastPrice)
         .toNumber();
 
-      this.fromAddressBook = nanoNymAccount.label;
+      this.fromAddressBook = currentNanoNymAccount.label;
       this.toAddressBook =
         this.addressBookService.getAccountName(destinationID) ||
         this.getAccountLabel(destinationID, null);
