@@ -313,7 +313,7 @@ This project is in early development. Contributions, feedback, and testing are w
 
 ## License
 
-[To be determined - likely MIT or similar open-source license]
+See the [LICENSE](LICENSE) document for details.
 
 ---
 
