@@ -5,6 +5,7 @@ import { NanoNymCryptoService } from './nanonym-crypto.service';
 import { NostrNotificationService } from './nostr-notification.service';
 import { ApiService } from './api.service';
 import { WalletService } from './wallet.service';
+import { WebsocketService } from './websocket.service';
 import { NanoBlockService } from './nano-block.service';
 import { UtilService } from './util.service';
 import { BehaviorSubject, of } from 'rxjs';
@@ -127,6 +128,12 @@ class MockNanoNymAccountSelectionService {
   }));
 }
 
+class MockWebsocketService {
+  subscribeAccounts = jasmine.createSpy('subscribeAccounts');
+  unsubscribeAccounts = jasmine.createSpy('unsubscribeAccounts');
+  newTransactions$ = new BehaviorSubject(null);
+}
+
 describe('NanoNymManagerService', () => {
 
   let service: NanoNymManagerService;
@@ -159,6 +166,7 @@ describe('NanoNymManagerService', () => {
         { provide: NostrNotificationService, useClass: MockNostrNotificationService },
         { provide: ApiService, useClass: MockApiService },
         { provide: WalletService, useClass: MockWalletService },
+        { provide: WebsocketService, useClass: MockWebsocketService },
         { provide: NanoBlockService, useClass: MockNanoBlockService },
         { provide: UtilService, useClass: MockUtilService },
         { provide: NotificationService, useClass: MockNotificationService },

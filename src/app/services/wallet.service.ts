@@ -163,22 +163,27 @@ export class WalletService {
 
       const walletAccountIDs = this.wallet.accounts.map(a => a.id);
 
+      // Include stealth account addresses in transaction detection
+      const stealthAccountIDs = this.nanoNymStorage.getAllNanoNyms()
+        .flatMap(nn => nn.stealthAccounts.map(sa => sa.address));
+      const allAccountIDs = [...walletAccountIDs, ...stealthAccountIDs];
+
       const isConfirmedIncomingTransactionForOwnWalletAccount = (
           (transaction.block.type === 'state')
         && (transaction.block.subtype === 'send')
-        && ( walletAccountIDs.includes(transaction.block.link_as_account) === true )
+        && ( allAccountIDs.includes(transaction.block.link_as_account) === true )
       );
 
       const isConfirmedSendTransactionFromOwnWalletAccount = (
           (transaction.block.type === 'state')
         && (transaction.block.subtype === 'send')
-        && ( walletAccountIDs.includes(transaction.block.account) === true )
+        && ( allAccountIDs.includes(transaction.block.account) === true )
       );
 
       const isConfirmedReceiveTransactionFromOwnWalletAccount = (
           (transaction.block.type === 'state')
         && (transaction.block.subtype === 'receive')
-        && ( walletAccountIDs.includes(transaction.block.account) === true )
+        && ( allAccountIDs.includes(transaction.block.account) === true )
       );
 
       if (isConfirmedIncomingTransactionForOwnWalletAccount === true) {
@@ -199,6 +204,19 @@ export class WalletService {
       } else if (isConfirmedSendTransactionFromOwnWalletAccount === true) {
         shouldNotify = true;
         await this.processStateBlock(transaction);
+
+        // If this is a stealth account transaction, refresh its balance
+        if (stealthAccountIDs.includes(transaction.block.account)) {
+          const nanoNyms = this.nanoNymStorage.getAllNanoNyms();
+          for (const nn of nanoNyms) {
+            const stealthAccount = nn.stealthAccounts.find(sa => sa.address === transaction.block.account);
+            if (stealthAccount) {
+              const nanonymManager = this.injector.get(NanoNymManagerService);
+              await nanonymManager.refreshBalances(nn.index);
+              break;
+            }
+          }
+        }
       } else if (isConfirmedReceiveTransactionFromOwnWalletAccount === true) {
         shouldNotify = true;
       }

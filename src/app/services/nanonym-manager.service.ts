@@ -14,6 +14,7 @@ import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
 import { ApiService } from "./api.service";
 import { WalletService, WalletAccount } from "./wallet.service";
+import { WebsocketService } from "./websocket.service";
 import { Subscription, Subject, interval } from "rxjs";
 import { NanoBlockService } from "./nano-block.service";
 import { UtilService } from "./util.service";
@@ -49,6 +50,7 @@ export class NanoNymManagerService {
     private nostr: NostrNotificationService,
     private api: ApiService,
     private wallet: WalletService,
+    private websocket: WebsocketService,
     private nanoBlock: NanoBlockService,
     private util: UtilService,
     private notifications: NotificationService,
@@ -301,6 +303,12 @@ export class NanoNymManagerService {
       // Add to routing map
       this.nostrPrivateToIndexMap.set(nostrPrivateHex, nanoNym.index);
 
+      // Subscribe all existing stealth accounts to WebSocket for balance updates
+      const stealthAddresses = nanoNym.stealthAccounts.map(sa => sa.address);
+      if (stealthAddresses.length > 0) {
+        this.websocket.subscribeAccounts(stealthAddresses);
+      }
+
       console.log(
         `[Manager] ✅ Monitoring active for "${nanoNym.label}"`,
       );
@@ -318,6 +326,12 @@ export class NanoNymManagerService {
   private async stopMonitoring(nanoNym: NanoNym): Promise<void> {
     try {
       await this.nostr.unsubscribeFromNotifications(nanoNym.keys.nostrPublic);
+
+      // Unsubscribe stealth accounts from WebSocket
+      const stealthAddresses = nanoNym.stealthAccounts.map(sa => sa.address);
+      if (stealthAddresses.length > 0) {
+        this.websocket.unsubscribeAccounts(stealthAddresses);
+      }
 
       // Remove from routing map
       const nostrPrivateHex = this.bytesToHex(nanoNym.keys.nostrPrivate);
@@ -574,6 +588,9 @@ export class NanoNymManagerService {
 
         // Remove from pending if it was queued
         this.removePendingStealthBlock(stealthAccount.address);
+
+        // Subscribe stealth account to WebSocket for real-time balance updates
+        this.websocket.subscribeAccounts([stealthAccount.address]);
       } else {
         console.warn(`[Manager] ⚠️ Phase 1 Failed: Could not open stealth account ${stealthAccount.address}. Will retry via Phase 2 (background retry).`);
         // Queue for retry
@@ -620,6 +637,8 @@ export class NanoNymManagerService {
     for (const nanoNym of allNanoNyms) {
       await this.refreshBalances(nanoNym.index);
     }
+    // Trigger reactive UI update after all balances are refreshed
+    this.wallet.informBalanceRefresh();
   }
 
   /**

@@ -1001,6 +1001,11 @@ export class SendComponent implements OnInit {
           txHashes.push(txHash);
           totalSent = totalSent.plus(amountToSend);
           successCount++;
+
+          // Update balance after each transaction to show incremental progress
+          const nanoNymAccount = this.selectedSpendableAccount as NanoNymAccount;
+          await this.nanoNymManager.refreshBalances(nanoNymAccount.index);
+          this.walletService.informBalanceRefresh();
         } else {
           console.error(`[Send-NanoNym] ❌ Transaction ${i + 1} failed`);
           // Continue trying other accounts even if one fails
