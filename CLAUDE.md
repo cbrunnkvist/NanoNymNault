@@ -206,6 +206,98 @@ For each active NanoNym:
 Offline operation:
 - On startup, request historical NIP-17 events since last seen timestamp (or wallet birthday) from all relays; merge and deduplicate by`tx_hash`.
 
+### 6.1 Stealth Account Opening Strategy (On-Chain Account Initialization)
+
+**Problem:** Stealth addresses are computed from Nostr notifications, but the corresponding on-chain accounts remain unopened (no confirmed blocks) until an explicit receive/open block is published.
+
+**Design Decision:** Hybrid two-phase approach to ensure funds can be spent while handling edge cases where the node is unreachable.
+
+#### Phase 1: Immediate Opening (Best Case)
+**Trigger:** Upon receipt of Nostr notification (after validation).
+
+**Workflow:**
+1. Parse notification and create stealth account in memory.
+2. Immediately attempt to publish an open/receive block for the stealth address.
+3. If wallet is locked:
+   - Queue the stealth account in `pendingStealthBlocks` array.
+   - Subscribe to wallet unlock event.
+   - Process queue when wallet unlocks.
+4. If publishing succeeds:
+   - Update balance from on-chain.
+   - Show success notification.
+5. If publishing fails (node unavailable):
+   - Add to retry queue.
+   - Proceed to Phase 2 (background retry).
+
+**Advantages:**
+- Funds are spendable immediately in the happy path.
+- No extra user action required.
+- Handles wallet-locked scenario gracefully via queue.
+
+**Implementation details:**
+- Located in `nanonym-manager.service.ts`: `receiveStealthFunds()` (called from `processNotification()`).
+- Pending queue: `pendingStealthBlocks` array with unlock subscriber.
+- Error handling: Log failures and proceed without blocking notification flow.
+
+#### Phase 2: Background Retry (Recovery from Transient Failures)
+**Trigger:** If immediate opening fails; runs periodically in background.
+
+**Workflow:**
+1. Every 5 minutes, check for unopened stealth accounts.
+2. For each unopened account, attempt to publish open block.
+3. Retry up to 12 times (1 hour total) before marking as "stuck."
+4. Only retry if wallet is unlocked (skip if locked).
+
+**Advantages:**
+- Handles scenario: Nostr available but node temporarily unreachable.
+- Eventual consistency without user intervention.
+- Bounded retry attempts prevent infinite loops.
+
+#### Phase 3: Just-in-Time Opening (Failsafe Before Spend)
+**Trigger:** When user attempts to spend from NanoNym with unopened stealth accounts.
+
+**Workflow:**
+1. In `confirmNanoNymSpend()`, before executing send transactions:
+   - Check if any selected stealth accounts are unopened (no frontier on node).
+   - If unopened accounts exist, attempt to open them synchronously.
+   - Show progress notification: "Opening stealth accounts..."
+   - Wait for confirmations (timeout: 30 seconds per account).
+2. If opening succeeds:
+   - Proceed with send transactions.
+   - Show transparent notification of what happened.
+3. If opening fails:
+   - Display specific error: "Cannot open stealth account X. Please wait and try again."
+   - Do NOT attempt send (would fail with no frontier).
+
+**Advantages:**
+- Handles edge case: Wallet in state with unopened accounts (e.g., Nostr notification received but immediate opening failed and background retry hasn't run).
+- Provides UX transparency ("I'm opening your stealth accounts...").
+- Prevents cryptic node errors by ensuring all accounts are ready before send.
+
+**Implementation details:**
+- New method: `ensureStealthAccountsOpened(stealthAccounts)` in `send.component.ts`.
+- Called before the send loop in `confirmNanoNymSpend()`.
+- Uses existing `nanoBlock.generateReceive()` infrastructure.
+- Shows progress toast with account count.
+
+#### 6.2 Unopened Account Handling Rules
+
+**Rules applied throughout the wallet:**
+
+1. **During balance display:** Always fetch current balance from node (accounts are spendable if they have a frontier, even if unconfirmed).
+2. **During account selection:** Include unopened accounts in selection (they may open by the time send is ready).
+3. **During spend preparation:**
+   - Fetch current account info from node.
+   - If account has no frontier: attempt just-in-time opening.
+   - If opening fails: skip account and warn user.
+4. **During background sync:** Periodically attempt to open any unopened accounts.
+
+**Why this design:**
+- Maximizes robustness against transient node/network failures.
+- Minimizes user friction (opening is automatic and transparent).
+- Handles both happy path (Nostr + node both available) and recovery paths (one or both temporarily unavailable).
+- Ensures seed-only recovery: even if opening failed, user can wait and retry.
+
 ---
 
 ## 7. Recovery Strategy (Multi-Tier, Seed-Only Guarantee)
@@ -587,10 +679,15 @@ Current status (as of 2025-11-18):
     - Reactive balance updates with automatic Nano node verification.
     - Grouped display: Regular Accounts + NanoNym Accounts sections.
     - Balance aggregation and stealth account management.
-- Phase 5 – Receive UI: 🚧 in progress.
+- Phase 5 – Receive UI & Stealth Account Opening: 🚧 in progress.
     - Multi-NanoNym management (generation, listing, balances) - ✅ working.
     - Background Nostr monitoring and history reconstruction - ✅ working.
     - Deprecation notice added; migration to Accounts page underway.
+    - Stealth account opening workflow (Nov 19, 2025):
+        - ✅ Phase 1: Immediate opening on notification (already implemented).
+        - ✅ Phase 2: Background retry mechanism (design documented in Section 6.1).
+        - 🚧 Phase 3: Just-in-time opening before spend (implementation pending).
+        - Design documented in Section 6.1 & 6.2 of this document.
 - Phase 6 – Observability and logging: ✅ complete (Nov 18, 2025).
     - Improved Nostr relay logging with appropriate log levels.
     - MAC-check match logging.
@@ -598,6 +695,7 @@ Current status (as of 2025-11-18):
     - Derivation path debug logging for both account types.
 - Later phases:
     - Complete Receive page NanoNym tab removal.
+    - Enhanced stealth account opening diagnostics.
     - Privacy Mode and advanced spend options.
     - Automated E2E tests (Playwright or similar).
     - Community beta and hardening.
