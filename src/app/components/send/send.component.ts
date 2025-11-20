@@ -2,6 +2,7 @@ import { Component, OnInit } from "@angular/core";
 import BigNumber from "bignumber.js";
 import { AddressBookService } from "../../services/address-book.service";
 import { BehaviorSubject } from "rxjs";
+import { debounceTime } from "rxjs/operators";
 import { WalletService } from "../../services/wallet.service";
 import { NotificationService } from "../../services/notification.service";
 import { ApiService } from "../../services/api.service";
@@ -172,9 +173,14 @@ export class SendComponent implements OnInit {
 
     // Reload spendable accounts (From Account dropdown) when balance is refreshed
     // This ensures the dropdown shows updated balances after sends, receives, or wallet reload
-    this.walletService.wallet.refresh$.subscribe(() => {
-      this.loadSpendableAccounts();
-    });
+    // Use debounceTime to prevent rapid repeated updates from triggering infinite loops
+    this.walletService.wallet.refresh$
+      .pipe(
+        debounceTime(300)
+      )
+      .subscribe(() => {
+        this.loadSpendableAccounts();
+      });
 
     // Set the account selected in the sidebar as default
     if (this.walletService.wallet.selectedAccount !== null) {
