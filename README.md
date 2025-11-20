@@ -35,12 +35,12 @@ It's a true _win-win_ for both senders and receivers: both gain significantly en
 
 ## Key Benefits
 
-✅ **Privacy:** No one can link multiple payments to the same recipient
-✅ **Simplicity:** Recipients share ONE NanoNym (not a new address for each payment)
-✅ **Multiple NanoNyms:** Generate as many as needed from a single seed
-✅ **Free notifications:** No blockchain bloat or notification transaction costs
-✅ **Compatibility:** Falls back to regular `nano_` addresses for non-compliant wallets
-✅ **Web-based:** Works in browser, no installation needed (just like Nault)
+✅ **Privacy:** No one can link multiple payments to the same recipient <br/>
+✅ **Simplicity:** Recipients share ONE NanoNym (not a new address for each payment) <br/>
+✅ **Multiple NanoNyms:** Generate as many as needed from a single seed <br/>
+✅ **Free notifications:** No blockchain bloat or notification transaction costs <br/>
+✅ **Compatibility:** Falls back to regular `nano_` addresses for non-compliant wallets <br/>
+✅ **Web-based:** Works in browser, no installation needed (just like Nault) <br/>
 
 ---
 
