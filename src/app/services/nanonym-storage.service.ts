@@ -96,6 +96,20 @@ export class NanoNymStorageService {
       return;
     }
 
+    // Prevent duplicate stealth accounts (same address + txHash)
+    const isDuplicate = nanoNym.stealthAccounts.some(
+      (sa) =>
+        sa.address === stealthAccount.address &&
+        sa.txHash === stealthAccount.txHash,
+    );
+
+    if (isDuplicate) {
+      console.warn(
+        `[Storage] Duplicate stealth account blocked: ${stealthAccount.address} (tx: ${stealthAccount.txHash})`,
+      );
+      return;
+    }
+
     // Add to stealth accounts array
     const updatedStealthAccounts = [...nanoNym.stealthAccounts, stealthAccount];
 

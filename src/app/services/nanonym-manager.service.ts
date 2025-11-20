@@ -409,6 +409,17 @@ export class NanoNymManagerService {
         return null;
       }
 
+      // Check if this tx_hash already exists in the NanoNym
+      const alreadyExists = nanoNym.stealthAccounts.some(
+        (sa) => sa.txHash === notification.tx_hash,
+      );
+      if (alreadyExists) {
+        console.warn(
+          `[Manager] ⚠️ DUPLICATE BLOCKED: tx_hash ${notification.tx_hash} already processed for "${nanoNym.label}", skipping`,
+        );
+        return null;
+      }
+
       console.log(`[Manager] 💰 Processing payment for "${nanoNym.label}" (tx: ${notification.tx_hash})`);
 
       // 1. Parse ephemeral public key R from notification
