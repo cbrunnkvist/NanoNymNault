@@ -710,13 +710,13 @@ export class NanoNymCryptoService {
     // Verify public key derivation if expected public key hex provided
     if (expectedPublicKeyHex) {
       try {
-        const derivedPublic = ed25519.getPublicKey(privateKeyScalar);
+        const derivedPublic = this.derivePublicKeyFromPrivate(privateKeyScalar);
         const derivedPublicHex = bytesToHex(derivedPublic);
 
         console.log('[NanoNymCrypto] Expected public key (from stealth account):', expectedPublicKeyHex);
         console.log('[NanoNymCrypto] Derived public key (from scalar):        ', derivedPublicHex);
 
-        if (derivedPublicHex !== expectedPublicKeyHex) {
+        if (derivedPublicHex.toLowerCase() !== expectedPublicKeyHex.toLowerCase()) {
           console.error('[NanoNymCrypto] ⚠️ PUBLIC KEY MISMATCH! Scalar does not derive to the expected public key');
           console.error('[NanoNymCrypto]   This indicates the private scalar is incorrect for this stealth account!');
         } else {
@@ -728,7 +728,7 @@ export class NanoNymCryptoService {
     }
 
     // Sign using @noble/ed25519 which works with scalars directly
-    const signature = ed25519.sign(messageHash, privateKeyScalar);
+    const signature = ed25519.sign(bytesToHex(messageHash), privateKeyScalar);
 
     console.log('[NanoNymCrypto] Block signed with stealth scalar. Signature:', bytesToHex(signature));
     return signature;
