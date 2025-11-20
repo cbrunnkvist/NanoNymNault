@@ -35,6 +35,8 @@ export interface WalletAccount {
   pendingFiat: number;
   addressBookName: string|null;
   receivePow: boolean;
+  isStealthAccount?: boolean;  // Flag for stealth account scalar-based signing
+  publicKeyHex?: string;  // Public key hex for stealth account signature verification
 }
 
 export interface Block {

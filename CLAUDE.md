@@ -732,6 +732,13 @@ Manual and automated tests:
 7. Encrypted backup data:
     - Tier 2 uses Nostr as encrypted storage.
     - Users can add self-hosted relays for stronger guarantees.
+8. **[BLOCKING - Nov 20, 2025] Stealth Account Block Signing Issue**:
+    - Stealth private keys are Ed25519 scalars (32 bytes, reduced mod L), derived via `p_masked = b_spend + t (mod l)`.
+    - Current code passes scalar to `nacl.sign.keyPair.fromSecretKey()`, which treats it as a seed and hashes it with BLAKE2b.
+    - This produces an incorrect public key and causes "Bad signature" rejections from Nano node.
+    - Root cause: Difference between seed-based key derivation (standard Nano) vs scalar-based (stealth accounts via ECDH).
+    - Solution: Use `@noble/ed25519` library directly for stealth account signing instead of nacl wrapper.
+    - Tracking: See Phase 1-5 plan in commit history for incremental fix approach.
 
 ---
 

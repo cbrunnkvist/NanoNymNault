@@ -25,6 +25,7 @@ import {
   NanoNymAccount,
   formatSpendableAccountLabel
 } from "../../types/spendable-account.types";
+import { StealthAccount } from "../../types/nanonym.types";
 import { NanoNymAccountSelectionService } from "../../services/nanonym-account-selection.service";
 
 const nacl = window["nacl"];
@@ -775,6 +776,116 @@ export class SendComponent implements OnInit {
   }
 
   /**
+   * Phase 3: Just-in-time opening of unopened stealth accounts before spending
+   * Ensures all stealth accounts are opened (have frontier) before attempting send
+   * Returns: true if all accounts are ready, false if unrecoverable failure
+   */
+  private async ensureStealthAccountsOpened(stealthAccounts: StealthAccount[]): Promise<boolean> {
+    const unopenedAccounts: StealthAccount[] = [];
+
+    // Check which accounts are unopened
+    for (const account of stealthAccounts) {
+      try {
+        const accountInfo = await this.nodeApi.accountInfo(account.address);
+        if (!accountInfo.frontier) {
+          unopenedAccounts.push(account);
+        }
+      } catch (err) {
+        // Account doesn't exist on node = unopened
+        unopenedAccounts.push(account);
+      }
+    }
+
+    // If all accounts are already opened, proceed
+    if (unopenedAccounts.length === 0) {
+      console.log('[Send-NanoNym] All stealth accounts already opened. Proceeding with send.');
+      return true;
+    }
+
+    console.log(`[Send-NanoNym] Phase 3: ${unopenedAccounts.length}/${stealthAccounts.length} stealth accounts unopened. Attempting just-in-time opening...`);
+
+    // Attempt to open unopened accounts
+    let successCount = 0;
+    for (let i = 0; i < unopenedAccounts.length; i++) {
+      const account = unopenedAccounts[i];
+      const progressMsg = `Opening stealth account ${i + 1}/${unopenedAccounts.length}...`;
+      console.log(`[Send-NanoNym] ${progressMsg}`);
+      this.notificationService.sendInfo(progressMsg, { identifier: 'stealth-opening-progress', timeout: 10000 });
+
+      try {
+        // Create pseudo wallet account for opening
+        // NOTE: For stealth accounts, we use scalar-based signing (@noble/ed25519)
+        // instead of nacl, because the private key is already a scalar (not a seed)
+        const pseudoWalletAccount = {
+          id: account.address,
+          secret: account.privateKey,
+          keyPair: null, // Not used for stealth accounts (scalar-based signing instead)
+          index: -1,
+          frontier: null,
+          balance: new BigNumber(account.amountRaw || 0),
+          balanceRaw: new BigNumber(account.amountRaw || 0),
+          pending: new BigNumber(0),
+          pendingRaw: new BigNumber(0),
+          balanceFiat: 0,
+          pendingFiat: 0,
+          addressBookName: null,
+          receivePow: false,
+          isStealthAccount: true,  // Flag to use scalar signing in nano-block.service
+          publicKeyHex: typeof account.publicKey === 'string' ? account.publicKey : this.util.hex.fromUint8(account.publicKey)  // Store the public key as hex string for signature verification
+        };
+
+        // Attempt to generate receive/open block
+        const txHash = await this.nanoBlock.generateReceive(
+          pseudoWalletAccount,
+          account.txHash,
+          false // Never ledger for stealth accounts
+        );
+
+        if (txHash) {
+          console.log(`[Send-NanoNym] ✅ Opened stealth account ${account.address}. Hash: ${txHash}`);
+
+          // Verify account is actually opened on-chain
+          try {
+            const verifyInfo = await this.nodeApi.accountInfo(account.address);
+            if (verifyInfo && verifyInfo.frontier) {
+              console.log(`[Send-NanoNym] ✅ Verified account opened on-chain. Frontier: ${verifyInfo.frontier}`);
+              successCount++;
+            } else {
+              console.warn(`[Send-NanoNym] ⚠️ Account ${account.address} still has no frontier after opening attempt`);
+            }
+          } catch (verifyErr) {
+            console.warn(`[Send-NanoNym] ⚠️ Could not verify account opened: ${verifyErr.message}`);
+          }
+        } else {
+          console.warn(`[Send-NanoNym] ⚠️ generateReceive() returned null for ${account.address}. Open block may not have been published.`);
+        }
+      } catch (err) {
+        console.error(`[Send-NanoNym] ⚠️ Error opening stealth account ${account.address}:`, err.message);
+      }
+
+      // Small delay between opens
+      await new Promise(resolve => setTimeout(resolve, 500));
+    }
+
+    this.notificationService.removeNotification('stealth-opening-progress');
+
+    if (successCount === unopenedAccounts.length) {
+      console.log(`[Send-NanoNym] ✅ All unopened accounts successfully opened and verified. Proceeding with send.`);
+      this.notificationService.sendSuccess(`Stealth accounts opened. Sending transactions...`, { identifier: 'stealth-opening-complete' });
+      return true;
+    } else {
+      // Fail completely if we couldn't open all accounts (don't do partial success)
+      // because unopened accounts will fail during send anyway
+      console.error(`[Send-NanoNym] ❌ Failed to open stealth accounts: ${successCount}/${unopenedAccounts.length} opened`);
+      this.notificationService.sendInfo(
+        `Could not open stealth accounts. ${successCount}/${unopenedAccounts.length} opened. Phase 2 background retry is active.`,
+        { identifier: 'stealth-opening-failed', timeout: 0 }
+      );
+      return false; // Cannot proceed - all accounts must be opened
+    }
+  }
+
+  /**
    * Confirm and execute spending from NanoNym stealth accounts (Section 8)
    * Sends multiple transactions, one from each selected stealth account
    */
@@ -794,6 +905,16 @@ export class SendComponent implements OnInit {
       this.sendProgress.total = this.selectedStealthAccounts.length;
       this.sendProgress.current = 0;
 
+      // Phase 3: Just-in-time opening - ensure all stealth accounts are opened before spending
+      console.log('[Send-NanoNym] Phase 3: Ensuring stealth accounts are opened...');
+      const accountsReady = await this.ensureStealthAccountsOpened(this.selectedStealthAccounts);
+
+      if (!accountsReady) {
+        this.notificationService.sendError('Cannot open stealth accounts. Please try again in a moment.');
+        this.confirmingTransaction = false;
+        return;
+      }
+
       // Send from each stealth account sequentially
       for (let i = 0; i < this.selectedStealthAccounts.length; i++) {
         const stealthAccount = this.selectedStealthAccounts[i];
@@ -804,14 +925,14 @@ export class SendComponent implements OnInit {
         try {
           accountInfo = await this.nodeApi.accountInfo(stealthAccount.address);
         } catch (err) {
-          // Account is unopened - skip it
-          console.warn(`[Send-NanoNym] Account unopened (no confirmed blocks): ${stealthAccount.address}. Skipping.`);
+          // This shouldn't happen after Phase 3 opening, but handle gracefully
+          console.warn(`[Send-NanoNym] Could not get account info for ${stealthAccount.address}. Skipping.`);
           continue;
         }
 
-        // Check if account is properly opened (has frontier and balance)
+        // Verify account has frontier (should be true after Phase 3)
         if (!accountInfo.frontier) {
-          console.warn(`[Send-NanoNym] Account unopened (no frontier): ${stealthAccount.address}. Skipping.`);
+          console.warn(`[Send-NanoNym] Account still unopened: ${stealthAccount.address}. Skipping.`);
           continue;
         }
 
@@ -1036,6 +1157,15 @@ export class SendComponent implements OnInit {
         this.nanoNymParsedKeys.spendPublic,
       );
       this.stealthAddress = stealth.address;
+
+      // DEBUG: Log sender-side stealth address computation
+      console.log('[Send] SENDER-SIDE STEALTH ADDRESS COMPUTATION');
+      console.log('[Send] Ephemeral public (R):', this.bytesToHex(ephemeral.public));
+      console.log('[Send] Recipient B_spend:', this.bytesToHex(this.nanoNymParsedKeys.spendPublic));
+      console.log('[Send] Recipient B_view:', this.bytesToHex(this.nanoNymParsedKeys.viewPublic));
+      console.log('[Send] Shared secret:', this.bytesToHex(sharedSecret));
+      console.log('[Send] Stealth address:', stealth.address);
+      console.log('[Send] Stealth public key:', this.bytesToHex(stealth.publicKey));
 
       // 4. Get account info for from and stealth address
       const from = await this.nodeApi.accountInfo(this.fromAccountID);

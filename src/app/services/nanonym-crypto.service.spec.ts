@@ -436,4 +436,70 @@ describe("NanoNymCryptoService", () => {
       expect(uniqueAddresses.size).toBe(3);
     });
   });
+
+  describe("NanoNym End-to-End Crypto Flow (Block Signing)", () => {
+    it("should derive valid stealth keys that can sign blocks", () => {
+      // Test: Verify the full flow - receiver derives stealth private key,
+      // derives public key from it, and the public key matches the stealth address
+
+      const testMnemonic =
+        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
+
+      // Step 1: Receiver creates NanoNym0
+      const receiverKeys = service.deriveNanoNymKeys(testMnemonic, 0);
+      expect(receiverKeys.spend.public).toBeTruthy();
+      expect(receiverKeys.spend.private).toBeTruthy();
+
+      // Step 2: Sender generates ephemeral keypair for this payment
+      const senderEphemeral = service.generateEphemeralKey();
+      expect(senderEphemeral.public.length).toBe(32);
+      expect(senderEphemeral.private.length).toBe(32);
+
+      // Step 3: Sender computes shared secret and derives stealth address
+      const sharedSecretSender = service.generateSharedSecret(
+        senderEphemeral.private,
+        receiverKeys.view.public,
+      );
+      const stealthAddressSender = service.deriveStealthAddress(
+        sharedSecretSender,
+        senderEphemeral.public,
+        receiverKeys.spend.public,
+      );
+
+      // Step 4: Receiver receives notification with ephemeral key, derives stealth account
+      const sharedSecretReceiver = service.generateSharedSecret(
+        receiverKeys.view.private,
+        senderEphemeral.public,
+      );
+      const stealthAddressReceiver = service.deriveStealthAddress(
+        sharedSecretReceiver,
+        senderEphemeral.public,
+        receiverKeys.spend.public,
+      );
+
+      // Step 5: Receiver derives the stealth private key
+      const stealthPrivateKey = service.deriveStealthPrivateKey(
+        receiverKeys.spend.private,
+        sharedSecretReceiver,
+        senderEphemeral.public,
+        receiverKeys.spend.public,
+      );
+
+      // CRITICAL VERIFICATION: Private key is 32 bytes (scalar)
+      expect(stealthPrivateKey.length).toBe(32);
+
+      // Step 6: Receiver derives public key from private key
+      const derivedPublicKey =
+        service.derivePublicKeyFromPrivate(stealthPrivateKey);
+
+      // Step 7: Verify the derived public key matches the stealth address
+      expect(derivedPublicKey).toEqual(stealthAddressSender.publicKey);
+      expect(stealthAddressReceiver.address).toEqual(stealthAddressSender.address);
+
+      // SUCCESS: The stealth private key scalar correctly produces the stealth address
+      // This validates that the key derivation is correct for signing blocks
+      expect(stealthPrivateKey).toBeTruthy();
+      expect(derivedPublicKey).toBeTruthy();
+    });
+  });
 });

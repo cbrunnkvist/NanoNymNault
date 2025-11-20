@@ -14,7 +14,7 @@ import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
 import { ApiService } from "./api.service";
 import { WalletService, WalletAccount } from "./wallet.service";
-import { Subscription, Subject } from "rxjs";
+import { Subscription, Subject, interval } from "rxjs";
 import { NanoBlockService } from "./nano-block.service";
 import { UtilService } from "./util.service";
 import { NotificationService } from "./notification.service";
@@ -27,9 +27,12 @@ const nacl = window["nacl"];
 })
 export class NanoNymManagerService {
   private notificationSubscription: Subscription | null = null;
+  private backgroundRetrySubscription: Subscription | null = null;
   // Map nostr private key hex -> NanoNym index for fast notification routing
   private nostrPrivateToIndexMap = new Map<string, number>();
   private pendingStealthBlocks: StealthAccount[] = [];
+  // Track retry attempts per account (address -> retry count)
+  private stealthAccountRetryCount = new Map<string, number>();
 
   // Observable for notification processing events
   public notificationProcessed$ = new Subject<{
@@ -60,6 +63,133 @@ export class NanoNymManagerService {
         this.processPendingStealthBlocks();
       }
     });
+
+    // Phase 2: Start background retry mechanism (every 5 minutes)
+    this.startBackgroundRetry();
+  }
+
+  /**
+   * Start periodic background retry for unopened stealth accounts (every 5 minutes)
+   * Phase 2 of the stealth account opening workflow
+   */
+  private startBackgroundRetry(): void {
+    // Run every 5 minutes (300000 ms)
+    this.backgroundRetrySubscription = interval(300000).subscribe(() => {
+      this.attemptBackgroundOpening();
+    });
+
+    // Also run once on startup
+    this.attemptBackgroundOpening();
+  }
+
+  /**
+   * Attempt to open stealth accounts that failed immediate opening
+   * Retries up to 12 times per account (1 hour total with 5-minute intervals)
+   */
+  private async attemptBackgroundOpening(): Promise<void> {
+    if (this.wallet.wallet.locked) {
+      console.debug('[Manager] Phase 2: Wallet locked, skipping background opening attempt.');
+      return;
+    }
+
+    if (this.pendingStealthBlocks.length === 0) {
+      return; // No pending accounts
+    }
+
+    console.log(`[Manager] Phase 2: Background opening attempt for ${this.pendingStealthBlocks.length} unopened stealth account(s)`);
+
+    // Show persistent notification for Phase 2 retry
+    this.notifications.sendInfo(
+      `Retrying to open ${this.pendingStealthBlocks.length} unopened stealth account(s)...`,
+      { identifier: 'phase2-retry-progress', timeout: 0 }
+    );
+
+    // Create a copy to avoid modification during iteration
+    const blocksToProcess = [...this.pendingStealthBlocks];
+
+    for (const stealthAccount of blocksToProcess) {
+      const retryCount = this.stealthAccountRetryCount.get(stealthAccount.address) || 0;
+
+      // Max 12 retries (1 hour total)
+      if (retryCount >= 12) {
+        console.warn(`[Manager] Phase 2: Max retries (12) reached for ${stealthAccount.address}. Stopping retry.`);
+        this.removePendingStealthBlock(stealthAccount.address);
+        this.stealthAccountRetryCount.delete(stealthAccount.address);
+        continue;
+      }
+
+      const nanoNym = this.storage.getNanoNym(stealthAccount.parentNanoNymIndex);
+      if (!nanoNym) {
+        console.warn(`[Manager] Phase 2: NanoNym not found for ${stealthAccount.address}, removing from retry queue.`);
+        this.removePendingStealthBlock(stealthAccount.address);
+        this.stealthAccountRetryCount.delete(stealthAccount.address);
+        continue;
+      }
+
+      try {
+        console.log(`[Manager] Phase 2: Retry ${retryCount + 1}/12 for ${stealthAccount.address}`);
+
+        // Attempt to open the account using the same method as Phase 1
+        const pseudoWalletAccount: WalletAccount = {
+          id: stealthAccount.address,
+          frontier: null,
+          secret: stealthAccount.privateKey,
+          keyPair: nacl.sign.keyPair.fromSecretKey(stealthAccount.privateKey),
+          index: -1,
+          balance: new BigNumber(0),
+          pending: new BigNumber(0),
+          balanceRaw: new BigNumber(0),
+          pendingRaw: new BigNumber(0),
+          balanceFiat: 0,
+          pendingFiat: 0,
+          addressBookName: nanoNym.label,
+          receivePow: false,
+          isStealthAccount: true  // Flag to use scalar signing in nano-block.service
+        };
+
+        const newHash = await this.nanoBlock.generateReceive(
+          pseudoWalletAccount,
+          stealthAccount.txHash,
+          false,
+        );
+
+        if (newHash) {
+          console.log(`[Manager] ✅ Phase 2 Success: ${stealthAccount.address} opened. Hash: ${newHash}`);
+
+          // Update balances
+          const accountInfo = await this.api.accountInfo(stealthAccount.address);
+          const newBalance = new BigNumber(accountInfo.balance || 0);
+
+          this.storage.updateStealthAccountBalance(
+            nanoNym.index,
+            stealthAccount.address,
+            newBalance,
+          );
+          this.storage.updateNanoNym(nanoNym.index, {
+            balance: nanoNym.balance.plus(newBalance),
+          });
+
+          // Remove from pending
+          this.removePendingStealthBlock(stealthAccount.address);
+          this.stealthAccountRetryCount.delete(stealthAccount.address);
+        } else {
+          // Increment retry count and continue
+          this.stealthAccountRetryCount.set(stealthAccount.address, retryCount + 1);
+        }
+      } catch (error) {
+        // Increment retry count and continue
+        this.stealthAccountRetryCount.set(stealthAccount.address, retryCount + 1);
+        console.warn(`[Manager] Phase 2: Error retry #${retryCount + 1} for ${stealthAccount.address}:`, error.message);
+      }
+    }
+
+    // Dismiss the progress notification
+    this.notifications.removeNotification('phase2-retry-progress');
+
+    // Show summary if still pending
+    if (this.pendingStealthBlocks.length > 0) {
+      console.log(`[Manager] Phase 2: ${this.pendingStealthBlocks.length} accounts still pending, will retry in 5 minutes`);
+    }
   }
 
   /**
@@ -271,12 +401,19 @@ export class NanoNymManagerService {
       const R = this.util.hex.toUint8(notification.R);
       console.debug(`[Manager] Ephemeral key R: ${notification.R}`);
 
+      // DEBUG: Log receiver-side input data
+      console.log('[Manager] RECEIVER-SIDE STEALTH ADDRESS COMPUTATION');
+      console.log('[Manager] Ephemeral public (R):', notification.R);
+      console.log('[Manager] Recipient B_spend:', this.util.hex.fromUint8(nanoNym.keys.spendPublic));
+      console.log('[Manager] Recipient B_view:', this.util.hex.fromUint8(nanoNym.keys.viewPublic));
+
       // 2. Generate shared secret using view key
       const sharedSecret = this.crypto.generateSharedSecret(
         nanoNym.keys.viewPrivate,
         R,
       );
       console.debug(`[Manager] Shared secret generated`);
+      console.log('[Manager] Shared secret:', this.util.hex.fromUint8(sharedSecret));
 
       // 3. Derive expected stealth address
       const stealth = this.crypto.deriveStealthAddress(
@@ -285,6 +422,8 @@ export class NanoNymManagerService {
         nanoNym.keys.spendPublic,
       );
       console.debug(`[Manager] Stealth address: ${stealth.address}`);
+      console.log('[Manager] Stealth address:', stealth.address);
+      console.log('[Manager] Stealth public key:', this.util.hex.fromUint8(stealth.publicKey));
 
       // 4. Verify transaction exists on blockchain (account may not be opened yet)
       const accountInfo = await this.api.accountInfo(stealth.address);
@@ -369,7 +508,7 @@ export class NanoNymManagerService {
       id: stealthAccount.address,
       frontier: null, // Will be fetched by generateReceive
       secret: stealthAccount.privateKey,
-      keyPair: nacl.sign.keyPair.fromSecretKey(stealthAccount.privateKey),
+      keyPair: null, // Not used for stealth accounts (scalar-based signing instead)
       index: -1, // Not applicable for stealth accounts
       balance: new BigNumber(0),
       pending: new BigNumber(0),
@@ -379,17 +518,19 @@ export class NanoNymManagerService {
       pendingFiat: 0,
       addressBookName: nanoNym.label,
       receivePow: false,
+      isStealthAccount: true,  // Flag to use scalar signing in nano-block.service
+      publicKeyHex: this.util.hex.fromUint8(stealthAccount.publicKey),  // Store the public key as hex string for signature verification
     };
 
     if (this.wallet.wallet.locked) {
-      console.log(`[Manager] 🔒 Wallet locked, queuing receive for ${stealthAccount.address}`);
+      console.log(`[Manager] 🔒 Wallet locked, queuing stealth account opening for ${stealthAccount.address}`);
       // Add to pending for later processing when unlocked
       this.addPendingStealthBlock(stealthAccount);
       return;
     }
 
     try {
-      console.log(`[Manager] Publishing receive block for ${stealthAccount.address}`);
+      console.log(`[Manager] 📤 Phase 1: Attempting immediate stealth account opening for ${stealthAccount.address} (amount: ${stealthAccount.amountRaw})`);
       const newHash = await this.nanoBlock.generateReceive(
         pseudoWalletAccount,
         stealthAccount.txHash,
@@ -397,7 +538,7 @@ export class NanoNymManagerService {
       );
 
       if (newHash) {
-        console.log(`[Manager] ✅ Receive block published for ${stealthAccount.address}. Hash: ${newHash}`);
+        console.log(`[Manager] ✅ Phase 1 Success: Stealth account ${stealthAccount.address} opened. Receive block hash: ${newHash}`);
 
         const receiveAmount = new BigNumber(stealthAccount.amountRaw);
         this.notifications.removeNotification('success-receive-nanonym');
@@ -420,11 +561,14 @@ export class NanoNymManagerService {
         // Remove from pending if it was queued
         this.removePendingStealthBlock(stealthAccount.address);
       } else {
-        console.error(`[Manager] ❌ Failed to publish receive block for ${stealthAccount.address}`);
+        console.warn(`[Manager] ⚠️ Phase 1 Failed: Could not open stealth account ${stealthAccount.address}. Will retry via Phase 2 (background retry).`);
+        // Queue for retry
+        this.addPendingStealthBlock(stealthAccount);
       }
     } catch (error) {
-      console.error(`[Manager] ❌ Error publishing receive block for ${stealthAccount.address}:`, error);
-      // If error, re-add to pending to retry
+      console.warn(`[Manager] ⚠️ Phase 1 Failed: Error opening stealth account ${stealthAccount.address}:`, error.message);
+      console.log(`[Manager] Queuing ${stealthAccount.address} for Phase 2 background retry (every 5 minutes).`);
+      // Queue for retry
       this.addPendingStealthBlock(stealthAccount);
     }
   }

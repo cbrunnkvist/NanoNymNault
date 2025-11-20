@@ -684,4 +684,53 @@ export class NanoNymCryptoService {
   publicKeyToNanoAddress(publicKey: Uint8Array): string {
     return this.util.account.getPublicAccountID(publicKey, "nano");
   }
+
+  /**
+   * Sign a block hash using a stealth private key scalar
+   *
+   * For stealth accounts, the private key is a 32-byte scalar (not a seed).
+   * This method signs directly using @noble/ed25519 which accepts scalars.
+   *
+   * IMPORTANT: This is required because nacl.sign.keyPair.fromSecretKey()
+   * treats input as a seed and hashes it with BLAKE2b, which would produce
+   * an incorrect signature. Stealth keys are already scalars and must not be hashed again.
+   *
+   * @param privateKeyScalar - 32-byte stealth private key scalar (p_masked = b_spend + t)
+   * @param messageHash - Block hash to sign (typically 256-bit BLAKE2b hash)
+   * @returns Signature (64 bytes)
+   */
+  signBlockWithScalar(
+    privateKeyScalar: Uint8Array,
+    messageHash: Uint8Array,
+    expectedPublicKeyHex?: string,
+  ): Uint8Array {
+    console.log('[NanoNymCrypto] Signing block with stealth scalar');
+    console.log('[NanoNymCrypto] Private scalar:', bytesToHex(privateKeyScalar));
+
+    // Verify public key derivation if expected public key hex provided
+    if (expectedPublicKeyHex) {
+      try {
+        const derivedPublic = ed25519.getPublicKey(privateKeyScalar);
+        const derivedPublicHex = bytesToHex(derivedPublic);
+
+        console.log('[NanoNymCrypto] Expected public key (from stealth account):', expectedPublicKeyHex);
+        console.log('[NanoNymCrypto] Derived public key (from scalar):        ', derivedPublicHex);
+
+        if (derivedPublicHex !== expectedPublicKeyHex) {
+          console.error('[NanoNymCrypto] ⚠️ PUBLIC KEY MISMATCH! Scalar does not derive to the expected public key');
+          console.error('[NanoNymCrypto]   This indicates the private scalar is incorrect for this stealth account!');
+        } else {
+          console.log('[NanoNymCrypto] ✅ Public key verification PASSED');
+        }
+      } catch (e) {
+        console.error('[NanoNymCrypto] Error verifying public key:', e);
+      }
+    }
+
+    // Sign using @noble/ed25519 which works with scalars directly
+    const signature = ed25519.sign(messageHash, privateKeyScalar);
+
+    console.log('[NanoNymCrypto] Block signed with stealth scalar. Signature:', bytesToHex(signature));
+    return signature;
+  }
 }

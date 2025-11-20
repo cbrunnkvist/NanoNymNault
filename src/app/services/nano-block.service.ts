@@ -7,6 +7,7 @@ import { NotificationService } from "./notification.service";
 import { AppSettingsService } from "./app-settings.service";
 import { LedgerService } from "./ledger.service";
 import { WalletAccount } from "./wallet.service";
+import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { BehaviorSubject } from "rxjs";
 import { tools as nanocurrencyWebTools } from "nanocurrency-web";
 const nacl = window["nacl"];
@@ -42,6 +43,7 @@ export class NanoBlockService {
     private notifications: NotificationService,
     private ledgerService: LedgerService,
     public settings: AppSettingsService,
+    private nanonymCrypto: NanoNymCryptoService,
   ) {}
 
   async generateChange(walletAccount, representativeAccount, ledger = false) {
@@ -373,6 +375,7 @@ export class NanoBlockService {
       blockData,
       openEquiv ? TxType.open : TxType.receive,
     );
+    console.log(`[NanoBlock] api.process() response for ${openEquiv ? 'open' : 'receive'} block:`, processResponse);
     if (processResponse && processResponse.hash) {
       walletAccount.frontier = processResponse.hash;
       // Add new hash into the work pool, high PoW threshold since we don't know what the next one will be
@@ -386,6 +389,7 @@ export class NanoBlockService {
       }
       return processResponse.hash;
     } else {
+      console.error(`[NanoBlock] api.process() failed to return hash. Response was:`, processResponse);
       return null;
     }
   }
@@ -571,8 +575,30 @@ export class NanoBlockService {
   // Sign a state block, and insert the signature into the block.
   signStateBlock(walletAccount, blockData) {
     const hashBytes = this.util.nano.hashStateBlock(blockData);
-    const privKey = walletAccount.keyPair.secretKey;
-    const signed = nacl.sign.detached(hashBytes, privKey);
+
+    let signed: Uint8Array;
+
+    // Check if this is a stealth account (has isStealthAccount flag)
+    if (walletAccount.isStealthAccount) {
+      // For stealth accounts, use scalar-based signing (@noble/ed25519)
+      // The privateKey is already a scalar (not a seed), so we cannot use nacl which would hash it
+      console.log('[NanoBlock] Signing stealth account block using scalar signing');
+
+      // Use the stored public key hex for verification
+      const publicKeyHex = walletAccount.publicKeyHex;
+      console.log('[NanoBlock] Stealth account public key:', publicKeyHex);
+
+      signed = this.nanonymCrypto.signBlockWithScalar(
+        walletAccount.secret,  // This is the scalar for stealth accounts
+        hashBytes,
+        publicKeyHex,  // Pass public key hex to verify scalar derives to correct key
+      );
+    } else {
+      // For regular accounts, use nacl (legacy behavior)
+      const privKey = walletAccount.keyPair.secretKey;
+      signed = nacl.sign.detached(hashBytes, privKey);
+    }
+
     blockData.signature = this.util.hex.fromUint8(signed);
   }
 
