@@ -244,7 +244,6 @@ export class NanoNymStorageService {
       index: nn.index,
       label: nn.label,
       nnymAddress: nn.nnymAddress,
-      fallbackAddress: nn.fallbackAddress,
       status: nn.status,
       createdAt: nn.createdAt,
       keys: {
@@ -269,7 +268,6 @@ export class NanoNymStorageService {
       index: stored.index,
       label: stored.label,
       nnymAddress: stored.nnymAddress,
-      fallbackAddress: stored.fallbackAddress,
       status: stored.status,
       createdAt: stored.createdAt,
       keys: {

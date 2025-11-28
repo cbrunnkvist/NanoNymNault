@@ -305,26 +305,6 @@
         </div>
       </div>
 
-      <div class="uk-margin">
-        <h4>Fallback Address (⚠ Not Private)</h4>
-        <div class="uk-card uk-card-default uk-card-body">
-          <div
-            class="nano-address-monospace uk-text-break uk-text-small uk-padding-small uk-background-muted"
-          >
-            {{ selectedNanoNym.fallbackAddress }}
-          </div>
-          <button
-            class="uk-button uk-button-secondary uk-width-1-1 uk-margin-small-top"
-            type="button"
-            ngxClipboard
-            [cbContent]="selectedNanoNym.fallbackAddress"
-            (cbOnSuccess)="copied()"
-          >
-            <span uk-icon="icon: copy"></span> Copy Fallback Address
-          </button>
-        </div>
-      </div>
-
       <hr class="uk-divider-icon" />
 
       <!-- Transaction History -->

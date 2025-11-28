@@ -646,18 +646,6 @@ export class NanoNymCryptoService {
   }
 
   /**
-   * Generate fallback Nano address from spend public key
-   * This is the standard nano_ address derived from B_spend
-   * Used as non-private fallback when sender doesn't support NanoNyms
-   *
-   * @param spendPublic - Spend public key (32 bytes)
-   * @returns Standard nano_ address
-   */
-  getFallbackAddress(spendPublic: Uint8Array): string {
-    return this.util.account.getPublicAccountID(spendPublic, "nano");
-  }
-
-  /**
    * Generate ephemeral keypair for sending
    * Used by sender to create one-time key for each payment
    *

@@ -13,9 +13,6 @@ export interface NanoNym {
   /** The nnym_ address */
   nnymAddress: string;
 
-  /** Fallback nano_ address (derived from B_spend) */
-  fallbackAddress: string;
-
   /** Active (monitoring Nostr) or Archived (not monitoring) */
   status: 'active' | 'archived';
 
@@ -97,7 +94,6 @@ export interface StoredNanoNym {
   index: number;
   label: string;
   nnymAddress: string;
-  fallbackAddress: string;
   status: 'active' | 'archived';
   createdAt: number;
   keys: {

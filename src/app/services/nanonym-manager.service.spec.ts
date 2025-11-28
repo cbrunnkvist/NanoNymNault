@@ -21,7 +21,6 @@ class MockNanoNymStorageService {
     index: 0,
     label: 'TestNym',
     nnymAddress: 'nnym_testaddress',
-    fallbackAddress: 'nano_testfallback',
     status: 'active',
     createdAt: Date.now(),
     keys: {
@@ -225,7 +224,6 @@ describe('NanoNymManagerService', () => {
         index: nanoNymIndex,
         label: 'TestNym',
         nnymAddress: 'nnym_testaddress',
-        fallbackAddress: 'nano_testfallback',
         status: 'active',
         createdAt: Date.now(),
         keys: {
@@ -280,7 +278,6 @@ describe('NanoNymManagerService', () => {
         index: nanoNymIndex,
         label: 'TestNym',
         nnymAddress: 'nnym_testaddress',
-        fallbackAddress: 'nano_testfallback',
         status: 'active',
         createdAt: Date.now(),
         keys: {
@@ -334,7 +331,6 @@ describe('NanoNymManagerService', () => {
         index: nanoNymIndex,
         label: 'TestNym',
         nnymAddress: 'nnym_testaddress',
-        fallbackAddress: 'nano_testfallback',
         status: 'active',
         createdAt: Date.now(),
         keys: {
@@ -420,7 +416,6 @@ describe('NanoNymManagerService', () => {
         index: 0,
         label: 'TestNym',
         nnymAddress: 'nnym_testaddress',
-        fallbackAddress: 'nano_testfallback',
         status: 'active',
         createdAt: Date.now(),
         keys: {

@@ -84,7 +84,6 @@ describe('AccountsComponent', () => {
         index: 0,
         label: 'Test NanoNym',
         nnymAddress: 'nnym_test',
-        fallbackAddress: 'nano_test',
         status: 'active',
         createdAt: Date.now(),
         keys: {

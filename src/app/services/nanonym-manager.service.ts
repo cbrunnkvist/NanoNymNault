@@ -217,15 +217,11 @@ export class NanoNymManagerService {
       keys.nostr.public,
     );
 
-    // Get fallback address
-    const fallbackAddress = this.crypto.getFallbackAddress(keys.spend.public);
-
     // Create NanoNym object
     const nanoNym: NanoNym = {
       index,
       label: label || `NanoNym ${index}`,
       nnymAddress,
-      fallbackAddress,
       status: "active",
       createdAt: Date.now(),
       keys: {

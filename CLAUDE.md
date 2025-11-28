@@ -78,7 +78,7 @@ Rationale for embedding`nostr_public`:
     - Shared Nostr key for simpler UX.
 
 Compatibility:
-- Non-supporting wallets will reject`nnym_` addresses; the UI must expose a standard`nano_` fallback address to prevent fund loss.
+- Non-supporting wallets will reject`nnym_` addresses; users should use standard wallet accounts for non-private payments.
 
 ---
 
@@ -113,13 +113,6 @@ Wallet birthday optimization:
 - Use it as a lower bound for Nostr history and (optionally) blockchain scans.
 - If unknown, default to a conservative date (genesis or user-provided).
 - Birthday is an optimization, not required for correctness.
-
-Fallback address:
-- For each NanoNym, derive a standard`nano_` fallback address from`B_spend`.
-- Receive UI must show both:
-    - NanoNym address (`nnym_...`): private, preferred.
-    -`nano_` fallback: non-private, for incompatible wallets.
-- UI clearly warns that fallback payments are linkable on-chain.
 
 ---
 
@@ -717,7 +710,7 @@ Manual and automated tests:
 
 1. Sender compatibility:
     - Only wallets that understand`nnym_` can use full privacy features.
-    - Fallback`nano_` address remains non-private.
+    - Users needing to receive from non-supporting wallets should use standard wallet accounts.
 2. Nostr reliance for fast recovery:
     - Tiers 1 and 2 depend on relays; Tier 3 and seed-only guarantees rely on archival infra plus heuristics.
 3. Trade-off between speed and guaranteed recovery:
