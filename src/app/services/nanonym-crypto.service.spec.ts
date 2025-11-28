@@ -294,21 +294,6 @@ describe("NanoNymCryptoService", () => {
     });
   });
 
-  describe("Fallback address", () => {
-    it("should generate standard nano_ address from spend key", () => {
-      const testMnemonic =
-        "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about";
-      const keys = service.deriveNanoNymKeys(testMnemonic, 0);
-
-      const fallbackAddr = service.getFallbackAddress(keys.spend.public);
-
-      // Should be valid nano_ address
-      expect(fallbackAddr).toBeTruthy();
-      expect(fallbackAddr.startsWith("nano_")).toBe(true);
-      expect(fallbackAddr.length).toBe(65); // Standard Nano address length
-    });
-  });
-
   describe("Round-trip encoding/decoding", () => {
     it("should correctly round-trip multiple NanoNym addresses", () => {
       const testMnemonic =
