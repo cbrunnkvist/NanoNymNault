@@ -110,6 +110,14 @@ export class AppSettingsService {
       shouldRandom: false,
     },
     {
+      name: 'Testnet (Local Node)',
+      value: 'testnet',
+      api: 'http://localhost:17076',
+      ws: 'ws://localhost:17078',
+      auth: null,
+      shouldRandom: false,
+    },
+    {
       name: 'Custom',
       value: 'custom',
       api: null,

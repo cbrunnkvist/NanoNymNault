@@ -89,6 +89,9 @@ export class AppComponent implements OnInit {
     this.onWindowResize(window);
     this.settings.loadAppSettings();
 
+    // Check for testnet URL parameter
+    this.checkTestnetParameter();
+
     this.updateAppTheme();
 
     // New for v19: Patch saved xrb_ prefixes to nano_
@@ -354,5 +357,26 @@ export class AppComponent implements OnInit {
     await this.price.getPrice(displayCurrency);
     this.walletService.reloadFiatBalances();
     setTimeout(() => this.updateFiatPrices(), this.fiatTimeout);
+  }
+
+  /**
+   * Check for testnet URL parameter and switch to testnet mode if present.
+   * Hidden feature: ?testnet=true or ?testnet=1
+   */
+  checkTestnetParameter() {
+    const urlParams = new URLSearchParams(window.location.search);
+    const testnetParam = urlParams.get('testnet');
+
+    if (testnetParam === 'true' || testnetParam === '1') {
+      const currentServer = this.settings.settings.serverName;
+
+      // Only switch if not already on testnet
+      if (currentServer !== 'testnet') {
+        console.log('Testnet mode activated via URL parameter');
+        this.settings.setAppSetting('serverName', 'testnet');
+        this.settings.loadServerSettings();
+        this.notifications.sendInfo('Testnet mode enabled - Connected to local testnet node (port 17076)');
+      }
+    }
   }
 }
