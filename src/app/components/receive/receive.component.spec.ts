@@ -77,33 +77,5 @@ describe('ReceiveComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  xdescribe('NanoNym detection', () => {
-    xit('should populate nanoNymAccounts from spendableAccounts$', () => {
-      const mockNanoNyms: NanoNymAccount[] = [
-        { id: 'nnym_test', type: 'nanonym', balance: new BigNumber(0) } as NanoNymAccount
-      ];
-
-      spendableAccountsSubject.next(mockNanoNyms);
-      fixture.detectChanges();
-
-      expect(component.nanoNymAccounts).toEqual(mockNanoNyms);
-    });
-
-    xit('should set isSelectedAccountNanoNym to true for nnmy_ addresses', () => {
-      component.onSelectedAccountChange('nnym_123');
-      expect(component.isSelectedAccountNanoNym).toBeTrue();
-    });
-
-    xit('should set isSelectedAccountNanoNym to false for nano_ addresses', () => {
-      component.onSelectedAccountChange('nano_123');
-      expect(component.isSelectedAccountNanoNym).toBeFalse();
-    });
-
-    xit('should set isSelectedAccountNanoNym to false for all accounts (0)', () => {
-      component.onSelectedAccountChange('0');
-      expect(component.isSelectedAccountNanoNym).toBeFalse();
-    });
-  });
-
   // TODO: Add tests for badge visibility in HTML via Playwright E2E tests
 });

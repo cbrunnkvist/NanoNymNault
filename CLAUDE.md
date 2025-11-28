@@ -679,22 +679,23 @@ Current status (as of 2025-11-18):
     - Reactive balance updates with automatic Nano node verification.
     - Grouped display: Regular Accounts + NanoNym Accounts sections.
     - Balance aggregation and stealth account management.
-- Phase 5 – Receive UI & Stealth Account Opening: 🚧 in progress.
-    - Multi-NanoNym management (generation, listing, balances) - ✅ working.
-    - Background Nostr monitoring and history reconstruction - ✅ working.
-    - Deprecation notice added; migration to Accounts page underway.
-    - Stealth account opening workflow (Nov 19, 2025):
-        - ✅ Phase 1: Immediate opening on notification (already implemented).
-        - ✅ Phase 2: Background retry mechanism (design documented in Section 6.1).
-        - 🚧 Phase 3: Just-in-time opening before spend (implementation pending).
-        - Design documented in Section 6.1 & 6.2 of this document.
+- Phase 5 – Receive UI & Stealth Account Opening: ✅ complete (Nov 28, 2025).
+    - Multi-NanoNym management (generation, listing, balances) - ✅ complete.
+    - Background Nostr monitoring and history reconstruction - ✅ complete.
+    - Migration to Accounts page - ✅ complete.
+    - Stealth account opening workflow (three-phase defense-in-depth):
+        - ✅ Phase 1: Immediate opening on notification (`receiveStealthFunds()`).
+        - ✅ Phase 2: Background retry mechanism (5-min interval, 12 retries max).
+        - ✅ Phase 3: Just-in-time opening before spend (`ensureStealthAccountsOpened()`).
+        - All phases implemented in `nanonym-manager.service.ts` and `send.component.ts`.
+        - Comprehensive test coverage in `send.component.spec.ts` (8 tests for Phase 3).
+    - Receive page cleanup - ✅ complete (orphaned modal code removed).
 - Phase 6 – Observability and logging: ✅ complete (Nov 18, 2025).
     - Improved Nostr relay logging with appropriate log levels.
     - MAC-check match logging.
     - Relay connection/disconnection lifecycle logging.
     - Derivation path debug logging for both account types.
 - Later phases:
-    - Complete Receive page NanoNym tab removal.
     - Enhanced stealth account opening diagnostics.
     - Privacy Mode and advanced spend options.
     - Automated E2E tests (Playwright or similar).

@@ -37,7 +37,6 @@ const routes: Routes = [
   { path: "qr-scan", component: QrScanComponent },
   { path: "send", component: SendComponent },
   { path: "receive", component: ReceiveComponent },
-  { path: "receive/nanonyms", component: ReceiveComponent },
   { path: "representatives", component: RepresentativesComponent },
   { path: "manage-representatives", component: ManageRepresentativesComponent },
   { path: "transaction/:transaction", component: TransactionDetailsComponent },

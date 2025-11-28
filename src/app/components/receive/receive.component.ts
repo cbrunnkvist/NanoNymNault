@@ -68,18 +68,7 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
   routerSub = null;
   notificationSub: Subscription | null = null;
-  nanoNymsSub: Subscription | null = null;
   spendableAccountsSub: Subscription | null = null;
-
-  // NanoNym state
-  nanonyms: NanoNym[] = [];
-  showGenerateNanoNymModal = false;
-  newNanoNymLabel = "";
-  generatingNanoNym = false;
-  recentlyGeneratedNanoNym: NanoNym | null = null;
-  generatedNanoNymQR: string | null = null;
-  generatedFallbackQR: string | null = null;
-  generateNanoNymModal: any = null;
 
   constructor(
     private route: Router,
@@ -110,25 +99,12 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     const merchantModeModal = UIkit.modal("#merchant-mode-modal");
     this.merchantModeModal = merchantModeModal;
 
-    const generateNanoNymModal = UIkit.modal("#generate-nanonym-modal");
-    this.generateNanoNymModal = generateNanoNymModal;
-
     this.routerSub = this.route.events.subscribe((event) => {
       if (event instanceof ChildActivationEnd) {
         this.mobileTransactionMenuModal.hide();
         this.merchantModeModal.hide();
-        this.generateNanoNymModal.hide();
       }
     });
-
-    // Subscribe to NanoNyms observable for reactive updates
-    // This ensures UI auto-updates when balances change from polling or new payments
-    await this.nanoNymStorage.whenLoaded();
-    this.nanoNymsSub = this.nanoNymStorage.nanonyms$.subscribe(
-      (nanonyms) => {
-        this.nanonyms = nanonyms;
-      }
-    );
 
     // Subscribe to spendable accounts for unified account dropdown
     this.spendableAccountsSub = this.walletService.spendableAccounts$.subscribe(
@@ -220,9 +196,6 @@ export class ReceiveComponent implements OnInit, OnDestroy {
     }
     if (this.notificationSub) {
       this.notificationSub.unsubscribe();
-    }
-    if (this.nanoNymsSub) {
-      this.nanoNymsSub.unsubscribe();
     }
     if (this.spendableAccountsSub) {
       this.spendableAccountsSub.unsubscribe();
@@ -670,123 +643,5 @@ export class ReceiveComponent implements OnInit, OnDestroy {
 
     this.inMerchantModePaymentComplete = true;
     this.inMerchantModeQR = false;
-  }
-
-  // NanoNym methods
-  async initiateGenerateNanoNymModal() {
-    // Ensure wallet is unlocked BEFORE showing the modal
-    if (this.walletService.isLocked()) {
-      const wasUnlocked = await this.walletService.requestWalletUnlock();
-      if (wasUnlocked === false) {
-        return;
-      }
-    }
-
-    // Only show the modal after successful unlock
-    this.openGenerateNanoNymModal();
-  }
-
-  openGenerateNanoNymModal() {
-    this.newNanoNymLabel = "";
-    this.recentlyGeneratedNanoNym = null;
-    this.generatedNanoNymQR = null;
-    this.generatedFallbackQR = null;
-    this.generateNanoNymModal.show();
-  }
-
-  closeGenerateNanoNymModal() {
-    this.newNanoNymLabel = "";
-    this.recentlyGeneratedNanoNym = null;
-    this.generatedNanoNymQR = null;
-    this.generatedFallbackQR = null;
-    this.generateNanoNymModal.hide();
-  }
-
-  async generateNanoNym() {
-    if (this.generatingNanoNym) return;
-
-    this.generatingNanoNym = true;
-
-    try {
-      const label = this.newNanoNymLabel.trim() || undefined;
-      const nanoNym = await this.nanoNymManager.createNanoNym(label);
-
-      this.recentlyGeneratedNanoNym = nanoNym;
-
-      // Generate QR codes
-      this.generatedNanoNymQR = await QRCode.toDataURL(nanoNym.nnymAddress, {
-        scale: 7,
-      });
-      this.generatedFallbackQR = await QRCode.toDataURL(
-        nanoNym.fallbackAddress,
-        { scale: 7 },
-      );
-
-      this.notificationService.sendSuccess(`NanoNym created: ${nanoNym.label}`);
-
-      // Refresh NanoNym list
-      await this.loadNanoNyms();
-    } catch (error) {
-      this.notificationService.sendError(
-        `Failed to create NanoNym: ${error.message}`,
-      );
-      this.closeGenerateNanoNymModal();
-    } finally {
-      this.generatingNanoNym = false;
-    }
-  }
-
-  async loadNanoNyms() {
-    await this.nanoNymStorage.whenLoaded();
-    this.nanonyms = this.nanoNymStorage.getAllNanoNyms();
-  }
-
-  get totalNanoNymBalance(): BigNumber {
-    return this.nanonyms.reduce(
-      (sum, nn) => sum.plus(nn.balance),
-      new BigNumber(0),
-    );
-  }
-
-  get activeNanoNymCount(): number {
-    return this.nanonyms.filter((nn) => nn.status === "active").length;
-  }
-
-  get totalPaymentCount(): number {
-    return this.nanonyms.reduce((sum, nn) => sum + nn.paymentCount, 0);
-  }
-
-  async toggleNanoNymStatus(index: number) {
-    const nanoNym = this.nanonyms.find((nn) => nn.index === index);
-    if (!nanoNym) return;
-
-    try {
-      if (nanoNym.status === "active") {
-        await this.nanoNymManager.archiveNanoNym(index);
-        this.notificationService.sendInfo(`NanoNym archived: ${nanoNym.label}`);
-      } else {
-        await this.nanoNymManager.reactivateNanoNym(index);
-        this.notificationService.sendSuccess(
-          `NanoNym reactivated: ${nanoNym.label}`,
-        );
-      }
-      await this.loadNanoNyms();
-    } catch (error) {
-      this.notificationService.sendError(
-        `Failed to update NanoNym: ${error.message}`,
-      );
-    }
-  }
-
-  showNanoNymQR(nanoNym: NanoNym) {
-    // TODO: Implement QR code display modal
-    // For now, just show a notification
-    this.notificationService.sendInfo(`QR code for: ${nanoNym.label}`);
-  }
-
-  copyToClipboard(text: string, type: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      this.notificationService.sendSuccess(`${type} copied to clipboard!`);
-    });
   }
 }
