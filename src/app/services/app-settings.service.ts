@@ -57,7 +57,7 @@ export class AppSettingsService {
     minimumReceive: '0.000001',
     walletVersion: 1,
     lightModeEnabled: false,
-    identiconsStyle: 'nanoidenticons',
+    identiconsStyle: 'none',
   };
 
   serverOptions = [
@@ -242,7 +242,7 @@ export class AppSettingsService {
       minimumReceive: '0.000001',
       walletVersion: 1,
       lightModeEnabled: false,
-      identiconsStyle: 'nanoidenticons',
+      identiconsStyle: 'none',
     };
   }
 
