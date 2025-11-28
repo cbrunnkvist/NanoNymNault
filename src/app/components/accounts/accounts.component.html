@@ -186,11 +186,12 @@
                         {{ account.nanoNym.paymentCount }} {{ account.nanoNym.paymentCount === 1 ? 'payment' : 'payments' }}
                       </div>
                     </div>
-                    <app-nano-account-id
-                      [accountID]="account.id"
-                      middle="auto"
-                      class="nano-address-clickable">
-                    </app-nano-account-id>
+                    <div class="nano-address-clickable nano-address-monospace">
+                      <app-nano-account-id
+                        [accountID]="account.id"
+                        middle="auto">
+                      </app-nano-account-id>
+                    </div>
                   </div>
                 </div>
               </a>
@@ -293,7 +294,10 @@
           <div
             class="nano-address-monospace uk-text-break uk-text-small uk-padding-small uk-background-muted"
           >
-            {{ selectedNanoNym.nnymAddress }}
+            <app-nano-account-id
+              [accountID]="selectedNanoNym.nnymAddress"
+              middle="on">
+            </app-nano-account-id>
           </div>
           <button
             class="uk-button uk-button-primary uk-width-1-1 uk-margin-small-top"
