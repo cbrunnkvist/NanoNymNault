@@ -508,6 +508,14 @@ export class NanoNymManagerService {
       this.storage.addStealthAccount(nanoNymIndex, stealthAccount);
       console.log(`[Manager] ✅ Stealth account created: ${stealth.address}`);
 
+      // 7.5. Show incoming payment notification
+      const incomingAmount = this.util.nano.rawToMnano(stealthAccount.balance);
+      this.notifications.removeNotification('incoming-nanonym-payment');
+      this.notifications.sendInfo(
+        `Incoming payment: ${this.noZerosPipe.transform(incomingAmount.toFixed(6))} XNO to ${nanoNym.label}`,
+        { identifier: 'incoming-nanonym-payment', timeout: 5000 }
+      );
+
       // 8. Initiate receive process for the stealth account
       await this.receiveStealthFunds(stealthAccount, nanoNym);
 
@@ -601,10 +609,7 @@ export class NanoNymManagerService {
           stealthAccount.address,
           newBalance,
         );
-        this.storage.updateNanoNym(nanoNym.index, {
-          balance: nanoNym.balance.plus(newBalance),
-          paymentCount: nanoNym.paymentCount + 1,
-        });
+        // Note: paymentCount is already set by addStealthAccount() - no need to increment again
 
         // Remove from pending if it was queued
         this.removePendingStealthBlock(stealthAccount.address);

@@ -43,6 +43,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   accountType: 'regular' | 'nanonym' | 'external' = 'external';
   nanoNym: any = null;
   showQRSection = false; // For collapsible QR
+  nanoNymBalanceFiat: number = 0;
 
   walletAccount = null;
 
@@ -600,6 +601,11 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     this.addressBookEntry = this.nanoNym.label;
     this.addressBookModel = this.nanoNym.label;
 
+    // Calculate fiat balance
+    this.nanoNymBalanceFiat = this.util.nano.rawToMnano(this.nanoNym.balance || 0)
+      .times(this.price.price.lastPrice)
+      .toNumber();
+
     // Transform stealth accounts into accountHistory format
     this.accountHistory = this.nanoNym.stealthAccounts.map(stealth => ({
       type: 'receive',
@@ -607,10 +613,14 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       amount: stealth.amountRaw,
       link_as_account: stealth.address,
       local_timestamp: Math.floor(stealth.receivedAt / 1000),
+      local_date_string: formatDate(stealth.receivedAt, 'MMM d, y', 'en-US'),
+      local_time_string: formatDate(stealth.receivedAt, 'HH:mm:ss', 'en-US'),
       confirmed: true,
       isNanoNymPayment: true,
       stealthAddress: stealth.address
     })).sort((a, b) => b.local_timestamp - a.local_timestamp);
+
+    this.updateTodayYesterdayDateStrings();
 
     this.loadingAccountDetails = false;
     this.onAccountDetailsLoadDone();
@@ -631,6 +641,12 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     } catch (error) {
       this.notifications.sendError(`Failed to update NanoNym: ${error.message}`);
     }
+  }
+
+  showMobileMenuForStealthAccount(payment: any) {
+    this.notifications.removeNotification('success-copied');
+    this.mobileTransactionData = payment;
+    this.mobileTransactionMenuModal.show();
   }
 
   getAccountLabel(accountID, defaultLabel) {

@@ -269,3 +269,47 @@
     height: auto;
     border-radius: 8px;
 }
+
+/* NanoNym-specific styles */
+.payment-count-badge {
+    display: inline-block;
+    background: #28a745;
+    border-radius: 20px;
+    font-size: 11px;
+    padding: 3px 12px;
+    margin-left: 8px;
+    vertical-align: 2px;
+    text-transform: uppercase;
+    color: #FFF;
+    font-weight: 600;
+}
+
+.payment-count-badge .badge-icon {
+    margin-right: 4px;
+    vertical-align: -2px;
+}
+
+.payment-count-badge .badge-text {
+    vertical-align: 1px;
+}
+
+.nanonym-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 5px;
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 11px;
+    font-weight: 600;
+    text-transform: uppercase;
+}
+
+.active-badge {
+    background-color: #28a745;
+    color: white;
+}
+
+.archived-badge {
+    background-color: #6c757d;
+    color: white;
+}

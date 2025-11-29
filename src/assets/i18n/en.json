@@ -22,7 +22,22 @@
     "this-change-has-not-yet-been-confirmed-by-the-network": "This change has not yet been confirmed by the network",
     "this-transaction-has-not-yet-been-confirmed-by-the-network": "This transaction has not yet been confirmed by the network",
     "transactions": "Transactions",
-    "view-transaction-details": "View transaction details"
+    "view-transaction-details": "View transaction details",
+    "nanonym-details": "NanoNym Details",
+    "active-status": "Active",
+    "archived-status": "Archived",
+    "archive-nanonym": "Archive NanoNym",
+    "reactivate-nanonym": "Reactivate NanoNym",
+    "stealth-accounts-count": "Stealth Accounts",
+    "created-at": "Created",
+    "payments-received": "Payments Received",
+    "refresh-balances": "Refresh Balances",
+    "stealth-address": "Stealth Address",
+    "payment-date": "Date",
+    "no-payments-received": "No payments received yet",
+    "loading-payments": "Loading payments...",
+    "view-stealth-account": "View Stealth Account",
+    "copy-stealth-address": "Copy Stealth Address"
   },
   "accounts": {
     "account-address-confirmed-on-ledger": "Account address confirmed on Ledger",
