@@ -17,6 +17,7 @@ import * as nanocurrency from 'nanocurrency';
 import {NinjaService} from '../../services/ninja.service';
 import { QrModalService } from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
+import { NanoNymManagerService } from '../../services/nanonym-manager.service';
 
 @Component({
   selector: 'app-account-details',
@@ -39,6 +40,9 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   addressBookEntry: any = null;
   account: any = {};
   accountID = '';
+  accountType: 'regular' | 'nanonym' | 'external' = 'external';
+  nanoNym: any = null;
+  showQRSection = false; // For collapsible QR
 
   walletAccount = null;
 
@@ -124,7 +128,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     private nanoBlock: NanoBlockService,
     private qrModalService: QrModalService,
     private ninja: NinjaService,
-    private translocoService: TranslocoService) {
+    private translocoService: TranslocoService,
+    private nanoNymManager: NanoNymManagerService) {
       // to detect when the account changes if the view is already active
       route.events.subscribe((val) => {
         if (val instanceof NavigationEnd) {
@@ -455,11 +460,20 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     const accountID = this.router.snapshot.params.account;
     this.accountID = accountID;
+
+    // NEW: Detect account type
+    if (accountID.startsWith('nnym_')) {
+      this.accountType = 'nanonym';
+      await this.loadNanoNymDetails(accountID);
+      return;
+    }
+
     this.generateReceiveQR(accountID);
 
     this.addressBookEntry = this.addressBook.getAccountName(accountID);
     this.addressBookModel = this.addressBookEntry || '';
     this.walletAccount = this.wallet.getWalletAccount(accountID);
+    this.accountType = this.walletAccount ? 'regular' : 'external';
 
     this.account = await this.api.accountInfo(accountID);
 
@@ -566,6 +580,57 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
 
     this.loadingAccountDetails = false;
     this.onAccountDetailsLoadDone();
+  }
+
+  async loadNanoNymDetails(nnymAddress: string) {
+    this.loadingAccountDetails = true;
+
+    const allNanoNyms = this.nanoNymManager.getSpendableNanoNymAccounts();
+    const nanoNymAccount = allNanoNyms.find(n => n.id === nnymAddress);
+
+    if (!nanoNymAccount) {
+      this.loadingAccountDetails = false;
+      this.notifications.sendError('NanoNym not found in this wallet');
+      setTimeout(() => this.route.navigate(['/accounts']), 2000);
+      return;
+    }
+
+    this.nanoNym = nanoNymAccount.nanoNym;
+    this.qrCodeImage = await QRCode.toDataURL(nnymAddress, { scale: 7 });
+    this.addressBookEntry = this.nanoNym.label;
+    this.addressBookModel = this.nanoNym.label;
+
+    // Transform stealth accounts into accountHistory format
+    this.accountHistory = this.nanoNym.stealthAccounts.map(stealth => ({
+      type: 'receive',
+      hash: stealth.txHash,
+      amount: stealth.amountRaw,
+      link_as_account: stealth.address,
+      local_timestamp: Math.floor(stealth.receivedAt / 1000),
+      confirmed: true,
+      isNanoNymPayment: true,
+      stealthAddress: stealth.address
+    })).sort((a, b) => b.local_timestamp - a.local_timestamp);
+
+    this.loadingAccountDetails = false;
+    this.onAccountDetailsLoadDone();
+  }
+
+  async toggleNanoNymStatus() {
+    if (!this.nanoNym) return;
+
+    try {
+      if (this.nanoNym.status === 'active') {
+        await this.nanoNymManager.archiveNanoNym(this.nanoNym.index);
+        this.notifications.sendInfo(`NanoNym archived: ${this.nanoNym.label}`);
+      } else {
+        await this.nanoNymManager.reactivateNanoNym(this.nanoNym.index);
+        this.notifications.sendSuccess(`NanoNym reactivated: ${this.nanoNym.label}`);
+      }
+      await this.loadNanoNymDetails(this.accountID);
+    } catch (error) {
+      this.notifications.sendError(`Failed to update NanoNym: ${error.message}`);
+    }
   }
 
   getAccountLabel(accountID, defaultLabel) {
@@ -729,6 +794,21 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   async saveAddressBook() {
     // Trim and remove duplicate spaces
     this.addressBookModel = this.addressBookModel.trim().replace(/ +/g, ' ');
+
+    // Handle NanoNym label updates
+    if (this.accountType === 'nanonym') {
+      if (!this.nanoNym) return;
+      const newLabel = this.addressBookModel.trim();
+      if (!newLabel) {
+        this.notifications.sendError('Label cannot be empty');
+        return;
+      }
+      await this.nanoNymManager.updateNanoNymLabel(this.nanoNym.index, newLabel);
+      this.nanoNym.label = newLabel;
+      this.notifications.sendSuccess('NanoNym label updated');
+      this.showEditAddressBook = false;
+      return;
+    }
 
     if (!this.addressBookModel) {
       // Check for deleting an entry in the address book

@@ -2,7 +2,6 @@ import { Component, OnInit, OnDestroy, ViewChild, ElementRef, AfterViewInit } fr
 import {Subject, timer, Subscription} from 'rxjs';
 import {debounce} from 'rxjs/operators';
 import {Router} from '@angular/router';
-import * as QRCode from 'qrcode';
 import {
   AppSettingsService,
   LedgerService,
@@ -16,7 +15,6 @@ import { TranslocoService } from '@ngneat/transloco';
 import { SpendableAccount, RegularAccount, NanoNymAccount } from '../../types/spendable-account.types';
 import { NanoNymStorageService } from '../../services/nanonym-storage.service';
 import { NanoNymManagerService } from '../../services/nanonym-manager.service';
-import { NanoNym } from '../../types/nanonym.types';
 
 @Component({
   selector: 'app-accounts',
@@ -39,12 +37,6 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
   regularAccounts: RegularAccount[] = [];
   nanoNymAccounts: NanoNymAccount[] = [];
   spendableAccountsSub: Subscription | null = null;
-
-  // NanoNym Details Modal
-  @ViewChild('nanoNymDetailsModal') nanoNymDetailsModalRef!: ElementRef;
-  nanoNymDetailsModal: any = null;
-  selectedNanoNym: NanoNym | null = null;
-  detailsNanoNymQR: string | null = null;
 
   // Generate NanoNym Modal
   @ViewChild('generateNanoNymModal') generateNanoNymModalRef!: ElementRef;
@@ -90,11 +82,6 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
 
   ngAfterViewInit() {
     const UIkit = window['UIkit'];
-
-    // Initialize NanoNym details modal
-    if (this.nanoNymDetailsModalRef) {
-      this.nanoNymDetailsModal = UIkit.modal(this.nanoNymDetailsModalRef.nativeElement);
-    }
 
     // Initialize Generate NanoNym modal
     if (this.generateNanoNymModalRef) {
@@ -168,6 +155,19 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
     this.router.navigate([`account/${account.id}`], { queryParams: {'compact': 1} });
   }
 
+  navigateToNanoNym(account: NanoNymAccount) {
+    const isSmallViewport = (window.innerWidth < 940);
+
+    if (isSmallViewport) {
+      this.walletService.wallet.selectedAccountId = account.id;
+      this.walletService.saveWalletExport();
+    }
+
+    this.router.navigate([`/account/${account.id}`], {
+      queryParams: { compact: '1' }
+    });
+  }
+
   copied() {
     this.notificationService.removeNotification('success-copied');
     this.notificationService.sendSuccess(this.translocoService.translate('general.successfully-copied-to-clipboard'), { identifier: 'success-copied' });
@@ -205,56 +205,6 @@ export class AccountsComponent implements OnInit, OnDestroy, AfterViewInit {
       this.notificationService.sendError(this.translocoService.translate('accounts.account-address-denied-if-it-is-wrong-do-not-use-the-wallet'));
     }
     this.notificationService.removeNotification('ledger-account');
-  }
-
-  // NanoNym Methods
-  async viewNanoNymDetails(nanoNym: NanoNym) {
-    this.selectedNanoNym = nanoNym;
-
-    // Generate QR code for the NanoNym address
-    try {
-      this.detailsNanoNymQR = await QRCode.toDataURL(nanoNym.nnymAddress, {
-        scale: 7,
-      });
-    } catch (error) {
-      console.error('Failed to generate QR code:', error);
-      this.detailsNanoNymQR = null;
-    }
-
-    if (this.nanoNymDetailsModal) {
-      this.nanoNymDetailsModal.show();
-    }
-  }
-
-  closeDetailsModal() {
-    this.selectedNanoNym = null;
-    this.detailsNanoNymQR = null;
-    if (this.nanoNymDetailsModal) {
-      this.nanoNymDetailsModal.hide();
-    }
-  }
-
-  async toggleNanoNymStatus(index: number) {
-    const nanoNym = this.nanoNymAccounts.find(acc => acc.nanoNym.index === index)?.nanoNym;
-    if (!nanoNym) return;
-
-    try {
-      if (nanoNym.status === 'active') {
-        await this.nanoNymManager.archiveNanoNym(index);
-        this.notificationService.sendInfo(`NanoNym archived: ${nanoNym.label}`);
-      } else {
-        await this.nanoNymManager.reactivateNanoNym(index);
-        this.notificationService.sendSuccess(`NanoNym reactivated: ${nanoNym.label}`);
-      }
-    } catch (error) {
-      this.notificationService.sendError(`Failed to update NanoNym: ${error.message}`);
-    }
-  }
-
-  copyToClipboard(text: string, type: string) {
-    navigator.clipboard.writeText(text).then(() => {
-      this.notificationService.sendSuccess(`${type} copied to clipboard!`);
-    });
   }
 
   // Generate NanoNym Modal Methods

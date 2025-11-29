@@ -4,6 +4,9 @@
     [class.add-whitespace-underneath]="walletAccount && (showFullDetailsOnSmallViewports === false)"
   >
 
+    <!-- REGULAR/EXTERNAL ACCOUNT VIEW -->
+    <ng-container *ngIf="accountType === 'regular' || accountType === 'external'">
+
     <div class="nano-card is-card" *ngIf="walletAccount && (showFullDetailsOnSmallViewports === false)">
       <div class="logo"></div>
       <div class="card-contents">
@@ -515,6 +518,26 @@
       </table>
     </div>
 
+    </ng-container>
+    <!-- End Regular/External Account View -->
+
+    <!-- NEW: NANONYM VIEW -->
+    <ng-container *ngIf="accountType === 'nanonym'">
+      <!-- NanoNym template will be added here -->
+      <div *ngIf="loadingAccountDetails" class="uk-text-center uk-margin-large-top">
+        <div uk-spinner="ratio: 2"></div>
+        <p>Loading NanoNym details...</p>
+      </div>
+
+      <div *ngIf="!loadingAccountDetails && nanoNym">
+        <p>NanoNym Details Page - Under Construction</p>
+        <p>Label: {{ nanoNym.label }}</p>
+        <p>Status: {{ nanoNym.status }}</p>
+        <p>Balance: {{ nanoNym.balance | rai: 'mnano,true' }} XNO</p>
+        <p>Payments: {{ nanoNym.paymentCount }}</p>
+      </div>
+    </ng-container>
+
   </div>
 </div>
 
@@ -863,5 +886,6 @@
         </div>
       </div>
     </div>
+
   </div>
 </div>

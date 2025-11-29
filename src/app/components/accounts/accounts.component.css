@@ -49,3 +49,12 @@ th.hidden-column, td.hidden-column {
 .icon-delete-account {
 	vertical-align: -2px;
 }
+
+.clickable-row {
+	transition: background-color 0.15s ease;
+	cursor: pointer;
+}
+
+.clickable-row:hover {
+	background-color: rgba(0, 123, 255, 0.08);
+}

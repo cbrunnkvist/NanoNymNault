@@ -259,3 +259,13 @@
         height: auto;
     }
 }
+
+.qr-section-toggle {
+    margin-bottom: 16px;
+}
+
+.qr-code-modal {
+    max-width: 250px;
+    height: auto;
+    border-radius: 8px;
+}

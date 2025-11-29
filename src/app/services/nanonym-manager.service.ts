@@ -279,6 +279,19 @@ export class NanoNymManagerService {
   }
 
   /**
+   * Update NanoNym label
+   */
+  async updateNanoNymLabel(index: number, newLabel: string): Promise<void> {
+    const nanoNym = this.storage.getNanoNym(index);
+    if (!nanoNym) {
+      throw new Error(`NanoNym with index ${index} not found`);
+    }
+
+    // Update label
+    this.storage.updateNanoNym(index, { label: newLabel });
+  }
+
+  /**
    * Start monitoring Nostr for a NanoNym
    */
   private async startMonitoring(nanoNym: NanoNym): Promise<void> {
