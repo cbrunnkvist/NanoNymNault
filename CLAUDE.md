@@ -325,79 +325,62 @@ Notes:
 - Parallel queries across all relays; merge results.
 - Relay set should include at least some long-lived, reliable relays; allow user configuration.
 
-### 7.2 Tier 2 – Encrypted Backup Notes on Nostr (Fast, Redundant)
+### 7.2 Tier 2 – Additional Backup Mechanisms (Status: TBD)
 
-Purpose: More compact, redundant recovery channel using encrypted “snapshot” backups.
+**Current Status: Not Implemented**
 
-Backup behavior:
-- Trigger: after each new payment (throttled, e.g. max once per hour).
-- Data (conceptual):
+The original design proposed two additional recovery tiers beyond Nostr multi-relay redundancy:
 
-```json
-{
-  "version": 1,
-  "protocol": "nanoNymNault-backup",
-  "wallet_birthday": 1704067200,
-  "nanoNym_index": 0,
-  "stealth_accounts": [
-    {
-      "address": "nano_1masked...",
-      "R": "hex_R",
-      "tx_hash": "hash",
-      "amount_raw": "raw_amount",
-      "received_timestamp": 1704070800,
-      "label": "optional_memo"
-    }
-  ]
-}
-```
+**Option A: Encrypted Backup Notes on Nostr**
+- Self-send NIP-17 gift-wrapped snapshot backups to public relays
+- **Problem:** Public relays have retention policies (7-30 days typical); self-sent backups get purged just like regular notifications
+- **Conclusion:** Provides no meaningful improvement over Tier 1 unless using custom/paid archival relays
 
-- Encryption:
-    - Derive`recovery_key = BLAKE2b(seed || "nanoNymNault-recovery")`.
-    - Encrypt entire backup payload with`recovery_key`.
-    - Publish as NIP-17 gift-wrapped event to self (sender and receiver =`nostr_public`).
+**Option B: Arweave Permanent Storage**
+- Upload encrypted backups to Arweave via Irys for permanent retention
+- **Problems:**
+  - Requires funded accounts (AR tokens)
+  - Per-NanoNym Ethereum keys would require funding N separate accounts (impractical)
+  - Shared wallet key would link all NanoNym backups (privacy leak)
+  - Free tier effectively dead in 2025
+- **Conclusion:** Economic model not feasible without user-funded accounts
 
-Recovery:
-1. Derive`recovery_key` from seed.
-2. Fetch backup events (kinds 1059 where sender=receiver=self).
-3. Decrypt backup payloads.
-4. For each stealth address, recompute`p_masked` and sync balances from Nano node.
+**Potential Solutions Under Consideration:**
+1. **Downloadable encrypted backup files** - User manually saves to their preferred cloud storage
+2. **Optional paid archival relay integration** - For users willing to pay monthly subscription
+3. **Custom relay configuration** - Allow users to specify their own long-term retention relay
+4. **Hybrid approach** - Combine downloadable backups with optional archival services
 
-Benefits:
-- Faster than replaying all notifications.
-- Single or few messages contain complete address list.
+### 7.3 Tier 3 – Blockchain-Based Fallback (Status: TBD)
 
-### 7.3 Tier 3 – Blockchain-Based Fallback (Guarantee, Slow)
+**Current Status: Not Implemented**
 
-Goal: Absolute guarantee of recoverability from seed only, even without Nostr.
+Without knowledge of the ephemeral public key `R`, it is cryptographically infeasible to derive stealth addresses from on-chain data alone. The `R` value must come from Nostr notifications (Tier 1) or backups (Tier 2).
 
-Current approach:
-- Not practical to brute-force`R` values; full cryptanalytic search is infeasible.
-- Current practical strategy is heuristic and community-architecture-based:
+**Theoretical Approaches (All Impractical):**
+1. Brute-force `R` values - computationally infeasible
+2. Heuristic chain scanning - can identify candidate accounts but cannot derive private keys
+3. Community archival infrastructure - still relies on Nostr retention
 
-1. Encourage community archival relays with long-term retention.
-2. In worst case, perform heuristics on the Nano chain:
-    - Enumerate candidate accounts that look like stealth outputs (e.g., unopened accounts with pending funds, accounts with single receive).
-    - Use date and amount heuristics; user manually verifies candidates.
-    - This is a last resort; design intent is that Tier 1 and Tier 2 cover almost all real cases.
+**Current Reality:**
+Recovery fundamentally depends on Nostr notification availability. The protocol prioritizes this by:
+- Using 3-5 diverse public relays
+- Allowing user-configured relay lists
+- Encouraging inclusion of reliable, long-lived relays
 
-Implementation priority:
-- Phase 1: Tier 1 + Tier 2 (core, must be robust).
-- Phase 2: Integrate community archival relays as a standard fallback.
-- Phase 3: Heuristic chain scanning if needed (expert/advanced mode).
+### 7.4 Recovery Strategy Summary (Current Implementation)
 
-### 7.4 Recovery Tiers Summary
+| Tier | Method | Status | Expected Success | Dependencies |
+|------|--------|--------|------------------|--------------|
+| 1 | Nostr multi-relay replay | ✅ Implemented | High (with relay redundancy) | 3-5 diverse relays |
+| 2 | Additional backup mechanisms | ⚠️ TBD | - | To be determined |
+| 3 | Blockchain-based fallback | ❌ Not feasible | - | Requires `R` from notifications |
 
-| | Tier | Method | Expected speed | Expected success | Dependencies | |
-|------|-------------------------|----------------|------------------|------------------------|
-| | 1 | Nostr notification replay | < 30 s | ≥ 99% | 3–5 normal relays | |
-| | 2 | Encrypted backup notes | < 10 s | ≥ 95% | Nostr relays | |
-| | 3 | Chain-based heuristics | minutes | 100% target | Seed + Nano network | |
-
-Design principle:
-- Normal operation: no blockchain scanning.
-- Fast recovery via Nostr (Tiers 1/2).
-- Seed-only guarantee via combination of Nostr + optional chain-based heuristics + archival infrastructure.
+**Design Reality:**
+- **Primary recovery mechanism:** Nostr multi-relay redundancy (Tier 1)
+- **Seed-only recovery:** Depends on at least one relay retaining notification history
+- **User responsibility:** Configure reliable relay set (including potential archival relays)
+- **Future work:** Determine practical Tier 2 implementation (likely downloadable backups)
 
 ---
 
