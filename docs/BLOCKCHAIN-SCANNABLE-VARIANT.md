@@ -214,7 +214,7 @@ export interface StealthAccountScannable extends StealthAccount {
 **Use cases for ephemeral mode**:
 - Users with reliable Nostr relay access
 - Prefer faster recovery (seconds vs minutes for blockchain scan)
-- Slightly better metadata privacy (R not strictly required for receiver to know sender, but tx lookup is an extra step)
+- Current default (no implementation changes needed)
 
 ---
 
