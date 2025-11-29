@@ -12,6 +12,20 @@ This document specifies an alternative NanoNym protocol variant inspired by Bitc
 
 The core difference: instead of ephemeral keypairs, the sender uses their own Nano account keys for ECDH, making all necessary information for stealth address derivation available on-chain.
 
+### Privacy Goals Reminder
+
+Before comparing variants, recall NanoNym's core privacy goals (from CLAUDE.md Section 11):
+
+1. **Reusable payment codes** - Main UX value
+2. **Recipient privacy from on-chain observers** - Third parties cannot link stealth accounts
+3. **Plausible deniability** - Recipient can deny ownership until consolidation/spending
+
+**NOT a goal**: Hiding sender identity from receiver (receiver can always see sender account in both variants)
+
+### Key Insight
+
+Both ephemeral and scannable modes provide **identical privacy properties**. The receiver can always see the sender's Nano account by looking up the transaction on-chain. The choice between modes is about **recovery guarantees**, not privacy.
+
 ---
 
 ## Comparison: Current vs Blockchain-Scannable

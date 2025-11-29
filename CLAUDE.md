@@ -603,39 +603,95 @@ Security and privacy considerations:
 
 ---
 
-## 11. Privacy Analysis (Condensed)
+## 11. Privacy Analysis
 
-Against blockchain observers:
-- Cannot link disparate receive payments to same NanoNym:
-    - Each payment uses a unique stealth account.
-- No explicit on-chain markers; NanoNym payments look like standard Nano sends.
-- Spending:
-    - Multi-account sends to same destination create visible linkages between those accounts.
-    - Timing correlation possible unless Privacy Mode is used.
+### Core Privacy Goals
 
-Against Nostr relays:
-- Events are NIP-17 gift-wrapped:
-    - Relays cannot see payload or real timestamp.
-    - Sender/receiver identity obscured by ephemeral keys.
-- Relay cannot link notifications to specific Nano accounts.
+NanoNyms is NOT about achieving full transaction-graph anonymity (like Monero). The primary goals are:
 
-Against network observers:
-- Can see Nostr and Nano traffic; users can mitigate with VPN/Tor.
-- Cannot trivially correlate Nostr events with specific on-chain transactions due to encryption and timestamp randomization.
+1. **Reusable payment codes** - Main UX improvement over static Nano addresses
+2. **Recipient privacy from on-chain observers** - Third parties cannot link stealth accounts
+3. **Plausible deniability** - Recipient can deny ownership of individual stealth accounts until consolidation/spending
 
-Comparison snapshot:
+### What NanoNyms Protects Against
 
-| | Protocol | Receive privacy | Spend privacy | Requires chain changes | |
-|-------------------|-----------------|-------------------|------------------------|
-| | Monero | High | High | Yes (own chain) | |
-| | BIP-352 | High | Medium | Assumes Bitcoin | |
-| | Zcash shielded | Very high | High (in-pool) | Yes (own chain) | |
-| | CamoNano | High | Unspecified | No (on-chain notify) | |
-| | NanoNymNault | High | Medium (warned) | No (wallet-level) | |
+**On-chain observers (blockchain analysts, explorers, passive surveillance):**
+- ✅ Cannot link multiple stealth accounts to the same NanoNym recipient
+- ✅ Cannot determine which NanoNym received a payment
+- ✅ Cannot connect stealth accounts to recipient's main Nano accounts
+- ✅ No visible on-chain markers (stealth payments look like standard Nano sends)
+- ✅ Stealth addresses appear as independent, unrelated accounts
 
-Design stance:
-- Receive-side privacy is strong and protocol-enforced.
-- Spend-side privacy is constrained by Nano’s account model; the wallet mitigates via warnings, selection strategies, and optional timing randomization, and is explicit about these limits.
+**Nostr relay operators:**
+- ✅ Cannot read notification payloads (NIP-17 gift-wrapped encryption)
+- ✅ Cannot see real timestamps (randomized ±2 days)
+- ✅ Cannot link notifications to specific Nano accounts
+- ✅ Sender/receiver identity obscured by ephemeral keys
+
+**Network-level observers:**
+- ⚠️ Can see Nostr and Nano traffic (mitigate with VPN/Tor)
+- ✅ Cannot trivially correlate encrypted Nostr events with on-chain transactions
+
+### What NanoNyms Does NOT Protect Against
+
+**The receiver (payment recipient) can always see:**
+- ❌ Sender's Nano account (visible via tx_hash lookup on-chain)
+- ❌ Sender's account balance and transaction history (public blockchain data)
+- ❌ Multiple payments from the same sender account (linkable to sender)
+- ❌ Transaction metadata (amount, timestamp)
+
+**Privacy breaks when recipient consolidates/spends:**
+- ❌ Sending from multiple stealth accounts to same destination links those accounts on-chain
+- ❌ Timing patterns may correlate stealth accounts
+- ⚠️ Mitigated by: account selection algorithm, privacy warnings, optional timing randomization
+
+**Not designed for:**
+- ❌ Hiding sender identity from receiver
+- ❌ Unlinkability after spending from multiple stealth accounts
+- ❌ Protection against sophisticated long-term chain analysis after consolidation
+
+### Privacy Model: Plausible Deniability
+
+Until the recipient spends or consolidates funds:
+- Stealth accounts appear as random, independent addresses on-chain
+- No cryptographic proof linking stealth accounts to each other
+- Recipient can plausibly deny ownership of individual stealth accounts
+- Only the recipient's seed can derive the private keys
+
+After spending/consolidation:
+- On-chain linkage becomes visible (multiple inputs → same destination)
+- Deniability for linked accounts is lost
+- Other unspent stealth accounts remain unlinkable
+
+### Comparison with Other Protocols
+
+| Protocol | Primary Goal | Receiver Privacy | Sender→Receiver Privacy | Chain Changes |
+|----------|--------------|------------------|-------------------------|---------------|
+| Monero | Full anonymity | Very High | High | Yes (own chain) |
+| Zcash (shielded) | Optional anonymity | Very High | High (in-pool) | Yes (own chain) |
+| BIP-352 Silent Payments | Reusable addresses | High | Low (receiver sees sender) | No (Bitcoin-native) |
+| BIP-47 PayNyms | Reusable codes | Medium | Low (on-chain notify) | No (OP_RETURN) |
+| CamoNano | Stealth addresses | High | Low (on-chain notify) | No (Nano-native) |
+| **NanoNymNault** | **Reusable + recipient privacy** | **High** | **Low (receiver sees sender)** | **No (wallet-level)** |
+
+### Design Stance
+
+**Primary value propositions:**
+1. **Reusability** - Publish one `nnym_` address, receive unlimited unlinkable payments
+2. **Recipient unlinkability** - On-chain observers cannot connect stealth accounts
+3. **No protocol changes** - Works with standard Nano nodes
+
+**Acknowledged limitations:**
+- Sender visibility to receiver (inherent to Nano's account model)
+- Linkage upon consolidation (inherent to account-based blockchains)
+- Timing correlation risks (mitigated by optional Privacy Mode)
+
+**Explicit non-goals:**
+- Full transaction-graph anonymity
+- Sender anonymity from receiver
+- Protection against all chain analysis (only pre-consolidation)
+
+The protocol is designed to be **explicit about these trade-offs** through UI warnings, account selection strategies, and clear documentation.
 
 ---
 
