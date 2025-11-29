@@ -20,7 +20,7 @@ The core difference: instead of ephemeral keypairs, the sender uses their own Na
 |----------|---------------------|----------------------|
 | Shared secret derivation | `r * B_view` (ephemeral) | `a_sender * B_view` (sender account) |
 | Recovery method | Nostr notifications | Blockchain scanning |
-| Sender privacy from receiver | High (unlinkable payments) | Low (receiver links same sender) |
+| Sender account visible to receiver | Yes (via tx_hash lookup) | Yes (via tx_hash lookup) |
 | Recovery guarantee | Depends on relay retention | Blockchain + seed only |
 | Communication channel | Nostr (NIP-17) required | Optional (metadata only) |
 
@@ -179,22 +179,28 @@ export interface StealthAccountScannable extends StealthAccount {
 
 ### Privacy Trade-offs
 
-**What the receiver learns** (compared to ephemeral mode):
+**Important**: In BOTH modes, the receiver can see the sender account by looking up the `tx_hash` on-chain. The ephemeral `R` value prevents on-chain observers from linking stealth addresses, but does NOT hide the sender from the receiver.
 
-| Scenario | Ephemeral Mode | Scannable Mode |
+**Actual differences**:
+
+| Property | Ephemeral Mode | Scannable Mode |
 |----------|----------------|----------------|
-| Same sender, 3 payments | 3 unlinkable payments | Knows all 3 from `nano_alice...` |
-| Different senders | Unlinkable | Can identify unique senders |
-| Sender's other activity | No knowledge | Can query `A_sender` account history |
+| Sender account visible to receiver | ✅ Yes (via tx lookup) | ✅ Yes (via tx lookup) |
+| On-chain observer linkability | ❌ Cannot link stealth addresses | ❌ Cannot link stealth addresses |
+| Recovery mechanism | Requires Nostr notifications | Blockchain scanning sufficient |
+| Derivation requirements | Needs `R` from notification | Needs `A_sender` from tx (already on-chain) |
 
-**Use cases where this is acceptable**:
-- Business receiving from known customers (already know sender)
-- Donation addresses (don't care who sender is)
-- Personal wallets (sender = receiver, just want privacy from chain observers)
+**Key insight**: The choice between modes is about **recovery guarantees**, not sender privacy from receiver.
 
-**Use cases where ephemeral mode is better**:
-- Anonymous donations (receiver shouldn't link donors)
-- Privacy-critical payments (sender wants anonymity from receiver)
+**Use cases for scannable mode**:
+- Users prioritizing guaranteed recovery over Nostr availability
+- Scenarios where receiver already knows sender identity
+- Long-term archival (don't want to rely on relay retention)
+
+**Use cases for ephemeral mode**:
+- Users with reliable Nostr relay access
+- Prefer faster recovery (seconds vs minutes for blockchain scan)
+- Slightly better metadata privacy (R not strictly required for receiver to know sender, but tx lookup is an extra step)
 
 ---
 
@@ -203,13 +209,14 @@ export interface StealthAccountScannable extends StealthAccount {
 ### Mode Selection
 
 **Option A: Sender chooses** (preferred):
-- Send UI shows toggle: "Privacy mode" vs "Blockchain-scannable"
-- Default: Privacy mode (ephemeral keys)
-- Tooltip explains trade-offs
+- Send UI shows toggle: "Standard (Nostr)" vs "Scannable (Blockchain recovery)"
+- Default: Standard (ephemeral keys + Nostr)
+- Tooltip: "Both modes provide same privacy. Scannable mode ensures recovery even if Nostr relays fail, at the cost of slower blockchain scanning."
 
 **Option B: Receiver specifies** (future):
 - New address format: `nnym2_...` for scannable variant
 - `nnym_` = ephemeral mode (current)
+- Note: Receiver sees sender account in both modes
 
 ### UX Flow: Blockchain Scanning Recovery
 
@@ -326,17 +333,24 @@ export interface StealthAccount {
 
 ## Security Considerations
 
-### Sender Account Linkage
+### Sender Account Visibility to Receiver
 
-**Risk**: Receiver can analyze sender's account history
+**Reality (applies to BOTH modes)**: Receiver can always analyze sender's account
+- In ephemeral mode: Receiver gets `tx_hash` in Nostr notification → queries blockchain → sees sender account
+- In scannable mode: Receiver scans blockchain → sees sender account directly
+- Result: Identical information available to receiver in both cases
+
+**What receiver can do (in BOTH modes)**:
 - Query `A_sender` account on explorers
 - See sender's balance, transaction patterns
+- Link multiple payments from same sender account
 - Potentially identify sender if account is KYC'd
 
-**Mitigations**:
-1. Warn users in send UI: "Receiver will see your account history"
+**Mitigations (apply to BOTH modes)**:
+1. Warn users in send UI: "Receiver will be able to see your account"
 2. Recommend using dedicated "sending accounts" with minimal balance
 3. Optional: Generate intermediate forwarding accounts (adds on-chain hop)
+4. Privacy model: NanoNym protects against on-chain observers, not against the receiver
 
 ### Chain Analysis Resistance
 
@@ -346,21 +360,25 @@ export interface StealthAccount {
 - Observer cannot tell if payment is ephemeral or scannable mode
 
 **Against statistical analysis**:
-- Scannable mode creates correlation: sender account → stealth address
-- If sender reuses account for multiple stealth sends, creates timing pattern
-- Less resistant to sophisticated graph analysis than ephemeral mode
+- Both modes: Sender account → stealth address correlation visible on-chain (one send tx per stealth account)
+- Both modes: Multiple payments from same sender create timing patterns
+- No difference in resistance to graph analysis between modes
 
 ### Comparison with Bitcoin Silent Payments
 
-**Why Bitcoin can do this with less privacy cost**:
+**Why Bitcoin Silent Payments work well**:
 - Bitcoin transactions naturally have multiple inputs (UTXO model)
-- Sender can mix inputs from different sources
-- Stealth payment input keys ≠ sender's main identity keys
+- Sender can mix UTXOs from different sources in one transaction
+- Stealth payment input keys can be fresh/isolated
+- Receiver must scan to know which outputs are theirs
 
-**Why Nano is different**:
-- Account model: `A_sender` is sender's persistent account identity
-- No native input mixing
-- Scannable mode directly exposes sender account to receiver
+**Why Nano's account model differs**:
+- Each send is from a single account (persistent identity)
+- No native input mixing or multi-input transactions
+- **Both ephemeral and scannable modes**: Sender account visible to receiver
+- **Key difference from Bitcoin**: Receiver can ALWAYS see sender account (via tx lookup in ephemeral mode, or scanning in scannable mode)
+
+**Bottom line**: Nano's account model means receiver visibility of sender is unavoidable regardless of protocol variant choice.
 
 ---
 
