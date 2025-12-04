@@ -1,6 +1,6 @@
 {
-  "name": "NanoNymNault",
-  "short_name": "NanoNyms",
+  "name": "NanoNyms (preview)",
+  "short_name": "NanoNyms (preview)",
   "theme_color": "#1976d2",
   "background_color": "#1f1f24",
   "display": "standalone",

@@ -3,7 +3,7 @@
   "version": "1.18.3",
   "license": "MIT",
   "description": "Wallet for interacting with nano",
-  "author": "The Nano Community / Andrew Steele",
+  "author": "Conny Brunnkvist <cbrunnkvist@gmail.com>",
   "main": "desktop-app/dist/desktop-app.js",
   "scripts": {
     "ng": "npm run version && ng",
@@ -129,7 +129,7 @@
     "appId": "cc.nault",
     "buildVersion": "1.0.0",
     "productName": "Nault",
-    "copyright": "Copyright © 2020 The Nano Community / Andrew Steele",
+    "copyright": "Copyright © 2025 Conny Brunnkvist <cbrunnkvist@gmail.com>",
     "directories": {
       "output": "desktop-app/build",
       "buildResources": "desktop-app/assets",
