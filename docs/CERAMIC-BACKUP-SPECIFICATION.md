@@ -1,0 +1,1048 @@
+# Ceramic Backup for NanoNym Recovery Specification
+
+Target agent: Implementing Coding Agent
+Project name: NanoNymNault
+Goal: Implement a seed-recoverable, append-only Tier-2 backup layer using Ceramic Streams for Nostr notifications, providing eternal access to `R` values and `tx_hash` pairs via decentralized, keyed logs without user-funded storage or external keys.
+Primary constraint: Pure PWA/browser-based (HTTPS nodes/gateways only); opportunistic appends on active sessions; leverage Ceramic's IPFS anchoring for durability.
+Live preview: N/A (internal feature; integrates with existing Nostr recovery).
+Status: Design finalized; implement as optional v1.1 post-Phase 5 (Dec 4, 2025).
+
+---
+
+## 1. Objective and Core Concept
+
+**Problem**: Nostr relays prune historical events (typically 7–30 days), risking loss of `R` values for stealth account recovery. Tier-1 (multi-relay replay) fails on full prune; Tier-3 (chain heuristics) infeasible without `R`. Users need seed-only discovery, but wallets can't persist or fund storage.
+
+**Solution**: Ceramic Streams as append-only, per-NanoNym DID-keyed logs for event blobs (`{R, tx_hash, open_ts}`). Senders append encrypted events to the targeted NanoNym's stream; receivers read history by deriving per-index DIDs. Opportunistic appends on wallet sessions, with IPFS anchoring for eternal availability. Unpublished NanoNyms remain dark (no streams created until first share).
+
+**Why This Approach?**
+- **Reliability**: Ceramic's DAG streams ensure immutable appends with Merkle proofs; IPFS DA provides "forever" storage via community pinning, sidestepping Nostr ephemerality.
+- **UX Focus**: Per-NanoNym isolation + stream filters enable granular recovery, reducing "dust" NanoNyms—query since a user-specified date for active eras only.
+- **Privacy Trade-Off**: Events encrypt content; streams are pubkey-gated (DID per NanoNym). Decentralized nodes see append metadata, but unpublished NanoNyms leak nothing.
+- **Constraints Honored**: Seed-derives DIDs; no costs (feeless writes); PWA-native via HTTP client.
+
+### Terminology
+- **Stream**: Ceramic's append-only log (DID-keyed, schema-enforced; one per NanoNym).
+- **DID**: Decentralized Identifier (Ed25519-based, per-NanoNym derived).
+- **Event Blob**: Encrypted JSON append per stealth open (array of events for that NanoNym).
+- **Opportunistic Append**: Add to stream on active receives; retro-fills via Nostr.
+- **Date Filter**: Optional recovery param for stream reads, defaulting to 1 year ago.
+
+### NanoNym Properties (Backup Extension)
+- One stream per active (shared) NanoNym (lazy creation on first append).
+- Blobs size: <1KB/event; streams scale unbounded.
+- No on-chain; all off-chain, permissionless.
+
+---
+
+## 2. Design Positioning
+
+**Rejected Alternatives**:
+- **Seed-wide stream**: Risks metadata leaks (activity signals across all NanoNyms).
+- **Per-stealth streams**: Over-proliferates; breaks aggregation.
+- **IOTA/HBAR**: Feeless but M2M-focused; Ceramic's schemas suit human events better.
+- **Arweave via Irys**: Requires funded accounts (AR tokens); per-NanoNym Ethereum keys would need funding N separate accounts (impractical).
+- **Public relay self-send backups**: Subject to same retention policies as regular notifications (7-30 days typical).
+
+**Adapted Ideas**:
+- **Ceramic Streams**: Like "Git for events"—append-only, keyed by per-NanoNym DID for isolation.
+- **NIP-17 gift-wrapping**: Reuse for stream appends (encrypted payloads).
+- **NanoNym derivation**: Extend paths for per-index DIDs.
+
+**Final Architecture**:
+- Seed → per-index DID → NanoNym-specific stream appends (senders target via `nnym_` pubkeys).
+- Schema validation for blob integrity.
+- IPFS anchoring: Community-pinned for resilience, no central service.
+- Date filtering: UX for skipping archived history.
+
+**Why Per-NanoNym Streams?** Granular isolation ensures unpublished NanoNyms stay private; custom keys beat Nostr's timestamp scans; eternal DA via IPFS anchors, aligning with Nano's fire-and-forget transfers.
+
+---
+
+## 3. DID and Stream Format
+
+**Why DIDs?** Deterministic, opaque discovery: Wallet derives per NanoNym from seed; unguessable without privkeys (Ed25519 space). Streams anchor to IPFS for global replication; lazy creation preserves privacy.
+
+### 3.1 DID Derivation Layout
+
+**Per-NanoNym DID Path Extension**:
+```
+m/44'/165'/0'/1000'/<account_index>'/1002' → Ed25519 keypair for DID
+```
+
+Where:
+- `44'` = BIP-44 purpose
+- `165'` = Nano coin type
+- `0'` = Account (hardened)
+- `1000'` = NanoNym master path
+- `<account_index>'` = NanoNym index (0, 1, 2, ...)
+- `1002'` = Ceramic DID derivation (new constant)
+
+**Comparison with Existing Paths**:
+- `/0` → spend keypair (`b_spend`, `B_spend`)
+- `/1` → view keypair (`b_view`, `B_view`)
+- `/2` → Nostr keypair (`nostr_private`, `nostr_public`)
+- `/1002` → **Ceramic DID keypair** (new)
+
+**DID String Format**: `did:key:z6M...` (multibase-encoded Ed25519 public key)
+
+**Stream ID**: Auto-generated by Ceramic from `DID + schema model ID`
+
+**Implementation Note**: Must use same BLAKE2b-based derivation as existing NanoNym keys to ensure determinism from hex seeds and BIP-39 mnemonics.
+
+### 3.2 Stream Blob Structure
+
+**JSON Schema** (per append):
+```json
+{
+  "version": 2,
+  "protocol": "nanoNymNault-ceramic",
+  "open_ts": 1733241600,
+  "stealths": [
+    {
+      "R": "a1b2c3d4...",
+      "tx_hash": "A123456789ABCDEF...",
+      "amount_raw": "1000000000000000000000000000",
+      "memo": "optional_encrypted_memo"
+    }
+  ],
+  "sig": "ed25519_signature_hex"
+}
+```
+
+**Field Definitions**:
+- `version`: Protocol version (2 for Ceramic Tier-2)
+- `protocol`: Identifier string for format validation
+- `open_ts`: Unix timestamp (seconds) when stealth account opened
+- `stealths`: Array of stealth account events for this NanoNym
+  - `R`: Ephemeral public key (hex, 64 chars)
+  - `tx_hash`: Nano transaction hash (64 chars hex)
+  - `amount_raw`: Optional raw amount for validation
+  - `memo`: Optional encrypted memo field
+- `sig`: Optional Ed25519 signature over canonical JSON (using `b_spend` for this NanoNym)
+
+**Encryption Envelope**:
+```json
+{
+  "sealed": {
+    "ciphertext": "base64_encrypted_blob",
+    "nonce": "base64_24_bytes",
+    "recipient": "B_view_hex"
+  },
+  "ephemeral_pk": "sender_ephemeral_nostr_public"
+}
+```
+
+Encrypted using NaCl box (X25519-XSalsa20-Poly1305) to `B_view` converted to Curve25519.
+
+**Rationale**:
+- Per-stream focus on one NanoNym enables targeted recovery
+- Timestamps enable date-filtered queries
+- Array structure allows batch appends (efficiency)
+- Signature provides authenticity (optional, for pinning services)
+
+**Compatibility**: Any Ceramic node/gateway supporting ComposeDB or Streams API.
+
+---
+
+## 4. Key Derivation and Blob Model
+
+### 4.1 Extended Key Derivation
+
+**Implementation in `nanonym-crypto.service.ts`**:
+
+Add new method:
+```typescript
+/**
+ * Derive Ceramic DID keypair for a NanoNym index
+ * Path: m/44'/165'/0'/1000'/<account_index>'/1002'
+ */
+deriveCeramicDID(
+  seed: string | Uint8Array,
+  accountIndex: number
+): { private: Uint8Array; public: Uint8Array; did: string } {
+  // Same derivation logic as deriveNanoNymKeys
+  // but with path ending in /1002' instead of /0, /1, /2
+
+  const basePath = /* ... same as existing ... */
+    .concat(this.uint32ToBytes(1002 | 0x80000000)); // 1002' for Ceramic
+
+  const didSeed = this.deriveChildKey(seedBytes, basePath);
+  const didKeyPair = this.blake2bKeyPairFromSeed(didSeed);
+
+  // Generate DID string using did-key format
+  const did = this.encodeDIDKey(didKeyPair.public);
+
+  return {
+    private: didKeyPair.private,
+    public: didKeyPair.public,
+    did: did
+  };
+}
+
+/**
+ * Encode Ed25519 public key as did:key format
+ * Uses multibase + multicodec encoding
+ */
+private encodeDIDKey(publicKey: Uint8Array): string {
+  // Multicodec prefix for Ed25519-pub: 0xed, 0x01
+  const multicodec = new Uint8Array([0xed, 0x01]);
+  const combined = new Uint8Array(multicodec.length + publicKey.length);
+  combined.set(multicodec, 0);
+  combined.set(publicKey, multicodec.length);
+
+  // Base58btc multibase encoding (starts with 'z')
+  const base58 = this.encodeBase58(combined);
+  return `did:key:z${base58}`;
+}
+```
+
+**Storage Extension in `NanoNym` Type**:
+```typescript
+export interface NanoNym {
+  // ... existing fields ...
+
+  /** Ceramic DID for this NanoNym (derived from seed) */
+  ceramicDID?: string;
+
+  /** Ceramic stream ID (created on first append) */
+  ceramicStreamID?: string;
+
+  /** Last Ceramic sync timestamp */
+  lastCeramicSync?: number;
+}
+```
+
+### 4.2 Blob Aggregation Strategy
+
+**Append Frequency**:
+- Per-event appends for real-time reliability
+- Optional batching (max 10 events or 5 minutes) for efficiency
+
+**Read Strategy**:
+- Filter by `open_ts >= wallet_birthday` (default)
+- User-adjustable date picker in recovery UI
+- Parallel reads across all NanoNym streams (Promise.all)
+
+**Deduplication**:
+- Use `tx_hash` as unique key
+- Skip events already in local storage
+- Log duplicates for debugging
+
+---
+
+## 5. Append Workflow (Sender → Targeted NanoNym Stream)
+
+### 5.1 Trigger Points
+
+**When to Append**:
+1. After successful Nano send to stealth address
+2. After Nostr notification sent (dual-channel redundancy)
+3. On background sync (retro-fill missed events from Nostr)
+
+**Where in Code**:
+- `send.component.ts`: After `confirmNanoNymSend()` completes
+- `nanonym-manager.service.ts`: After `receiveStealthFunds()` succeeds
+
+### 5.2 Sender Workflow Steps
+
+**In `send.component.ts` (after line 1300)**:
+
+```typescript
+// After Nostr notification sent successfully
+async appendToCeramicStream(
+  nnym_address: string,
+  R: string,
+  tx_hash: string,
+  amount_raw: string
+): Promise<void> {
+  try {
+    // 1. Derive target NanoNym's Ceramic DID from nnym_ address
+    const parsed = this.nanoNymCrypto.decodeNanoNymAddress(nnym_address);
+    const targetDID = await this.ceramicService.resolveDIDFromPublicKeys(
+      parsed.spendPublic,
+      parsed.viewPublic,
+      parsed.nostrPublic
+    );
+
+    // 2. Create blob
+    const blob = {
+      version: 2,
+      protocol: "nanoNymNault-ceramic",
+      open_ts: Math.floor(Date.now() / 1000),
+      stealths: [{
+        R: R,
+        tx_hash: tx_hash,
+        amount_raw: amount_raw
+      }]
+    };
+
+    // 3. Encrypt blob to B_view
+    const encrypted = await this.ceramicService.encryptBlob(
+      blob,
+      parsed.viewPublic
+    );
+
+    // 4. Append to stream (fire-and-forget, non-blocking)
+    this.ceramicService.appendToStream(targetDID, encrypted).catch(err => {
+      console.warn('[Ceramic] Append failed (non-fatal):', err);
+    });
+
+    console.log('[Ceramic] Appended backup for', tx_hash);
+  } catch (error) {
+    console.warn('[Ceramic] Backup append failed (non-fatal):', error);
+    // Do not block send flow
+  }
+}
+```
+
+**Key Design Decisions**:
+- **Non-blocking**: Ceramic append failures don't affect Nano send or Nostr notification
+- **Opportunistic**: Best-effort backup; Nostr remains primary
+- **Fire-and-forget**: No UI feedback (background operation)
+
+### 5.3 DID Resolution from `nnym_` Address
+
+**Problem**: Given a `nnym_` address, how does the sender find the target Ceramic stream?
+
+**Solution**: Deterministic DID derivation is receiver-only (requires seed). Senders use one of:
+
+**Option A: Embedded in `nnym_` Address (Breaking Change)**
+- Extend `nnym_` format to include Ceramic DID public key
+- Would require version 2 address format
+- **Rejected**: Breaks existing addresses
+
+**Option B: DID Discovery Service (Centralized)**
+- Map `nnym_` → DID via REST API
+- **Rejected**: Centralization anti-pattern
+
+**Option C: Derive from Public Keys (Deterministic)**
+```typescript
+/**
+ * Compute expected Ceramic DID from NanoNym public keys
+ * This replicates the receiver's derivation WITHOUT needing the seed
+ *
+ * Works because: DID public key = f(B_spend, B_view, nostr_public)
+ * where f() is BLAKE2b(concatenate all three)
+ */
+computeExpectedDID(
+  B_spend: Uint8Array,
+  B_view: Uint8Array,
+  nostr_public: Uint8Array
+): string {
+  // Hash all three public keys together
+  const combined = new Uint8Array(96); // 32 + 32 + 32
+  combined.set(B_spend, 0);
+  combined.set(B_view, 32);
+  combined.set(nostr_public, 64);
+
+  // Derive pseudo-seed for DID
+  const didPublicSeed = blake2b(combined, undefined, 32);
+
+  // Generate Ed25519 public key
+  const scalar = this.blake2bToScalar(didPublicSeed);
+  const didPublic = ed25519.ExtendedPoint.BASE.multiply(
+    this.bytesToBigIntLE(scalar)
+  ).toRawBytes();
+
+  return this.encodeDIDKey(didPublic);
+}
+```
+
+**Receiver Derivation** (must match):
+```typescript
+// In deriveNanoNymKeys(), also derive DID
+const ceramicDIDPath = basePath.concat(this.uint32ToBytes(1002));
+const didSeed = this.deriveChildKey(seedBytes, ceramicDIDPath);
+// didSeed MUST equal blake2b(B_spend || B_view || nostr_public)
+```
+
+**Critical Constraint**: The `/1002'` derivation path MUST produce the same result as hashing the three public keys together. This requires:
+1. Seed → derive all 4 keypairs (spend, view, nostr, ceramic)
+2. Ceramic DID = BLAKE2b(B_spend || B_view || nostr_public)
+3. Sender can compute DID from `nnym_` address without seed
+
+**Implementation**:
+```typescript
+// Modify deriveNanoNymKeys() to enforce this:
+const expectedDIDSeed = blake2b(
+  concat(spend.public, view.public, nostr.public),
+  undefined,
+  32
+);
+const ceramicDID = this.blake2bKeyPairFromSeed(expectedDIDSeed);
+// Store both private (from /1002' path) and public (deterministic)
+```
+
+### 5.4 Optional PoW for Spam Gating
+
+**Purpose**: Prevent stream spam on public Ceramic nodes
+
+**Implementation** (optional, low priority):
+```typescript
+async computeAppendPoW(blob: any, difficulty: number = 20): Promise<string> {
+  // Find nonce such that BLAKE2b(blob || nonce) has `difficulty` leading zeros
+  const blobBytes = new TextEncoder().encode(JSON.stringify(blob));
+  let nonce = 0;
+
+  while (true) {
+    const nonceBytes = new Uint8Array(4);
+    new DataView(nonceBytes.buffer).setUint32(0, nonce, false);
+    const hash = blake2b(concat(blobBytes, nonceBytes), undefined, 32);
+
+    if (this.countLeadingZeros(hash) >= difficulty) {
+      return nonce.toString();
+    }
+    nonce++;
+  }
+}
+```
+
+**Default**: Disabled (rely on Ceramic node policies)
+
+---
+
+## 6. Recovery Workflow (Seed-Only Restore)
+
+### 6.1 Wallet Birthday Optimization
+
+**Default Behavior**:
+- Use earliest NanoNym `createdAt` timestamp as lower bound
+- If unknown, default to 1 year ago from current date
+- User can override via date picker in recovery UI
+
+**Implementation**:
+```typescript
+// In nanonym-manager.service.ts
+async startCeramicRecovery(options?: {
+  sinceDate?: Date;
+  nanoNymIndices?: number[];
+}): Promise<RecoveryResult> {
+  const allNanoNyms = this.storage.getAllNanoNyms();
+
+  // Determine recovery start date
+  let sinceTimestamp: number;
+  if (options?.sinceDate) {
+    sinceTimestamp = Math.floor(options.sinceDate.getTime() / 1000);
+  } else {
+    // Default: earliest NanoNym creation or 1 year ago
+    const earliestCreatedAt = Math.min(
+      ...allNanoNyms.map(nn => nn.createdAt),
+      Date.now() - 365 * 86400 * 1000 // 1 year ago fallback
+    );
+    sinceTimestamp = Math.floor(earliestCreatedAt / 1000);
+  }
+
+  console.log(`[Ceramic Recovery] Starting from ${new Date(sinceTimestamp * 1000).toISOString()}`);
+
+  // ... proceed with recovery
+}
+```
+
+### 6.2 Recovery Steps
+
+**UI Flow** (new modal in `accounts.component.ts`):
+
+1. **Trigger**: User clicks "Recover from Ceramic Backup" button
+2. **Date Picker**: "Recover payments since: [date picker] (default: NanoNym creation)"
+3. **Progress**: "Scanning 3 NanoNym streams since 2024-12-03..."
+4. **Results**: "Found 12 payments across 3 NanoNyms"
+5. **Fallback**: "No Ceramic data found. Falling back to Nostr relays..."
+
+**Implementation**:
+```typescript
+async recoverFromCeramic(sinceDate: Date): Promise<void> {
+  const seed = this.wallet.wallet.seed;
+  if (!seed) throw new Error("Wallet not unlocked");
+
+  // 1. Derive all NanoNyms (gap limit)
+  const nanoNyms: NanoNym[] = [];
+  let emptyCount = 0;
+  const gapLimit = 20;
+
+  for (let index = 0; emptyCount < gapLimit; index++) {
+    const ceramicDID = this.crypto.deriveCeramicDID(seed, index);
+
+    // 2. Resolve stream ID
+    const streamID = await this.ceramicService.resolveStreamID(ceramicDID.did);
+
+    if (!streamID) {
+      emptyCount++;
+      continue; // No stream = never used
+    }
+
+    emptyCount = 0; // Reset gap counter
+
+    // 3. Read stream with date filter
+    const sinceTs = Math.floor(sinceDate.getTime() / 1000);
+    const events = await this.ceramicService.readStream(streamID, {
+      filter: { open_ts: { gte: sinceTs } }
+    });
+
+    if (events.length === 0) continue;
+
+    // 4. Decrypt and process events
+    for (const encryptedBlob of events) {
+      const nanoNym = this.storage.getNanoNymByDID(ceramicDID.did);
+      if (!nanoNym) {
+        console.warn('[Ceramic] Stream found but NanoNym not in storage');
+        continue;
+      }
+
+      const blob = await this.ceramicService.decryptBlob(
+        encryptedBlob,
+        nanoNym.keys.viewPrivate
+      );
+
+      // 5. Import stealth accounts
+      for (const stealth of blob.stealths) {
+        await this.processNotification(
+          {
+            version: 1,
+            protocol: "nanoNymNault",
+            R: stealth.R,
+            tx_hash: stealth.tx_hash,
+            amount_raw: stealth.amount_raw
+          },
+          nanoNym.index
+        );
+      }
+    }
+  }
+
+  console.log('[Ceramic Recovery] Complete');
+}
+```
+
+### 6.3 Parallel Stream Reads
+
+**Optimization**: Read all streams concurrently
+
+```typescript
+// Read streams in parallel (Promise.all)
+const recoveryPromises = nanoNymIndices.map(async index => {
+  const did = this.crypto.deriveCeramicDID(seed, index);
+  return this.recoverNanoNymStream(did, sinceTs);
+});
+
+const results = await Promise.all(recoveryPromises);
+const totalEvents = results.reduce((sum, r) => sum + r.eventCount, 0);
+```
+
+**Error Handling**:
+- Individual stream failures don't block others
+- Log failures and continue
+- Show summary: "Recovered 10/12 NanoNyms (2 failed)"
+
+### 6.4 Offline/Edge Cases
+
+**Ceramic Node Unavailable**:
+- Retry with exponential backoff (3 attempts)
+- Fallback to Nostr Tier-1 recovery
+- Cache successful reads for faster subsequent loads
+
+**Long Gaps (>30 days)**:
+- Nostr data likely pruned
+- Ceramic becomes primary recovery source
+- Prompt user: "Ceramic found 5 payments, but Nostr has only 2. Use Ceramic data?"
+
+---
+
+## 7. Ceramic Node Requirements
+
+### 7.1 Public Node Selection
+
+**Recommended Nodes** (as of Dec 2024):
+- `https://ceramic-clay.3boxlabs.com` (testnet)
+- `https://gateway.ceramic.network` (mainnet)
+- `https://ceramic.hirenodes.io` (community)
+
+**Configuration in `environment.ts`**:
+```typescript
+export const environment = {
+  // ... existing config ...
+
+  ceramic: {
+    nodes: [
+      'https://gateway.ceramic.network',
+      'https://ceramic.hirenodes.io'
+    ],
+    timeout: 30000, // 30s per request
+    retries: 3
+  }
+};
+```
+
+### 7.2 Library Integration
+
+**Dependencies** (add to `package.json`):
+```json
+{
+  "dependencies": {
+    "@ceramicnetwork/http-client": "^2.30.0",
+    "@ceramicnetwork/stream-tile": "^2.30.0",
+    "dids": "^4.0.0",
+    "key-did-provider-ed25519": "^3.0.0",
+    "key-did-resolver": "^3.0.0"
+  }
+}
+```
+
+**Service Skeleton** (`ceramic.service.ts`):
+```typescript
+import { Injectable } from '@angular/core';
+import { CeramicClient } from '@ceramicnetwork/http-client';
+import { TileDocument } from '@ceramicnetwork/stream-tile';
+import { DID } from 'dids';
+import { Ed25519Provider } from 'key-did-provider-ed25519';
+import { getResolver } from 'key-did-resolver';
+
+@Injectable({ providedIn: 'root' })
+export class CeramicService {
+  private client: CeramicClient;
+
+  constructor() {
+    this.client = new CeramicClient(
+      environment.ceramic.nodes[0]
+    );
+  }
+
+  async createStream(did: string): Promise<string> {
+    // Create new TileDocument for NanoNym
+  }
+
+  async appendToStream(streamID: string, blob: any): Promise<void> {
+    // Append encrypted event blob
+  }
+
+  async readStream(streamID: string, filter?: any): Promise<any[]> {
+    // Read and filter events
+  }
+}
+```
+
+### 7.3 PWA Constraints
+
+**Browser Compatibility**:
+- Uses `fetch()` API (all modern browsers)
+- HTTPS-only (required for PWA)
+- No WebRTC (simplifies deployment)
+
+**Bundle Size Impact**:
+- `@ceramicnetwork/http-client`: ~150KB gzipped
+- Total increase: ~200KB (acceptable for Tier-2 reliability)
+
+---
+
+## 8. Privacy Analysis
+
+### 8.1 Core Privacy Goals
+
+**What Ceramic Tier-2 Protects**:
+- ✅ **Event persistence**: Survives Nostr relay pruning
+- ✅ **Content privacy**: All blobs encrypted to `B_view`
+- ✅ **Unlinkability**: Separate DIDs per NanoNym prevent cross-linking
+- ✅ **Unpublished privacy**: Lazy stream creation (no stream until first payment)
+
+**What Ceramic Tier-2 Does NOT Protect**:
+- ❌ **Stream existence metadata**: Ceramic nodes can see a stream exists for a DID
+- ❌ **Append timing**: Nodes see when events are added (coarse metadata)
+- ⚠️ **Funding correlation**: If sender uses same wallet across multiple `nnym_` sends, stream appends may reveal timing patterns
+
+### 8.2 Metadata Leakage Analysis
+
+**Observable by Ceramic Nodes**:
+- DID identifier (per-NanoNym, but public after first use)
+- Stream creation timestamp
+- Append timestamps (but not content)
+- Blob sizes (~500 bytes, relatively uniform)
+
+**NOT Observable**:
+- NanoNym address (`nnym_` string)
+- Recipient identity
+- Payment amounts
+- Transaction hashes
+- Relationships between DIDs
+
+**Comparison with Nostr**:
+
+| Metadata | Nostr (NIP-17) | Ceramic Streams |
+|----------|----------------|-----------------|
+| Event timestamps | Randomized ±2 days | Actual (append time) |
+| Recipient identity | Ephemeral outer key | Per-NanoNym DID |
+| Content encryption | NIP-44/NIP-59 | NaCl box to B_view |
+| Relay metadata | Multiple relays | Single stream ID |
+| Retention | 7-30 days | Indefinite (IPFS) |
+
+**Mitigation Strategies**:
+- Use multiple Ceramic nodes (failover diversifies metadata)
+- Batch appends to reduce timing precision
+- Optional: Add random delays before appends
+
+### 8.3 Privacy Model Summary
+
+**Threat Model**:
+- **Global passive observer**: Cannot link streams to real identities
+- **Ceramic node operator**: Sees stream activity but not content
+- **Targeted surveillance**: If attacker knows DID → NanoNym mapping, can track append frequency (but not amounts/recipients)
+
+**Privacy Stance**: "Private per-NanoNym log with eternal availability"
+- Stronger than Nostr (persistence)
+- Weaker than Nostr (timing metadata)
+- **Net benefit**: Trade append-time leakage for guaranteed recovery
+
+---
+
+## 9. Implementation Roadmap (Status-Oriented)
+
+**Current Status (Dec 4, 2025)**: Design complete; hooks to Phase 5.
+
+### Phase 1 – Per-Index DID Derivation
+**Status**: Not started
+**Estimated effort**: 2 days
+**Tasks**:
+- [ ] Extend `nanonym-crypto.service.ts` with `deriveCeramicDID()` method
+- [ ] Implement deterministic DID from public keys (sender-side computation)
+- [ ] Add `did-key` encoding utilities (Base58btc multibase)
+- [ ] Unit tests: Verify determinism across hex/mnemonic seeds
+- [ ] Integration test: Sender-computed DID matches receiver-derived DID
+
+**Acceptance Criteria**:
+- Same seed + same index → identical DID (100% deterministic)
+- DID computable from `nnym_` address public keys
+- Test vectors documented
+
+### Phase 2 – Stream Handling
+**Status**: Not started
+**Estimated effort**: 3 days
+**Tasks**:
+- [ ] Create `ceramic.service.ts` with HTTP client wrapper
+- [ ] Implement blob schema (JSON-LD or TypeScript interface)
+- [ ] Encrypt/decrypt methods using NaCl box to `B_view`
+- [ ] Stream creation (lazy, on first append)
+- [ ] Append method with retry logic
+- [ ] Read method with date filtering
+- [ ] Unit tests: Roundtrip append/read with mock client
+- [ ] Error handling: Node unavailable, timeout, invalid schema
+
+**Acceptance Criteria**:
+- Append succeeds on public Ceramic node
+- Read returns filtered events by timestamp
+- Encryption roundtrip preserves data integrity
+
+### Phase 3 – Sender Integration
+**Status**: Not started
+**Estimated effort**: 2 days
+**Tasks**:
+- [ ] Hook `send.component.ts` to append after successful send
+- [ ] Derive target DID from `nnym_` address
+- [ ] Non-blocking append (fire-and-forget)
+- [ ] Logging: Success/failure without blocking UI
+- [ ] Integration test: End-to-end send → Ceramic append
+
+**Acceptance Criteria**:
+- Ceramic append failures don't block Nano send
+- Successful appends logged in console
+- No UI latency impact
+
+### Phase 4 – Recovery Wizard
+**Status**: Not started
+**Estimated effort**: 3 days
+**Tasks**:
+- [ ] Add "Recover from Ceramic" button to accounts page
+- [ ] Date picker modal with default to NanoNym birthday
+- [ ] Progress indicator: "Scanning X streams since Y date"
+- [ ] Parallel stream reads with Promise.all
+- [ ] Deduplicate events against existing storage
+- [ ] Fallback to Nostr if Ceramic returns empty
+- [ ] E2E test: Recover wallet from seed + Ceramic data
+
+**Acceptance Criteria**:
+- Date filter correctly limits returned events
+- All NanoNym streams scanned in <10 seconds
+- Duplicate tx_hashes skipped gracefully
+
+### Phase 5 – Node Setup & Production Readiness
+**Status**: Not started
+**Estimated effort**: 2 days
+**Tasks**:
+- [ ] Configure production Ceramic nodes (mainnet gateway)
+- [ ] Multi-node failover logic (retry with backup nodes)
+- [ ] Monitoring: Log append success/failure rates
+- [ ] Documentation: User guide for recovery
+- [ ] Optional: Self-hosted node instructions
+
+**Acceptance Criteria**:
+- 99%+ append success rate (measured over 100 sends)
+- Recovery works on fresh wallet with only seed
+- User documentation published
+
+### Later Enhancements
+**Future v1.2+**:
+- [ ] Schema v2 with signature verification
+- [ ] Batch append optimization (10 events per blob)
+- [ ] Multi-node parallel appends for redundancy
+- [ ] Ceramic IDX for cross-stream queries
+- [ ] Hybrid recovery (Ceramic + Nostr parallel reads)
+
+---
+
+## 10. Known Limitations
+
+### 10.1 Technical Constraints
+
+1. **Node Availability**:
+   Public Ceramic nodes may experience downtime or rate limiting.
+   **Mitigation**: Multi-node failover (2-3 nodes configured).
+
+2. **Append Latency**:
+   IPFS anchoring takes 5-30 seconds after append.
+   **Impact**: Non-blocking; async background operation.
+   **Mitigation**: Fire-and-forget; don't wait for confirmation.
+
+3. **Multi-Stream Overhead**:
+   Parallel reads scale linearly with NanoNym count (N streams).
+   **Impact**: 20 NanoNyms = 20 concurrent HTTP requests.
+   **Mitigation**: Promise.all with concurrency limit (10 max).
+
+4. **DID Exposure**:
+   Per-NanoNym DID becomes public on first stream creation.
+   **Privacy Impact**: Reveals NanoNym is "active" but not linked to identity.
+   **Mitigation**: Lazy creation (stream only created when `nnym_` shared).
+
+5. **PWA Constraints**:
+   HTTP-only communication (no WebRTC P2P).
+   **Impact**: Relies on Ceramic gateway availability.
+   **Mitigation**: Standard for PWAs; same as Nostr relay model.
+
+6. **Storage Costs**:
+   Community IPFS pinning is voluntary; data could theoretically be pruned.
+   **Reality**: IPFS anchored data has high retention (>99% for popular networks).
+   **Mitigation**: Document this trade-off; recommend users save seed backups.
+
+### 10.2 Operational Considerations
+
+1. **Recovery UX Complexity**:
+   Users must choose date filter; non-obvious for non-technical users.
+   **Mitigation**: Default to "all time" or NanoNym creation date.
+
+2. **Duplicate Events**:
+   Nostr + Ceramic may both deliver same events.
+   **Mitigation**: Deduplicate by `tx_hash` before processing.
+
+3. **Partial Failures**:
+   Some streams may load while others fail (node issues).
+   **Mitigation**: Show partial success UI ("Recovered 8/10 NanoNyms").
+
+---
+
+## 11. Future Enhancements (Key Ideas)
+
+### 11.1 Stream Manifest (Root DID)
+
+**Concept**: Single "wallet-level" stream that lists all NanoNym DIDs.
+
+**Benefits**:
+- Faster discovery (single query instead of gap-limit scanning)
+- Can include metadata (labels, archival status)
+
+**Privacy Trade-Off**:
+- Links all NanoNym DIDs to single wallet identity
+- **Rejected for v1**: Breaks per-NanoNym isolation
+
+**Potential v2 Approach**:
+- Encrypted manifest (to wallet master key)
+- Optional, user-controlled
+
+### 11.2 Ceramic IDX for Cross-Stream Queries
+
+**Concept**: Use Ceramic's Identity Index (IDX) for efficient queries.
+
+**Benefits**:
+- Query "all payments since X across all my NanoNyms" in one call
+- Better than N separate stream reads
+
+**Implementation**:
+- Requires IDX schema definition
+- Integration with ComposeDB (Ceramic's GraphQL layer)
+
+**Timeline**: Post-v1.1 (wait for ComposeDB stability)
+
+### 11.3 Hybrid Recovery (Ceramic + Nostr Parallel)
+
+**Concept**: Query both Ceramic and Nostr simultaneously; merge results.
+
+**Benefits**:
+- Fastest possible recovery (Nostr wins on recent events)
+- Ceramic fills gaps for older events
+- Redundancy increases reliability
+
+**Implementation**:
+```typescript
+const [nostrEvents, ceramicEvents] = await Promise.all([
+  this.nostrService.fetchHistory(sinceDate),
+  this.ceramicService.readStreams(sinceDate)
+]);
+
+const merged = this.deduplicateEvents([...nostrEvents, ...ceramicEvents]);
+```
+
+**Timeline**: v1.2 (after both Tier-1 and Tier-2 stabilize)
+
+### 11.4 Enhanced DA Options
+
+**Filecoin Backing**:
+- Ceramic can anchor to Filecoin for provable storage deals
+- Guarantees retention beyond IPFS community pinning
+
+**Arweave Fallback**:
+- Optionally sync Ceramic streams to Arweave (permanent storage)
+- Requires solving the funding problem (per-NanoNym wallets impractical)
+
+**Timeline**: v2.0+ (evaluate demand and economics)
+
+---
+
+## 12. Summary and Guardrails
+
+**Ceramic Tier-2 provides**: Per-NanoNym DID-keyed streams for unbreakable NanoNym recovery—seed derives isolated silos, user filters by date, network anchors eternally via IPFS.
+
+### 12.1 Critical Invariants
+
+**Must Never Break**:
+1. **Determinism**: `Seed + index → same DID` (always, across devices)
+2. **Isolation**: Each NanoNym has independent stream (no cross-linking)
+3. **Encryption**: All blobs encrypted to `B_view` before append
+4. **Non-blocking**: Ceramic operations never delay Nano sends
+5. **Recoverability**: `Seed + date → full stealth account history`
+
+**Test Every Change**:
+- Restore from seed + Ceramic data → must match Nostr results
+- Sender-computed DID → must equal receiver-derived DID
+- Append failure → must not crash send workflow
+
+### 12.2 Commit Message Guidelines
+
+**Subject Line Format**:
+```
+Add per-NanoNym DID derivation for Ceramic isolation
+```
+
+**Body Content** (explain WHY):
+```
+Ensures unpublished NanoNyms stay private until first payment.
+Derives deterministic DID from seed path m/44'/165'/0'/1000'/<index>'/1002'.
+Sender computes same DID from nnym_ public keys for targeted appends.
+
+Maintains critical invariant: Seed-only recovery without external dependencies.
+```
+
+**References**:
+- Link to this spec: `docs/CERAMIC-BACKUP-SPECIFICATION.md`
+- Related issue (if applicable)
+
+### 12.3 Development Checklist
+
+Before marking Tier-2 as "complete":
+- [ ] All test vectors pass (deterministic DID generation)
+- [ ] E2E recovery test: Fresh wallet restores all payments from Ceramic
+- [ ] Append success rate >99% on production Ceramic nodes
+- [ ] No performance regression on send flow (<100ms added latency)
+- [ ] Documentation updated (user guide + developer docs)
+- [ ] Privacy analysis reviewed and accepted
+
+---
+
+## Appendix A: Test Vectors
+
+### A.1 DID Derivation Test Cases
+
+**Test Case 1: Hex Seed**
+```
+Seed (hex): 0000000000000000000000000000000000000000000000000000000000000000
+Index: 0
+Expected DID: did:key:z6Mk...
+```
+
+**Test Case 2: BIP-39 Mnemonic**
+```
+Mnemonic: "abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about"
+Index: 0
+Expected DID: did:key:z6Mk...
+```
+
+(Full test vectors to be computed during implementation)
+
+### A.2 Blob Encryption Roundtrip
+
+**Test**: Encrypt blob with `B_view`, decrypt with `b_view`, verify content matches.
+
+```typescript
+const blob = {
+  version: 2,
+  protocol: "nanoNymNault-ceramic",
+  open_ts: 1733241600,
+  stealths: [{ R: "abc123", tx_hash: "def456" }]
+};
+
+const encrypted = await ceramicService.encryptBlob(blob, B_view);
+const decrypted = await ceramicService.decryptBlob(encrypted, b_view);
+
+assert.deepEqual(decrypted, blob);
+```
+
+---
+
+## Appendix B: Ceramic Stream Schema (JSON-LD)
+
+**ComposeDB Model Definition**:
+
+```graphql
+type NanoNymBackup @createModel(accountRelation: LIST, description: "NanoNym stealth account backup events") {
+  version: Int! @int(min: 2, max: 2)
+  protocol: String! @string(maxLength: 50)
+  open_ts: Int! @int(min: 0)
+  stealths: [StealthEvent!]! @list(maxLength: 100)
+  sig: String @string(maxLength: 128)
+}
+
+type StealthEvent {
+  R: String! @string(minLength: 64, maxLength: 64)
+  tx_hash: String! @string(minLength: 64, maxLength: 64)
+  amount_raw: String @string(maxLength: 40)
+  memo: String @string(maxLength: 256)
+}
+```
+
+**Runtime Validation** (TypeScript):
+```typescript
+interface NanoNymBackupBlob {
+  version: 2;
+  protocol: "nanoNymNault-ceramic";
+  open_ts: number; // Unix seconds
+  stealths: Array<{
+    R: string; // 64 hex chars
+    tx_hash: string; // 64 hex chars
+    amount_raw?: string; // Nano raw amount
+    memo?: string;
+  }>;
+  sig?: string; // Optional Ed25519 signature
+}
+
+function validateBlob(blob: any): blob is NanoNymBackupBlob {
+  return (
+    blob.version === 2 &&
+    blob.protocol === "nanoNymNault-ceramic" &&
+    typeof blob.open_ts === "number" &&
+    Array.isArray(blob.stealths) &&
+    blob.stealths.every(s =>
+      typeof s.R === "string" && s.R.length === 64 &&
+      typeof s.tx_hash === "string" && s.tx_hash.length === 64
+    )
+  );
+}
+```
+
+---
+
+**End of Specification**
