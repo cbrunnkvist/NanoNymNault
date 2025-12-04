@@ -36,15 +36,15 @@ This document describes the cryptographic key derivation architecture for NanoNy
    │   Method: BLAKE2b-based (Ed25519)    │
    └──────────────────────────────────────┘
               ↓
-         ┌────┴────┬────────┬──────────┐
-         ↓         ↓        ↓          ↓
-    T=0: b_spend  T=1: b_view  T=2: nostr_private
-    (Ed25519)     (Ed25519)    (Ed25519→Nostr)
-         │          │            │
-         ↓          ↓            ↓
-    B_spend ──→ B_view ──→ nostr_public
-         │          │            │
-         └──────────┴────────────┘
+         ┌────┴────┬────────┬──────────┬──────────┐
+         ↓         ↓        ↓          ↓          ↓
+    T=0: b_spend  T=1: b_view  T=2: nostr_private  T=1002: ceramic_did
+    (Ed25519)     (Ed25519)    (Secp256k1)         (Ed25519)
+         │          │            │                   │
+         ↓          ↓            ↓                   ↓
+    B_spend ──→ B_view ──→ nostr_public ──→ ceramic_public
+         │          │            │                   │
+         └──────────┴────────────┴───────────────────┘
                     ↓
             ┌───────────────┐
             │  nnym_v1_...  │
@@ -70,18 +70,45 @@ Where:
   0'             = Account 0 (hardened)
   1000'          = NanoNym namespace (hardened)
   <account_index>' = NanoNym account (0, 1, 2, ...) (hardened)
-  <key_type>     = 0: spend, 1: view, 2: nostr (non-hardened)
+  <key_type>     = 0: spend, 1: view, 2: nostr, 1002': ceramic_did (non-hardened except 1002')
 ```
 
 **Key Derivation Method:**
 - Uses BLAKE2b hash-based derivation (not BIP-32 secp256k1)
-- Produces Ed25519 keys for all three key types
-- Nostr key is Ed25519, used in Nostr context (note: non-standard for Nostr)
+- Produces Ed25519 keys for spend and view keys
+- **Nostr key (T=2)**: Derived via BLAKE2b seed, then converted to Secp256k1 keypair using `@noble/secp256k1`
+  - Process: `BLAKE2b(seed_path) → 32-byte scalar → Secp256k1 private key → x-only public key (32 bytes)`
+  - Result: Standard Secp256k1 key compatible with Nostr (NIP-01)
+- **Ceramic DID key (T=1002')**: Ed25519 keypair for Ceramic stream authentication (Tier-2 backup)
+
+### Ceramic DID Derivation (Tier-2 Backup)
+
+**Purpose**: Enable eternal backup of stealth account notifications via Ceramic Streams.
+
+**Derivation Path**: `m/44'/165'/0'/1000'/<account_index>'/1002'`
+
+**Key Properties**:
+- **Ed25519 keypair**: Matches Ceramic's DID standard (did:key format)
+- **Per-NanoNym isolation**: Each NanoNym has independent Ceramic stream
+- **Deterministic recovery**: Same seed + same index → same DID → same stream
+- **Sender-computable**: DID can be derived from `nnym_` public keys without seed
+
+**Why 1002' (hardened)?**
+- Large gap from standard paths (0, 1, 2) prevents accidental collision
+- Hardened derivation ensures cryptographic independence from payment keys
+- Future-proof: Room for additional auxiliary keys (1003', 1004', etc.)
+
+**Usage**:
+- Senders append encrypted event blobs to target NanoNym's Ceramic stream
+- Receivers query streams by deriving DID from seed during recovery
+- Provides eternal backup if Nostr relays prune historical notifications
+
+**See**: `docs/CERAMIC-BACKUP-SPECIFICATION.md` for full Tier-2 design.
 
 ### User Experience
 
-**Backup:** Single 24-word Nano seed  
-**Recovery:** Deterministic - restore seed, recover all NanoNyms  
+**Backup:** Single 24-word Nano seed (covers ALL keys including Ceramic DID)
+**Recovery:** Deterministic - restore seed, recover all NanoNyms and their backups
 **Simplicity:** ★★★★★ (Excellent - one seed does everything)
 
 ### Use Cases
@@ -90,6 +117,7 @@ Where:
 - Merchants wanting unlinkable payment addresses
 - Users new to both Nano and Nostr
 - Anyone who values simplicity
+- Long-term storage requiring eternal backup (Ceramic Tier-2)
 
 ---
 
@@ -272,10 +300,12 @@ Bytes 98-99:  Checksum (BLAKE2b-5, first 2 bytes)
    - All Nano spend keys
    - All Nano view keys
    - All Nostr notification keys
-3. Scan Nostr relays for historical notifications
-4. Detect all past payments
+   - All Ceramic DID keys (for Tier-2 backup recovery)
+3. Scan Nostr relays for historical notifications (Tier-1)
+4. Optionally: Query Ceramic streams for eternal backup (Tier-2)
+5. Detect all past payments
 
-**Recovery Time:** Minutes (depends on notification history)
+**Recovery Time:** Minutes (depends on notification history and chosen recovery tier)
 
 ---
 
@@ -338,16 +368,27 @@ Bytes 98-99:  Checksum (BLAKE2b-5, first 2 bytes)
 
 ## Implementation Status
 
-### ✅ Completed (Phase 1)
+### ✅ Completed (Phase 1-5)
 
-- [x] v1 key derivation (Nano seed → all keys)
+- [x] v1 key derivation (Nano seed → all keys including Secp256k1 Nostr keys)
 - [x] nnym_v1 address encoding/decoding
 - [x] Unit tests for v1 cryptography
 - [x] Documentation of v1 architecture
+- [x] Send/receive workflows with stealth addresses
+- [x] Nostr NIP-17 gift-wrapped notifications (Tier-1 recovery)
+- [x] Multi-NanoNym management and account aggregation
+- [x] Stealth account opening (three-phase defense-in-depth)
 
-### 🔜 Planned (Phase 2+)
+### 🚧 In Progress (Phase 6 - Tier-2 Recovery)
 
-- [ ] v2 address format specification
+- [ ] Ceramic DID derivation (path /1002')
+- [ ] Per-NanoNym Ceramic stream appends
+- [ ] Ceramic-based recovery workflow with date filtering
+- [ ] See: `docs/CERAMIC-BACKUP-SPECIFICATION.md`
+
+### 🔜 Planned (Future Versions)
+
+- [ ] v2 address format specification (Nostr-first with external keys)
 - [ ] Dual-seed management system
 - [ ] nnym_v2 encoding/decoding
 - [ ] Migration tooling (v1 → v2 optional)
@@ -382,8 +423,8 @@ Bytes 98-99:  Checksum (BLAKE2b-5, first 2 bytes)
 
 ## FAQ
 
-**Q: Why not use a single seed for everything?**  
-A: Ed25519 (Nano) and Secp256k1 (Nostr) are mathematically incompatible. Secure cross-derivation is not possible.
+**Q: Why not use a single seed for everything?**
+A: In v1 (current), we DO use a single seed. The Nostr Secp256k1 key is derived from a BLAKE2b-hashed seed from the Nano derivation path. For v2 (future, Nostr-first), Ed25519 and Secp256k1 will remain separate because NIP-06 standard derivation cannot be mixed with Nano's BLAKE2b approach.
 
 **Q: Can I use my existing Nostr identity in NanoNymNault wallet?**  
 A: No. NanoNymNault is Nano-first and derives Nostr keys internally. For existing Nostr identity preservation, wait for v2 in Nostr client integrations.
@@ -410,6 +451,22 @@ A: No. It's a consequence of supporting both protocols with their native curves.
 
 ---
 
-*Document Version: 1.0*  
-*Last Updated: 2025-11-13*  
+## Changelog
+
+**Version 1.1 (2025-12-04)**:
+- Clarified Nostr key derivation: BLAKE2b-derived seed → Secp256k1 keypair (not Ed25519)
+- Added Ceramic DID derivation path (T=1002') for Tier-2 backup
+- Updated implementation status to reflect Phase 1-5 completion
+- Added recovery workflow with Tier-1 (Nostr) and Tier-2 (Ceramic) options
+- Cross-referenced CERAMIC-BACKUP-SPECIFICATION.md for Tier-2 details
+
+**Version 1.0 (2025-11-13)**:
+- Initial document describing v1 (Nano-first) and v2 (Nostr-first) architectures
+- Detailed cryptographic constraints preventing Ed25519 ↔ Secp256k1 cross-derivation
+- Defined BIP-44 style derivation paths for NanoNym keys
+
+---
+
+*Document Version: 1.1*
+*Last Updated: 2025-12-04*
 *Status: Living Document*
