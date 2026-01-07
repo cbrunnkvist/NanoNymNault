@@ -1,0 +1,27 @@
+# Ceramic Spike Learnings (drop-in notes for future storage spikes)
+
+- **Scope**: Branch `ceramic_as_tier_2_event_storage` integrates Ceramic Streams Tier-2 backup into NanoNym send/recovery flows. Uncommitted change: dev `ceramicGateway` now points directly to `http://localhost:7007` (no CORS proxy).
+- **Model implemented**:
+  - DID derivation: `BLAKE2b-256("nanonym-ceramic-did-v1" || B_spend || B_view || nostr_public)` → Ed25519 key → `did:key:z...`.
+  - Deterministic stream: `family="nanonym-backup"`, `tags=["v2"]`.
+  - Payload: Tier-1 `NanoNymNotification` `{_v:1,_p:"NNymNotify",R,tx_h,a_raw?}` wrapped in Tier-2 `NanoNymNotificationsRecord` `{_v:3,_p:"NNymRecord",o_ts,s_txs:[...]}`.
+  - Encryption: NaCl box to `B_view` (Ed25519→Curve25519); anyone with `nnym_` can append, only receiver can decrypt.
+- **App wiring**:
+  - Send flow (`SendComponent`): after Nano send + Nostr notify, fire-and-forget append via `CeramicStreamService.appendSendEvent(...)`; failures are logged only.
+  - Recovery (`NanoNymManagerService`): on startup/seed restore, `recoverFromStream(seed, index, createdAt)` decrypts stream events and pipes them through existing `processNotification` for dedup/open.
+  - Health check: `GET /api/v0/node/healthcheck` run on wallet unlock (console log only).
+- **Operational reality hit during spike**:
+  - No public gateway; `https://gateway.ceramic.network` is NXDOMAIN. Requires self-hosted node (`ceramic daemon`, sometimes with `ceramic-one`) and CORS enablement. Dev script `proxy:ceramic` points at the defunct gateway; current env change bypasses proxy.
+  - Streams v2 API used (`@ceramicnetwork/http-client@2.36.0`, `stream-tile@2.35.0`); ComposeDB migration risk for any future SDK upgrades.
+  - Browser bundle impact for Ceramic + DID libs not yet measured; Angular `allowedCommonJsDependencies` updated to silence warnings.
+- **Gaps/risks if revisiting Ceramic**:
+  - No retries/backoff for append/read; no concurrency caps; no UI controls (always on) and no user-facing errors.
+  - Spam risk: anyone with `nnym_` can append junk to a stream; no PoW/signature guard implemented.
+  - Production story undefined: users would need their own HTTPS Ceramic node or Tier-2 must stay optional/disabled.
+  - Tests absent for DID derivation, Ed25519→Curve25519 conversions, encrypt/decrypt, and stream determinism; recovery wizard UI not built.
+- **Reusable takeaways for other storage spikes**:
+  - Favor protocols with **public, CORS-friendly gateways**; otherwise plan for bundled proxy + self-host instructions.
+  - Derive write addresses from **public data** when senders must append, but keep payload encryption anchored on receiver-only keys.
+  - Make backup appends **non-blocking** for send UX, but surface health/errors somewhere so recovery expectations stay clear.
+  - Add **date/created-at filters** to bound recovery scans; reuse existing notification ingestion for deduplication.
+  - Budget early for **bundle weight** and dependency compatibility with Angular 13/CommonJS constraints.
