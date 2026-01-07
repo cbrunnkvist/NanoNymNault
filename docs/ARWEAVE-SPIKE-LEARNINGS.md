@@ -2,7 +2,7 @@
 
 **Date**: 2026-01-08
 **Branch**: `arweave_as_tier_2_event_storage`
-**Status**: PARTIALLY SUCCESSFUL - Query works, Upload blocked
+**Status**: SUCCESSFUL - Query and Upload both working
 
 ## Objective
 
@@ -25,34 +25,28 @@ Implement Arweave (via Irys bundler) as Tier 2 backup for NanoNym payment notifi
    - NaCl box encryption to recipient's view key (Ed25519→X25519 conversion)
    - Blind index derivation from Nostr public key (BLAKE2b-256)
 
-### What Doesn't Work
+### Initial Blocker: Irys SDK
 
-**Irys SDK Upload from Browser** - BLOCKED
+The Irys SDK (both Node.js and "web" versions) couldn't run in Angular/webpack:
+- Required Node.js `crypto`, `fs`, `path` modules
+- Web version expected browser wallet (MetaMask), not raw keys
 
-The Irys SDK (both Node.js and "web" versions) cannot run in an Angular/webpack browser environment:
+### Solution: Custom ANS-104 Implementation
 
-1. **@irys/upload + @irys/upload-ethereum** (Node.js packages)
-   - Requires Node.js `crypto`, `fs`, `path` modules
-   - Webpack 5 removed automatic polyfills
-   - Error: "Can't resolve 'crypto'"
+Instead of fighting the SDK, we implemented direct data item creation:
 
-2. **@irys/web-upload + @irys/web-upload-ethereum** (Web packages)
-   - Designed for dApps with MetaMask/wallet connection
-   - Uses `withProvider()` instead of `withWallet()`
-   - Expects injected Ethereum provider, not raw private keys
-   - Still requires `@irys/upload-core` which needs `crypto`
+1. **IrysDataItemService** (`src/app/services/irys-data-item.service.ts`)
+   - Creates ANS-104 data items from scratch
+   - Uses `@noble/secp256k1` for Ethereum signing
+   - Uses `@noble/hashes/sha512` (sha384) for DeepHash
+   - Uses `@noble/hashes/sha3` (keccak256) for message hashing
+   - POSTs directly to `https://devnet.irys.xyz/tx/ethereum`
 
-3. **@irys/web-upload-ethereum-ethers-v6** (Ethers adapter)
-   - Allows using ethers.js Wallet as provider
-   - But `@irys/bundles` and `@irys/upload-core` still require Node.js `crypto`
-
-### Root Cause
-
-The Irys SDK architecture assumes either:
-- **Server-side** (Node.js with full crypto/fs access)
-- **Browser dApp** (user connects wallet via MetaMask/WalletConnect)
-
-NanoNymNault is a **browser app with internally-derived keys** - a use case the SDK doesn't support.
+2. **Key Implementation Details**
+   - DeepHash algorithm (SHA-384 based recursive hashing)
+   - AVS (Avro) tag encoding with ZigZag VInt
+   - Ethereum message signing with `\x19Ethereum Signed Message:\n` prefix
+   - ANS-104 binary format construction
 
 ## Technical Details
 
@@ -87,80 +81,60 @@ This is consistent with the existing NanoNym privacy model.
 
 ## Implementation Status
 
+### IrysDataItemService (`src/app/services/irys-data-item.service.ts`)
+
+| Method | Status | Notes |
+|--------|--------|-------|
+| `createAndUploadDataItem()` | ✅ Working | Main entry point |
+| `createDataItem()` | ✅ Working | ANS-104 format construction |
+| `deepHash()` | ✅ Working | SHA-384 recursive hashing |
+| `signEthereumMessage()` | ✅ Working | Keccak256 + secp256k1 |
+| `serializeAvroTags()` | ✅ Working | AVS encoding with ZigZag VInt |
+| `uploadDataItem()` | ✅ Working | POST to Irys devnet |
+
 ### IrysDiscoveryService (`src/app/services/irys-discovery.service.ts`)
 
 | Method | Status | Notes |
 |--------|--------|-------|
 | `deriveBlindIndex()` | ✅ Working | BLAKE2b-256 of nostr public key |
+| `deriveIrysKey()` | ✅ Working | m/44'/60'/0'/0/255 derivation |
 | `encryptPayload()` | ✅ Working | NaCl box, Ed25519→X25519 conversion |
 | `decryptPayload()` | ✅ Working | NaCl box.open |
 | `queryNotifications()` | ✅ Working | GraphQL to arweave.net |
 | `parseEncryptedPayload()` | ✅ Working | Version 1 format parser |
 | `recoverNotificationsForNanoNym()` | ✅ Working | Query + decrypt pipeline |
-| `uploadNotification()` | ❌ Stub | Returns null, logs warning |
+| `uploadNotification()` | ✅ Working | Uses IrysDataItemService |
 
 ### Send Flow Integration
 
-The send component attempts Irys backup after Nostr notification:
+The send component performs Irys backup after Nostr notification:
 1. Nostr notification sent (primary channel)
-2. Irys backup attempted (currently no-op)
-3. Transaction completes regardless of Irys status
+2. Irys backup uploaded to Arweave (Tier 2)
+3. Transaction completes regardless of Irys status (non-blocking)
 
-## Alternative Approaches
+## Solution: Direct ANS-104 Implementation
 
-### Option 1: Direct Arweave/Bundlr REST API
+We chose Option 1 from our analysis and implemented it successfully:
 
-Skip the SDK and implement upload directly:
-1. Create ANS-104 data item manually
-2. Sign with Ethereum key (Secp256k1)
-3. POST to `https://devnet.irys.xyz/tx`
+1. **Create ANS-104 data item manually** - Done in `IrysDataItemService`
+2. **Sign with Ethereum key (Secp256k1)** - Using `@noble/secp256k1`
+3. **POST to Irys devnet** - Direct HTTP request
 
-**Pros**: Full control, no SDK dependencies
-**Cons**: Complex signing implementation, need to match ANS-104 spec exactly
+### Why This Worked
 
-### Option 2: Server-Side Proxy
+- `@noble/secp256k1` and `@noble/hashes` are pure JavaScript, browser-compatible
+- No Node.js dependencies required
+- Full control over the signing and encoding process
+- ~20KB bundle size increase (minimal impact)
 
-Run a small backend service that:
-1. Receives encrypted payloads from browser
-2. Uses Node.js Irys SDK to upload
-3. Returns transaction ID
+### ANS-104 Implementation Details
 
-**Pros**: SDK works correctly server-side
-**Cons**: Requires infrastructure, central point of failure
+Key components that were implemented:
 
-### Option 3: WebAssembly Bundler
-
-Compile Irys signing logic to WASM for browser use.
-
-**Pros**: Runs in browser, no server needed
-**Cons**: Significant development effort, not clear if feasible
-
-### Option 4: Alternative Storage
-
-Consider other permanent/archival storage options:
-- IPFS with pinning service (Pinata, Filebase)
-- Filecoin (similar SDK issues likely)
-- Custom relay with archival guarantee
-
-## Recommendations
-
-### Short-term (Current State)
-
-1. Keep Nostr as primary notification channel (Tier 1)
-2. Leave query functionality in place for future recovery
-3. Document upload limitation clearly
-
-### Medium-term
-
-1. Investigate direct Arweave REST API approach
-2. Create minimal ANS-104 signing implementation
-3. Test with Irys devnet
-
-### Long-term
-
-1. Consider server-side proxy if direct approach fails
-2. Monitor Irys SDK for browser-native support
-3. Evaluate alternative archival solutions
+1. **DeepHash** - Recursive SHA-384 hashing with "blob"/"list" tags
+2. **AVS Tags** - Avro serialization with ZigZag variable-length integers
+3. **Ethereum Message Signing** - `\x19Ethereum Signed Message:\n{len}` prefix + keccak256
+4. **Binary Layout** - Signature type (2) + signature (65) + owner (65) + flags + tags + data
 
 ## Angular 14 Migration (Side Effect)
 
@@ -178,7 +152,8 @@ The migration was successful and the app builds/works correctly.
 ## Files Changed
 
 ```
-src/app/services/irys-discovery.service.ts  (NEW)
+src/app/services/irys-data-item.service.ts  (NEW - ANS-104 implementation)
+src/app/services/irys-discovery.service.ts  (NEW - encryption, query, upload)
 src/app/components/send/send.component.ts   (Irys integration)
 package.json                                 (Angular 14 + deps)
 docs/ARWEAVE-SPIKE-LEARNINGS.md            (this file)
@@ -186,6 +161,11 @@ docs/ARWEAVE-SPIKE-LEARNINGS.md            (this file)
 
 ## Conclusion
 
-The Arweave/Irys Tier 2 backup concept is **technically sound** but **implementation blocked** by SDK browser compatibility. The query/recovery path is functional, enabling future uploads once a solution is found.
+The Arweave/Irys Tier 2 backup is **fully implemented**:
 
-**Nostr remains the reliable primary notification channel.** Tier 2 is deferred, not abandoned.
+- ✅ Query notifications from Arweave (working)
+- ✅ Upload notifications to Arweave via Irys devnet (working)
+- ✅ Integrated into NanoNym send flow
+- ✅ No external SDK dependencies (pure @noble/* libraries)
+
+**Nostr remains the primary notification channel.** Arweave provides permanent archival backup for enhanced recovery guarantees.

@@ -3,11 +3,14 @@ import { blake2b } from 'blakejs';
 import * as nacl from 'tweetnacl';
 import { edwardsToMontgomeryPub } from '@noble/curves/ed25519';
 import { bytesToHex } from '@noble/curves/abstract/utils';
+import { getPublicKey as getSecpPublicKey } from '@noble/secp256k1';
 import { UtilService } from './util.service';
+import { IrysDataItemService } from './irys-data-item.service';
 
 const ARWEAVE_GRAPHQL_ENDPOINT = 'https://arweave.net/graphql';
 const IRYS_GATEWAY = 'https://gateway.irys.xyz';
 const PROTOCOL_TAG = 'NanoNym-Signal';
+const PROTOCOL_VERSION = '1';
 
 export interface IrysNotification {
   txId: string;
@@ -28,7 +31,10 @@ export interface DecryptedIrysNotification {
   providedIn: 'root'
 })
 export class IrysDiscoveryService {
-  constructor(private util: UtilService) {}
+  constructor(
+    private util: UtilService,
+    private irysDataItem: IrysDataItemService
+  ) {}
 
   deriveBlindIndex(nostrPublicKey: Uint8Array): string {
     const hash = blake2b(nostrPublicKey, undefined, 32);
@@ -167,15 +173,86 @@ export class IrysDiscoveryService {
   }
 
   async uploadNotification(
-    _seed: string | Uint8Array,
-    _blindIndex: string,
-    _encryptedData: Uint8Array,
-    _nonce: Uint8Array,
-    _ephemeralPublic: Uint8Array
+    seed: string | Uint8Array,
+    blindIndex: string,
+    encryptedData: Uint8Array,
+    nonce: Uint8Array,
+    ephemeralPublic: Uint8Array
   ): Promise<string | null> {
-    console.warn('[IrysDiscovery] Upload not implemented - Irys SDK requires Node.js crypto polyfills');
-    console.warn('[IrysDiscovery] Tier 2 backup skipped. Nostr notification is primary channel.');
-    return null;
+    try {
+      const irysKey = this.deriveIrysKey(seed);
+      const irysKeyHex = bytesToHex(irysKey.private);
+
+      const combinedData = new Uint8Array(
+        1 + nonce.length + ephemeralPublic.length + encryptedData.length
+      );
+      let offset = 0;
+      combinedData[offset++] = 1;
+      combinedData.set(nonce, offset);
+      offset += nonce.length;
+      combinedData.set(ephemeralPublic, offset);
+      offset += ephemeralPublic.length;
+      combinedData.set(encryptedData, offset);
+
+      const tags = [
+        { name: 'Protocol', value: PROTOCOL_TAG },
+        { name: 'Protocol-Version', value: PROTOCOL_VERSION },
+        { name: 'Blind-Index', value: blindIndex },
+        { name: 'Content-Type', value: 'application/octet-stream' }
+      ];
+
+      const txId = await this.irysDataItem.createAndUploadDataItem(
+        irysKeyHex,
+        combinedData,
+        tags
+      );
+
+      if (txId) {
+        console.log(`[IrysDiscovery] Uploaded notification to Arweave: ${txId}`);
+      }
+
+      return txId;
+    } catch (e) {
+      console.error('[IrysDiscovery] Upload failed:', e);
+      return null;
+    }
+  }
+
+  deriveIrysKey(seed: string | Uint8Array): { private: Uint8Array; public: Uint8Array } {
+    let seedBytes: Uint8Array;
+    if (typeof seed === 'string') {
+      if (/^[0-9A-Fa-f]{64}$/.test(seed)) {
+        seedBytes = this.util.hex.toUint8(seed);
+      } else {
+        throw new Error('Mnemonic seeds not supported for Irys key derivation - use hex seed');
+      }
+    } else {
+      seedBytes = seed;
+    }
+
+    const basePath = this.uint32ToBytes(44 | 0x80000000)
+      .concat(this.uint32ToBytes(60 | 0x80000000))
+      .concat(this.uint32ToBytes(0 | 0x80000000))
+      .concat(this.uint32ToBytes(0 | 0x80000000))
+      .concat(this.uint32ToBytes(255 | 0x80000000));
+
+    const data = new Uint8Array(seedBytes.length + basePath.length);
+    data.set(seedBytes, 0);
+    data.set(new Uint8Array(basePath), seedBytes.length);
+
+    const privateKey = new Uint8Array(blake2b(data, undefined, 32));
+    const publicKey = getSecpPublicKey(privateKey, true).slice(1);
+
+    return { private: privateKey, public: publicKey };
+  }
+
+  private uint32ToBytes(value: number): number[] {
+    return [
+      (value >>> 24) & 0xff,
+      (value >>> 16) & 0xff,
+      (value >>> 8) & 0xff,
+      value & 0xff
+    ];
   }
 
   parseEncryptedPayload(data: Uint8Array): {
