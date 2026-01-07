@@ -28,6 +28,7 @@ import {
 } from "../../types/spendable-account.types";
 import { StealthAccount } from "../../types/nanonym.types";
 import { NanoNymAccountSelectionService } from "../../services/nanonym-account-selection.service";
+import { IrysDiscoveryService } from "../../services/irys-discovery.service";
 
 const nacl = window["nacl"];
 
@@ -130,6 +131,7 @@ export class SendComponent implements OnInit {
     public nostrService: NostrNotificationService,
     private nanoNymManager: NanoNymManagerService,
     private accountSelection: NanoNymAccountSelectionService,
+    private irysDiscovery: IrysDiscoveryService,
   ) {}
 
   async ngOnInit() {
@@ -1254,26 +1256,26 @@ export class SendComponent implements OnInit {
       return;
     }
 
+    const notification = {
+      version: 1,
+      protocol: "nanoNymNault",
+      R: this.bytesToHex(this.ephemeralPublicKey),
+      tx_hash: txHash,
+      amount: this.amount?.toString() || "",
+      amount_raw: this.rawAmount.toString(),
+    };
+
+    console.log("[Send] Preparing notification:", {
+      tx_hash: txHash,
+      ephemeralPublicKey_hex: this.bytesToHex(this.ephemeralPublicKey),
+      receiverNostrPublic_hex: this.bytesToHex(
+        this.nanoNymParsedKeys.nostrPublic,
+      ),
+      notification: notification,
+    });
+
     try {
       const senderNostrKey = this.nanoNymCrypto.generateEphemeralKey();
-      const notification = {
-        version: 1,
-        protocol: "nanoNymNault",
-        R: this.bytesToHex(this.ephemeralPublicKey),
-        tx_hash: txHash,
-        amount: this.amount?.toString() || "",
-        amount_raw: this.rawAmount.toString(),
-      };
-
-      console.log("[Send] Preparing Nostr notification:", {
-        tx_hash: txHash,
-        ephemeralPublicKey_hex: this.bytesToHex(this.ephemeralPublicKey),
-        receiverNostrPublic_hex: this.bytesToHex(
-          this.nanoNymParsedKeys.nostrPublic,
-        ),
-        notification: notification,
-      });
-
       const acceptedRelays = await this.nostrService.sendNotification(
         notification,
         senderNostrKey.private,
@@ -1286,8 +1288,45 @@ export class SendComponent implements OnInit {
     } catch (error) {
       console.error("[Send] Failed to send Nostr notification:", error);
       this.notificationService.sendWarning(
-        "Transaction sent but notification failed. Recipient may not see payment immediately.",
+        "Transaction sent but Nostr notification failed. Recipient may not see payment immediately.",
       );
+    }
+
+    this.sendIrysBackup(notification);
+  }
+
+  private async sendIrysBackup(notification: object) {
+    try {
+      const seed = this.walletService.wallet.seed;
+      if (!seed || !this.nanoNymParsedKeys) {
+        console.warn("[Send] Cannot send Irys backup: wallet locked or missing keys");
+        return;
+      }
+
+      const blindIndex = this.irysDiscovery.deriveBlindIndex(
+        this.nanoNymParsedKeys.nostrPublic
+      );
+
+      const { encrypted, nonce, ephemeralPublic } = this.irysDiscovery.encryptPayload(
+        notification,
+        this.nanoNymParsedKeys.viewPublic
+      );
+
+      const txId = await this.irysDiscovery.uploadNotification(
+        seed,
+        blindIndex,
+        encrypted,
+        nonce,
+        ephemeralPublic
+      );
+
+      if (txId) {
+        console.log(`[Send] Irys backup uploaded: ${txId}`);
+      } else {
+        console.warn("[Send] Irys backup upload returned null");
+      }
+    } catch (error) {
+      console.warn("[Send] Failed to send Irys backup (non-critical):", error);
     }
   }
 
