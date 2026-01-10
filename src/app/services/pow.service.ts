@@ -136,8 +136,8 @@ export class PowService {
     this.powAlert$.next(false); // extra safety to ensure the alert is always reset
 
     let powSource = this.appSettings.settings.powSource;
-    const multiplierSource: Number = this.appSettings.settings.multiplierSource;
-    let localMultiplier: Number = 1;
+    const multiplierSource: number = this.appSettings.settings.multiplierSource;
+    let localMultiplier: number = 1;
 
     if (powSource === 'best') {
       powSource = this.determineBestPoWMethod();
