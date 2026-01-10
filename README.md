@@ -168,7 +168,7 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 
 ## Project Status
 
-🔨 **In Development** - Planning phase complete, implementation starting
+🚀 **Core Features Implemented** - Send, receive, and spend from NanoNyms working
 
 ### Documentation
 
@@ -186,25 +186,19 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 **✅ What's Working:**
 - Sending TO NanoNyms (full flow: generate stealth address → send XNO → send Nostr notification)
 - Receiving payments (notifications decrypt, stealth addresses derived, balances displayed)
+- Spending FROM NanoNyms (stealth account selection, multi-account sends, privacy warnings)
 - NanoNym management (generate, label, archive/reactivate, view details)
 - Multi-relay Nostr redundancy (3-5 relays simultaneously)
+- Stealth account opening (three-phase defense-in-depth: immediate, background retry, just-in-time)
 
-**❌ Current Blocker: Spending FROM Stealth Accounts**
+**🔜 Planned Enhancements:**
+- Privacy Mode (optional timing randomization between multi-account sends)
+- Stealth account consolidation/sweep tools
+- Enhanced privacy scoring and per-send impact summary
+- Tier 2 backup mechanisms (downloadable encrypted backups)
+- Automated E2E tests (Playwright or similar)
 
-Location: `src/app/services/nanonym-manager.service.ts:343-348`
-
-```typescript
-// TODO: Add stealth account to WalletService
-// This will require modifying WalletService to support imported accounts
-```
-
-**What needs to be implemented:**
-1. **WalletService integration** - Import stealth accounts as spendable accounts
-2. **Account selection algorithm** - Choose which stealth accounts to spend from (minimize linkage)
-3. **Privacy warning UI** - Warn users when multiple accounts will be linked on-chain
-4. **Multi-account send flow** - Coordinate sending from N stealth accounts to 1 destination
-
-**See:** CLAUDE.md Section 8 (Spending from Stealth Accounts) for complete specification.
+**See:** CLAUDE.md Section 12 (Implementation Roadmap) for detailed status.
 
 ---
 
