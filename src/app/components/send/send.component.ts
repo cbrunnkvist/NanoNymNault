@@ -758,18 +758,21 @@ export class SendComponent implements OnInit {
         ? this.stealthAddress
         : this.getDestinationID();
 
-      const newHash = await this.nanoBlock.generateSend(
+      const created = await this.nanoBlock.createSendBlock(
         walletAccount,
         destinationID,
         this.rawAmount,
         this.walletService.isLedgerWallet(),
       );
 
-      if (newHash) {
-        // If NanoNym, send Nostr notification
+      let newHash = null;
+
+      if (created) {
         if (this.isNanoNymAddress) {
-          await this.sendNostrNotification(newHash);
+          await this.sendNostrNotification(created.hash);
         }
+
+        newHash = await this.nanoBlock.broadcastBlock(created.block, walletAccount);
 
         this.notificationService.removeNotification("success-send");
         this.notificationService.sendSuccess(
