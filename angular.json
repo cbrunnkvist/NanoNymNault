@@ -106,21 +106,21 @@
         "serve": {
           "builder": "@angular-devkit/build-angular:dev-server",
           "options": {
-            "browserTarget": "nault:build"
+            "buildTarget": "nault:build"
           },
           "configurations": {
             "production": {
-              "browserTarget": "nault:build:production"
+              "buildTarget": "nault:build:production"
             },
             "desktop": {
-              "browserTarget": "nault:build:desktop"
+              "buildTarget": "nault:build:desktop"
             }
           }
         },
         "extract-i18n": {
           "builder": "@angular-devkit/build-angular:extract-i18n",
           "options": {
-            "browserTarget": "nault:build"
+            "buildTarget": "nault:build"
           }
         },
         "test": {
