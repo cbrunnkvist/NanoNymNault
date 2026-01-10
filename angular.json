@@ -46,7 +46,15 @@
               "punycode",
               "querystring",
               "hw-transport-webusb",
-              "hw-transport-web-ble"
+              "hw-transport-web-ble",
+              "@ceramicnetwork/http-client",
+              "@ceramicnetwork/stream-tile",
+              "@ceramicnetwork/common",
+              "dids",
+              "key-did-provider-ed25519",
+              "key-did-resolver",
+              "uint8arrays",
+              "multiformats"
             ],
             "vendorChunk": true,
             "extractLicenses": false,

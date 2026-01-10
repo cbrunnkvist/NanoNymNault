@@ -12,6 +12,7 @@ import {
 import { NanoNymStorageService } from "./nanonym-storage.service";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
+import { CeramicStreamService } from "./ceramic-stream.service";
 import { ApiService } from "./api.service";
 import { WalletService, WalletAccount } from "./wallet.service";
 import { WebsocketService } from "./websocket.service";
@@ -48,6 +49,7 @@ export class NanoNymManagerService {
     private storage: NanoNymStorageService,
     private crypto: NanoNymCryptoService,
     private nostr: NostrNotificationService,
+    private ceramic: CeramicStreamService,
     private api: ApiService,
     private wallet: WalletService,
     private websocket: WebsocketService,
@@ -63,11 +65,27 @@ export class NanoNymManagerService {
     this.wallet.wallet.locked$.subscribe(isLocked => {
       if (!isLocked) { // Wallet is unlocked
         this.processPendingStealthBlocks();
+        // Run service health checks (non-blocking, every unlock)
+        void this.runServiceHealthChecks();
       }
     });
 
     // Phase 2: Start background retry mechanism (every 5 minutes)
     this.startBackgroundRetry();
+  }
+
+  /**
+   * Run health checks for Nostr and Ceramic services
+   * Called on each wallet unlock for early visibility into service availability
+   */
+  private async runServiceHealthChecks(): Promise<void> {
+    console.log("[Manager] 🏥 Running service health checks...");
+
+    // Check Nostr (sync, fast)
+    this.nostr.checkHealth();
+
+    // Check Ceramic (async, may timeout)
+    await this.ceramic.checkHealth();
   }
 
   /**
@@ -369,6 +387,65 @@ export class NanoNymManagerService {
     // Verify all stealth account balances against Nano node
     // Ensures we have accurate on-chain balances on startup
     await this.refreshAllBalances();
+
+    // Add Tier-2 Ceramic recovery
+    await this.recoverFromCeramic();
+  }
+
+  /**
+   * Recover stealth accounts from Ceramic Tier-2 backup (automatic recovery on seed restore)
+   */
+  async recoverFromCeramic(): Promise<void> {
+    console.log("[Ceramic] 🔄 Starting Tier-2 recovery...");
+
+    try {
+      const seed = this.wallet.wallet.seed;
+      if (!seed) {
+        console.warn("[Ceramic] No seed available for recovery");
+        return;
+      }
+
+      const allNanoNyms = this.storage.getAllNanoNyms();
+      let totalRecovered = 0;
+
+      for (const nanoNym of allNanoNyms) {
+        try {
+          // Recover from Ceramic for this NanoNym
+          const events = await this.ceramic.recoverFromStream(
+            seed,
+            nanoNym.index,
+            nanoNym.createdAt || 0 // Use NanoNym creation time as lower bound
+          );
+
+          // Process each recovered notification (already in correct format)
+          for (const notification of events) {
+            // Use existing processNotification() method (handles deduplication)
+            const result = await this.processNotification(notification, nanoNym.index);
+            if (result) {
+              totalRecovered++; // Only count if not duplicate
+            }
+          }
+        } catch (error) {
+          console.warn(
+            `[Ceramic] Recovery failed for NanoNym #${nanoNym.index}:`,
+            error
+          );
+          // Continue with other NanoNyms
+        }
+      }
+
+      if (totalRecovered > 0) {
+        console.log(
+          `[Ceramic] ✅ Recovered ${totalRecovered} stealth accounts from Ceramic`
+        );
+      } else {
+        console.log(
+          "[Ceramic] No additional events found (already synced from Nostr)"
+        );
+      }
+    } catch (error) {
+      console.warn("[Ceramic] Recovery failed (non-fatal):", error);
+    }
   }
 
   /**
@@ -418,18 +495,18 @@ export class NanoNymManagerService {
         return null;
       }
 
-      // Check if this tx_hash already exists in the NanoNym
+      // Check if this tx_h already exists in the NanoNym
       const alreadyExists = nanoNym.stealthAccounts.some(
-        (sa) => sa.txHash === notification.tx_hash,
+        (sa) => sa.txHash === notification.tx_h,
       );
       if (alreadyExists) {
         console.warn(
-          `[Manager] ⚠️ DUPLICATE BLOCKED: tx_hash ${notification.tx_hash} already processed for "${nanoNym.label}", skipping`,
+          `[Manager] ⚠️ DUPLICATE BLOCKED: tx_h ${notification.tx_h} already processed for "${nanoNym.label}", skipping`,
         );
         return null;
       }
 
-      console.log(`[Manager] 💰 Processing payment for "${nanoNym.label}" (tx: ${notification.tx_hash})`);
+      console.log(`[Manager] 💰 Processing payment for "${nanoNym.label}" (tx: ${notification.tx_h})`);
 
       // 1. Parse ephemeral public key R from notification
       const R = this.util.hex.toUint8(notification.R);
@@ -467,9 +544,9 @@ export class NanoNymManagerService {
       if (accountInfo.error) {
         if (accountInfo.error === "Account not found") {
           console.debug(`[Manager] Unopened stealth account (pending receive block)`);
-          // Use notification amount_raw as expected balance (will be verified when block opens)
-          accountBalance = notification.amount_raw || "0";
-          console.debug(`[Manager] Using notification amount_raw as expected balance: ${accountBalance} raw`);
+          // Use notification a_raw as expected balance (will be verified when block opens)
+          accountBalance = notification.a_raw || "0";
+          console.debug(`[Manager] Using notification a_raw as expected balance: ${accountBalance} raw`);
         } else {
           console.error(
             `[Manager] ❌ Error querying stealth address: ${accountInfo.error}`,
@@ -496,9 +573,9 @@ export class NanoNymManagerService {
         publicKey: stealth.publicKey,
         privateKey: privateKeyBytes,
         ephemeralPublicKey: this.util.hex.toUint8(notification.R),
-        txHash: notification.tx_hash,
-        amountRaw: notification.amount_raw || "0",
-        memo: notification.memo,
+        txHash: notification.tx_h,
+        amountRaw: notification.a_raw || "0",
+        memo: undefined,
         receivedAt: Date.now(),
         parentNanoNymIndex: nanoNymIndex,
         balance: new BigNumber(accountBalance),
@@ -525,7 +602,7 @@ export class NanoNymManagerService {
         nanoNymLabel: nanoNym.label,
         amount: this.formatAmount(stealthAccount.balance),
         stealthAddress: stealth.address,
-        txHash: notification.tx_hash,
+        txHash: notification.tx_h,
       });
 
       console.log(

@@ -3,16 +3,7 @@ import { SimplePool, nip59, nip19 } from "nostr-tools";
 import type { Event } from "nostr-tools/lib/types/core";
 import * as Rx from "rxjs";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
-
-export interface NanoNymNotification {
-  version: number;
-  protocol: string;
-  R: string; // Ephemeral public key (hex)
-  tx_hash: string; // Nano transaction hash
-  amount?: string; // Optional: XNO amount
-  amount_raw?: string; // Optional: raw amount
-  memo?: string; // Optional: encrypted memo
-}
+import { NanoNymNotification } from "../types/nanonym.types";
 
 export interface RelayStatus {
   url: string;
@@ -317,8 +308,8 @@ export class NostrNotificationService {
 
       // ONLY log successful, valid NanoNym notifications
       console.log("[Nostr] ✅ Payment notification received:", {
-        tx_hash: notification.tx_hash,
-        amount: notification.amount || "unknown",
+        tx_h: notification.tx_h,
+        a_raw: notification.a_raw || "unknown",
       });
 
       // Emit the notification for processing
@@ -340,10 +331,10 @@ export class NostrNotificationService {
     return (
       notification &&
       typeof notification === "object" &&
-      notification.version === 1 &&
-      notification.protocol === "nanoNymNault" &&
+      notification._v === 1 &&
+      notification._p === "NNymNotify" &&
       typeof notification.R === "string" &&
-      typeof notification.tx_hash === "string"
+      typeof notification.tx_h === "string"
     );
   }
 
@@ -375,6 +366,23 @@ export class NostrNotificationService {
       const eventCount = this.relayEventCount.get(url) || 0;
       console.debug(`  ${url}: ${eventCount} events`);
     });
+  }
+
+  /**
+   * Check Nostr relay connectivity health
+   * @returns Health status with connection counts
+   */
+  checkHealth(): { healthy: boolean; connectedCount: number; totalCount: number } {
+    const statusMap = this.pool.listConnectionStatus();
+    const connectedCount = [...statusMap.values()].filter((v) => v).length;
+    const totalCount = this.defaultRelays.length;
+    const healthy = connectedCount > 0;
+
+    console.log(
+      `[Nostr] Health check: ${healthy ? "✅" : "❌"} ${connectedCount}/${totalCount} relays connected`
+    );
+
+    return { healthy, connectedCount, totalCount };
   }
 
   /**

@@ -7,6 +7,7 @@ import { ed25519, edwardsToMontgomeryPub } from "@noble/curves/ed25519";
 import { bytesToHex } from "@noble/curves/abstract/utils";
 import { getPublicKey as getSecpPublicKey } from "@noble/secp256k1";
 import { sha512 } from "@noble/hashes/sha512";
+import * as bs58 from "bs58";
 
 /**
  * NanoNymCryptoService
@@ -826,5 +827,159 @@ export class NanoNymCryptoService {
 
     console.log('[NanoNymCrypto] Block signed with Schnorr-style signature:', bytesToHex(signature));
     return signature;
+  }
+
+  // ========================================================================
+  // CERAMIC TIER-2 BACKUP: DID DERIVATION AND KEY CONVERSION
+  // ========================================================================
+
+  /**
+   * Encode Ed25519 public key as did:key format
+   * Uses multicodec 0xed01 for Ed25519-pub + Base58btc encoding
+   *
+   * @param publicKey - Ed25519 public key (32 bytes)
+   * @returns DID in format "did:key:z..." (Base58btc encoded)
+   */
+  private encodeDIDKey(publicKey: Uint8Array): string {
+    // Multicodec prefix for Ed25519-pub: 0xed, 0x01
+    const multicodec = new Uint8Array([0xed, 0x01]);
+    const combined = new Uint8Array(multicodec.length + publicKey.length);
+    combined.set(multicodec, 0);
+    combined.set(publicKey, multicodec.length);
+
+    // Base58btc encoding with 'z' multibase prefix
+    const encoded = bs58.encode(combined);
+    return `did:key:z${encoded}`;
+  }
+
+  /**
+   * Convert Ed25519 public key to Curve25519 (X25519) public key
+   * Used for NaCl box encryption to B_view
+   *
+   * @param edPub - Ed25519 public key (32 bytes)
+   * @returns X25519 public key (32 bytes)
+   */
+  ed25519ToCurve25519Public(edPub: Uint8Array): Uint8Array {
+    // Use existing edwardsToMontgomeryPub from @noble/curves/ed25519
+    return edwardsToMontgomeryPub(edPub);
+  }
+
+  /**
+   * Convert Ed25519 private key to Curve25519 (X25519) private key
+   * Used for NaCl box decryption with b_view
+   *
+   * @param edPriv - Ed25519 private key (32 bytes)
+   * @returns X25519 private key (32 bytes)
+   */
+  ed25519ToCurve25519Private(edPriv: Uint8Array): Uint8Array {
+    // Hash the seed with SHA-512
+    const hash = sha512(edPriv);
+    const scalar = new Uint8Array(hash.slice(0, 32));
+
+    // Clamp for Curve25519
+    scalar[0] &= 248;
+    scalar[31] &= 127;
+    scalar[31] |= 64;
+
+    return scalar;
+  }
+
+  /**
+   * Derive Ceramic DID from NanoNym public keys (hash-based)
+   * Both sender and receiver compute identical DIDs from same public keys
+   *
+   * Domain separator: "nanonym-ceramic-did-v1" (22 bytes UTF-8)
+   * Formula: ceramic_seed = BLAKE2b-256("nanonym-ceramic-did-v1" || B_spend || B_view || nostr_public)
+   *
+   * @param B_spend - Spend public key (Ed25519, 32 bytes)
+   * @param B_view - View public key (Ed25519, 32 bytes)
+   * @param nostr_public - Nostr public key (Secp256k1, 32 bytes x-coordinate)
+   * @returns Object with { privateKey, publicKey, did }
+   */
+  deriveCeramicDID(
+    B_spend: Uint8Array,
+    B_view: Uint8Array,
+    nostr_public: Uint8Array
+  ): { privateKey: Uint8Array; publicKey: Uint8Array; did: string } {
+    // Domain separator (UTF-8 encoded, 22 bytes)
+    const domainSeparator = new TextEncoder().encode("nanonym-ceramic-did-v1");
+
+    // Concatenate: domain || B_spend || B_view || nostr_public
+    const input = new Uint8Array(
+      domainSeparator.length + 32 + 32 + 32 // 22 + 96 = 118 bytes
+    );
+    let offset = 0;
+    input.set(domainSeparator, offset);
+    offset += domainSeparator.length;
+    input.set(B_spend, offset);
+    offset += 32;
+    input.set(B_view, offset);
+    offset += 32;
+    input.set(nostr_public, offset);
+
+    // Hash with BLAKE2b-256 to get Ed25519 seed (32 bytes)
+    const ceramicSeed = new Uint8Array(blake2b(input, undefined, 32));
+
+    // Derive Ed25519 keypair from seed (use existing method)
+    const keypair = this.blake2bKeyPairFromSeed(ceramicSeed);
+
+    // Encode as did:key format
+    const did = this.encodeDIDKey(keypair.public);
+
+    console.log(`[Ceramic DID] Derived DID: ${did}`);
+
+    return {
+      privateKey: keypair.private,
+      publicKey: keypair.public,
+      did: did
+    };
+  }
+
+  /**
+   * Derive Ceramic DID from nnym_ address (sender-side)
+   * Sender extracts public keys from address and computes DID
+   *
+   * @param nnymAddress - NanoNym address string (nnym_...)
+   * @returns Object with { privateKey, publicKey, did }
+   */
+  deriveCeramicDIDFromAddress(
+    nnymAddress: string
+  ): { privateKey: Uint8Array; publicKey: Uint8Array; did: string } {
+    // Decode nnym_ address to extract public keys
+    const parsed = this.decodeNanoNymAddress(nnymAddress);
+
+    // Derive Ceramic DID from extracted public keys
+    return this.deriveCeramicDID(
+      parsed.spendPublic,
+      parsed.viewPublic,
+      parsed.nostrPublic
+    );
+  }
+
+  /**
+   * Derive Ceramic DID for a NanoNym by index (receiver-side)
+   * Receiver derives NanoNym keys from seed, then computes DID
+   *
+   * @param seed - Master seed (hex string or bytes)
+   * @param accountIndex - NanoNym account index
+   * @returns Object with { privateKey, publicKey, did }
+   */
+  deriveCeramicDIDForNanoNym(
+    seed: string | Uint8Array,
+    accountIndex: number
+  ): { privateKey: Uint8Array; publicKey: Uint8Array; did: string } {
+    // Derive NanoNym keys (use existing method)
+    const keys = this.deriveNanoNymKeys(seed, accountIndex);
+
+    // Derive Ceramic DID from public keys
+    const result = this.deriveCeramicDID(
+      keys.spend.public,
+      keys.view.public,
+      keys.nostr.public
+    );
+
+    console.log(`[Ceramic DID] Derived for NanoNym #${accountIndex}: ${result.did}`);
+
+    return result;
   }
 }

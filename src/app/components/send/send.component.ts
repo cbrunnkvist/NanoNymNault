@@ -19,6 +19,7 @@ import { HttpClient } from "@angular/common/http";
 import * as nanocurrency from "nanocurrency";
 import { NanoNymCryptoService } from "../../services/nanonym-crypto.service";
 import { NostrNotificationService } from "../../services/nostr-notification.service";
+import { CeramicStreamService } from "../../services/ceramic-stream.service";
 import { NanoNymManagerService } from "../../services/nanonym-manager.service";
 import {
   SpendableAccount,
@@ -26,7 +27,7 @@ import {
   NanoNymAccount,
   formatSpendableAccountLabel
 } from "../../types/spendable-account.types";
-import { StealthAccount } from "../../types/nanonym.types";
+import { StealthAccount, NanoNymNotification } from "../../types/nanonym.types";
 import { NanoNymAccountSelectionService } from "../../services/nanonym-account-selection.service";
 
 const nacl = window["nacl"];
@@ -130,6 +131,7 @@ export class SendComponent implements OnInit {
     public nostrService: NostrNotificationService,
     private nanoNymManager: NanoNymManagerService,
     private accountSelection: NanoNymAccountSelectionService,
+    private ceramicService: CeramicStreamService,
   ) {}
 
   async ngOnInit() {
@@ -764,9 +766,10 @@ export class SendComponent implements OnInit {
       );
 
       if (newHash) {
-        // If NanoNym, send Nostr notification
+        // If NanoNym, send Nostr notification and Ceramic backup
         if (this.isNanoNymAddress) {
           await this.sendNostrNotification(newHash);
+          void this.sendCeramicBackup(newHash); // Fire-and-forget Tier-2 backup
         }
 
         this.notificationService.removeNotification("success-send");
@@ -1256,17 +1259,16 @@ export class SendComponent implements OnInit {
 
     try {
       const senderNostrKey = this.nanoNymCrypto.generateEphemeralKey();
-      const notification = {
-        version: 1,
-        protocol: "nanoNymNault",
+      const notification: NanoNymNotification = {
+        _v: 1,
+        _p: "NNymNotify",
         R: this.bytesToHex(this.ephemeralPublicKey),
-        tx_hash: txHash,
-        amount: this.amount?.toString() || "",
-        amount_raw: this.rawAmount.toString(),
+        tx_h: txHash,
+        a_raw: this.rawAmount.toString(),
       };
 
       console.log("[Send] Preparing Nostr notification:", {
-        tx_hash: txHash,
+        tx_h: txHash,
         ephemeralPublicKey_hex: this.bytesToHex(this.ephemeralPublicKey),
         receiverNostrPublic_hex: this.bytesToHex(
           this.nanoNymParsedKeys.nostrPublic,
@@ -1288,6 +1290,23 @@ export class SendComponent implements OnInit {
       this.notificationService.sendWarning(
         "Transaction sent but notification failed. Recipient may not see payment immediately.",
       );
+    }
+  }
+
+  /**
+   * Append Ceramic backup for NanoNym transaction (Tier-2 backup)
+   */
+  async sendCeramicBackup(txHash: string): Promise<void> {
+    try {
+      await this.ceramicService.appendSendEvent(
+        this.toAccountID, // nnym_ address
+        this.bytesToHex(this.ephemeralPublicKey), // R value
+        txHash,
+        this.rawAmount.toString()
+      );
+      console.log(`[Ceramic] 📤 Backup appended for tx ${txHash.slice(0, 8)}...`);
+    } catch (error) {
+      console.warn("[Ceramic] Backup append failed (non-fatal):", error);
     }
   }
 

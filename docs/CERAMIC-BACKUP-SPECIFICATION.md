@@ -218,16 +218,56 @@ b_view (Ed25519 private, from seed) → ed25519_to_curve25519() → X25519 priva
 
 ### 6.1 Configuration
 
-**Recommended Nodes** (as of Dec 2024):
+**Ceramic Access in 2025**:
 
-- `https://gateway.ceramic.network` (mainnet)
-- `https://ceramic.hirenodes.io` (community)
+As of December 2025, **no public Ceramic gateway exists**. The previously documented `gateway.ceramic.network` domain does not resolve (DNS NXDOMAIN). Developers must run their own Ceramic node locally.
+
+**Local Node Setup**:
+
+```bash
+npm install -g @ceramicnetwork/cli
+ceramic daemon
+```
+
+Default node URL: `http://localhost:7007`
+
+**Development Configuration** (CORS handling):
+
+Since browser-based wallets cannot directly access `localhost:7007` from a served application due to CORS restrictions, use a CORS proxy during development:
+
+```bash
+# Terminal 1: Start Ceramic node
+ceramic daemon
+
+# Terminal 2: Start CORS proxy (configured in package.json)
+npm run proxy:ceramic
+
+# Terminal 3: Start wallet dev server
+npm run wallet:dev
+```
+
+The proxy runs on `http://localhost:8010/proxy` and forwards requests to the local Ceramic node with appropriate CORS headers.
+
+**Environment Configuration**:
+
+- Development (`environment.ts`): `ceramicGateway: "http://localhost:8010/proxy"`
+- Production (`environment.prod.ts`): User must configure their own Ceramic node URL
 
 **Parameters**:
 
 - Timeout: 30s per request
 - Retries: 3 with exponential backoff (1s/2s/4s)
-- Multi-node failover on failure
+- Health check endpoint: `GET /api/v0/node/healthcheck` (returns `"Alive!"` or `"Insufficient resources"`)
+
+**Production Deployment Considerations**:
+
+For production PWA deployment, users have several options:
+
+1. **Self-hosted Ceramic node** with public HTTPS endpoint and CORS headers
+2. **Reverse proxy** to local node (e.g., nginx with CORS configuration)
+3. **Disable Tier-2 backup** and rely solely on Nostr Tier-1 recovery
+
+Ceramic Tier-2 backup is **optional**; the NanoNym protocol guarantees seed-only recovery via Nostr multi-relay redundancy (Tier-1).
 
 ### 6.2 Dependencies
 

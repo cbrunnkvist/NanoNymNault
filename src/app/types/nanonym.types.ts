@@ -75,16 +75,25 @@ export interface StealthAccount {
 }
 
 /**
- * Notification payload from Nostr (NIP-17 decrypted content)
+ * Notification payload for stealth transaction (Tier-1 Nostr format)
+ * Used by both Nostr notifications and Ceramic records
  */
 export interface NanoNymNotification {
-  version: number;
-  protocol: string;
-  R: string; // Hex-encoded ephemeral public key
-  tx_hash: string;
-  amount?: string;
-  amount_raw?: string;
-  memo?: string;
+  _v: number;        // Protocol version (1)
+  _p: string;        // Protocol name ("NNymNotify")
+  R: string;         // Hex-encoded ephemeral public key
+  tx_h: string;      // Nano transaction hash
+  a_raw?: string;    // Transaction amount in Nano RAW (optional)
+}
+
+/**
+ * Ceramic Tier-2 backup record (wraps array of NanoNymNotification)
+ */
+export interface NanoNymNotificationsRecord {
+  _v: number;                      // Protocol version (3)
+  _p: string;                      // Protocol name ("NNymRecord")
+  o_ts: number;                    // Open timestamp (earliest tx timestamp)
+  s_txs: NanoNymNotification[];    // Stealth transactions
 }
 
 /**
