@@ -325,31 +325,32 @@ Notes:
 - Parallel queries across all relays; merge results.
 - Relay set should include at least some long-lived, reliable relays; allow user configuration.
 
-### 7.2 Tier 2 – Additional Backup Mechanisms (Status: TBD)
+### 7.2 Tier 2 – Additional Backup Mechanisms (Status: Implemented)
 
-**Current Status: Not Implemented**
+**Current Status: ✅ Implemented (Jan 2026)**
 
-The original design proposed two additional recovery tiers beyond Nostr multi-relay redundancy:
+We implemented an Arweave-based backup using the Irys bundler infrastructure.
 
-**Option A: Encrypted Backup Notes on Nostr**
-- Self-send NIP-17 gift-wrapped snapshot backups to public relays
-- **Problem:** Public relays have retention policies (7-30 days typical); self-sent backups get purged just like regular notifications
-- **Conclusion:** Provides no meaningful improvement over Tier 1 unless using custom/paid archival relays
+**Architecture:**
+- **Storage**: Arweave Permaweb (permanent, decentralized storage).
+- **Upload**: Via Irys devnet bundler (currently free for small payloads < 100KB).
+- **Privacy Model**: "Scan-All" Private Broadcast.
+  - No recipient-identifying tags are stored on-chain.
+  - Uploads are tagged only with `Protocol: NanoNym-Signal`.
+  - Recovery requires scanning the global stream of events since wallet birthday and attempting to decrypt each one.
+  - Observers see only global activity volume, not per-user payment patterns.
+- **Implementation**: Custom ANS-104 data item signing (bypassing SDKs) using browser-compatible crypto libraries.
 
-**Option B: Arweave Permanent Storage**
-- Upload encrypted backups to Arweave via Irys for permanent retention
-- **Problems:**
-  - Requires funded accounts (AR tokens)
-  - Per-NanoNym Ethereum keys would require funding N separate accounts (impractical)
-  - Shared wallet key would link all NanoNym backups (privacy leak)
-  - Free tier effectively dead in 2025
-- **Conclusion:** Economic model not feasible without user-funded accounts
+**Recovery Process:**
+1. User provides seed + wallet birthday.
+2. Wallet queries Arweave GraphQL for all `NanoNym-Signal` events since birthday.
+3. Wallet attempts to decrypt each event with the derived View Key.
+4. Successful decryptions reveal the stealth address info (`R`, `tx_hash`).
 
-**Potential Solutions Under Consideration:**
-1. **Downloadable encrypted backup files** - User manually saves to their preferred cloud storage
-2. **Optional paid archival relay integration** - For users willing to pay monthly subscription
-3. **Custom relay configuration** - Allow users to specify their own long-term retention relay
-4. **Hybrid approach** - Combine downloadable backups with optional archival services
+**Limitations:**
+- **Upload Centralization**: Currently relies on Irys gateway for uploads (single point of failure for *new* backups, but not existing ones).
+- **Recovery Speed**: Slower than Nostr (O(n) decryption attempts), but optimized via time-based pagination.
+- **Cost**: Currently using free devnet tier. Mainnet would require funding Irys node with crypto.
 
 ### 7.3 Tier 3 – Blockchain-Based Fallback (Status: TBD)
 
@@ -373,14 +374,14 @@ Recovery fundamentally depends on Nostr notification availability. The protocol 
 | Tier | Method | Status | Expected Success | Dependencies |
 |------|--------|--------|------------------|--------------|
 | 1 | Nostr multi-relay replay | ✅ Implemented | High (with relay redundancy) | 3-5 diverse relays |
-| 2 | Additional backup mechanisms | ⚠️ TBD | - | To be determined |
+| 2 | Additional backup mechanisms | ✅ Implemented | High (Permanent) | Irys (upload), Arweave (read) |
 | 3 | Blockchain-based fallback | ❌ Not feasible | - | Requires `R` from notifications |
 
 **Design Reality:**
 - **Primary recovery mechanism:** Nostr multi-relay redundancy (Tier 1)
-- **Seed-only recovery:** Depends on at least one relay retaining notification history
+- **Seed-only recovery:** Depends on at least one relay retaining notification history OR Arweave availability.
 - **User responsibility:** Configure reliable relay set (including potential archival relays)
-- **Future work:** Determine practical Tier 2 implementation (likely downloadable backups)
+- **Future work:** Monitor Irys free tier viability; consider direct Arweave upload if needed.
 
 ---
 
