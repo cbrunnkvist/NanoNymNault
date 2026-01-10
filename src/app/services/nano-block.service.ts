@@ -206,7 +206,7 @@ export class NanoBlockService {
   //
   // }
 
-  async generateSend(walletAccount, toAccountID, rawAmount, ledger = false) {
+  async createSendBlock(walletAccount, toAccountID, rawAmount, ledger = false) {
     const fromAccount = await this.api.accountInfo(walletAccount.id);
     if (!fromAccount)
       throw new Error(
@@ -226,7 +226,7 @@ export class NanoBlockService {
       fromAccount.representative ||
       this.settings.settings.defaultRepresentative ||
       this.getRandomRepresentative();
-    const blockData = {
+    const blockData: any = {
       type: "state",
       account: walletAccount.id,
       previous: fromAccount.frontier,
@@ -259,7 +259,7 @@ export class NanoBlockService {
       } catch (err) {
         this.clearLedgerNotification();
         this.sendLedgerDeniedNotification(err);
-        return;
+        return null;
       }
     } else {
       this.signStateBlock(walletAccount, blockData);
@@ -275,15 +275,32 @@ export class NanoBlockService {
     blockData.work = await this.workPool.getWork(fromAccount.frontier, 1);
     this.notifications.removeNotification("pow");
 
+    const hashBytes = this.util.nano.hashStateBlock(blockData);
+    const hash = this.util.hex.fromUint8(hashBytes);
+
+    return { block: blockData, hash };
+  }
+
+  async broadcastBlock(blockData, walletAccount) {
     const processResponse = await this.api.process(blockData, TxType.send);
     if (!processResponse || !processResponse.hash)
       throw new Error(processResponse.error || `Node returned an error`);
 
     walletAccount.frontier = processResponse.hash;
-    this.workPool.addWorkToCache(processResponse.hash, 1); // Add new hash into the work pool, high PoW threshold for send block
-    this.workPool.removeFromCache(fromAccount.frontier);
+    this.workPool.addWorkToCache(processResponse.hash, 1);
+    
+    if (blockData.previous) {
+      this.workPool.removeFromCache(blockData.previous);
+    }
 
     return processResponse.hash;
+  }
+
+  async generateSend(walletAccount, toAccountID, rawAmount, ledger = false) {
+    const created = await this.createSendBlock(walletAccount, toAccountID, rawAmount, ledger);
+    if (!created) return null;
+
+    return await this.broadcastBlock(created.block, walletAccount);
   }
 
   async generateReceive(walletAccount, sourceBlock, ledger = false) {
