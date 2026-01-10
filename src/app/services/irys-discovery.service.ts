@@ -36,11 +36,6 @@ export class IrysDiscoveryService {
     private irysDataItem: IrysDataItemService
   ) {}
 
-  deriveBlindIndex(nostrPublicKey: Uint8Array): string {
-    const hash = blake2b(nostrPublicKey, undefined, 32);
-    return bytesToHex(new Uint8Array(hash));
-  }
-
   encryptPayload(
     payload: object,
     recipientViewPublic: Uint8Array
@@ -94,87 +89,105 @@ export class IrysDiscoveryService {
   }
 
   async queryNotifications(
-    blindIndex: string,
-    since?: number
+    since: number = 0
   ): Promise<IrysNotification[]> {
-    const query = `
-      query {
-        transactions(
-          tags: [
-            { name: "Protocol", values: ["${PROTOCOL_TAG}"] },
-            { name: "Blind-Index", values: ["${blindIndex}"] }
-          ]
-          first: 100
-          sort: HEIGHT_DESC
-        ) {
-          edges {
-            node {
-              id
-              tags {
-                name
-                value
-              }
-              block {
-                timestamp
+    const notifications: IrysNotification[] = [];
+    let hasNextPage = true;
+    let afterCursor = '';
+
+    const minTimestamp = Math.floor(since / 1000);
+
+    console.log(`[IrysDiscovery] Scanning for notifications since timestamp: ${minTimestamp}`);
+
+    while (hasNextPage) {
+      const query = `
+        query {
+          transactions(
+            tags: [
+              { name: "Protocol", values: ["${PROTOCOL_TAG}"] }
+            ]
+            first: 100
+            sort: HEIGHT_ASC
+            after: "${afterCursor}"
+          ) {
+            pageInfo {
+              hasNextPage
+            }
+            edges {
+              cursor
+              node {
+                id
+                tags {
+                  name
+                  value
+                }
+                block {
+                  timestamp
+                }
               }
             }
           }
         }
-      }
-    `;
+      `;
 
-    try {
-      const response = await fetch(ARWEAVE_GRAPHQL_ENDPOINT, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ query })
-      });
+      try {
+        const response = await fetch(ARWEAVE_GRAPHQL_ENDPOINT, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ query })
+        });
 
-      if (!response.ok) {
-        throw new Error(`Arweave GraphQL error: ${response.status}`);
-      }
-
-      const result = await response.json();
-      const edges = result?.data?.transactions?.edges || [];
-
-      const notifications: IrysNotification[] = [];
-
-      for (const edge of edges) {
-        const node = edge.node;
-        const timestamp = node.block?.timestamp || Math.floor(Date.now() / 1000);
-
-        if (since && timestamp < since) {
-          continue;
+        if (!response.ok) {
+          throw new Error(`Arweave GraphQL error: ${response.status}`);
         }
 
-        try {
-          const dataResponse = await fetch(`${IRYS_GATEWAY}/${node.id}`);
-          if (!dataResponse.ok) {
-            console.warn(`[IrysDiscovery] Failed to fetch data for ${node.id}`);
+        const result = await response.json();
+        const edges = result?.data?.transactions?.edges || [];
+        const pageInfo = result?.data?.transactions?.pageInfo;
+
+        if (edges.length === 0) {
+          break;
+        }
+
+        afterCursor = edges[edges.length - 1].cursor;
+        hasNextPage = pageInfo.hasNextPage;
+
+        for (const edge of edges) {
+          const node = edge.node;
+          const timestamp = node.block?.timestamp || Math.floor(Date.now() / 1000);
+
+          if (timestamp < minTimestamp) {
             continue;
           }
 
-          const dataBuffer = await dataResponse.arrayBuffer();
-          notifications.push({
-            txId: node.id,
-            timestamp,
-            encryptedPayload: new Uint8Array(dataBuffer)
-          });
-        } catch (e) {
-          console.warn(`[IrysDiscovery] Error fetching notification ${node.id}:`, e);
-        }
-      }
+          try {
+            const dataResponse = await fetch(`${IRYS_GATEWAY}/${node.id}`);
+            if (!dataResponse.ok) {
+              console.warn(`[IrysDiscovery] Failed to fetch data for ${node.id}`);
+              continue;
+            }
 
-      return notifications;
-    } catch (e) {
-      console.error('[IrysDiscovery] Query failed:', e);
-      return [];
+            const dataBuffer = await dataResponse.arrayBuffer();
+            notifications.push({
+              txId: node.id,
+              timestamp,
+              encryptedPayload: new Uint8Array(dataBuffer)
+            });
+          } catch (e) {
+            console.warn(`[IrysDiscovery] Error fetching notification ${node.id}:`, e);
+          }
+        }
+      } catch (e) {
+        console.error('[IrysDiscovery] Query failed:', e);
+        hasNextPage = false;
+      }
     }
+
+    return notifications;
   }
 
   async uploadNotification(
     seed: string | Uint8Array,
-    blindIndex: string,
     encryptedData: Uint8Array,
     nonce: Uint8Array,
     ephemeralPublic: Uint8Array
@@ -197,7 +210,6 @@ export class IrysDiscoveryService {
       const tags = [
         { name: 'Protocol', value: PROTOCOL_TAG },
         { name: 'Protocol-Version', value: PROTOCOL_VERSION },
-        { name: 'Blind-Index', value: blindIndex },
         { name: 'Content-Type', value: 'application/octet-stream' }
       ];
 
@@ -283,15 +295,13 @@ export class IrysDiscoveryService {
   }
 
   async recoverNotificationsForNanoNym(
-    nostrPublicKey: Uint8Array,
     viewPrivateKey: Uint8Array,
     since?: number
   ): Promise<DecryptedIrysNotification[]> {
-    const blindIndex = this.deriveBlindIndex(nostrPublicKey);
-    console.log(`[IrysDiscovery] Recovering notifications for blind index: ${blindIndex.substring(0, 16)}...`);
+    console.log(`[IrysDiscovery] Recovering notifications (Scan-All mode)...`);
 
-    const encryptedNotifications = await this.queryNotifications(blindIndex, since);
-    console.log(`[IrysDiscovery] Found ${encryptedNotifications.length} encrypted notifications`);
+    const encryptedNotifications = await this.queryNotifications(since);
+    console.log(`[IrysDiscovery] Found ${encryptedNotifications.length} total encrypted notifications`);
 
     const decrypted: DecryptedIrysNotification[] = [];
 

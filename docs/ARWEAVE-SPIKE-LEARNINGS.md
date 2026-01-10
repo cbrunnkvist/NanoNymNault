@@ -127,6 +127,17 @@ We chose Option 1 from our analysis and implemented it successfully:
 - Full control over the signing and encoding process
 - ~20KB bundle size increase (minimal impact)
 
+### Privacy Model: Scan-All (Private Broadcast)
+
+Initially, we planned to use a "Blind Index" tag (`BLAKE2b(nostr_pub)`) to allow efficient querying. However, this leaks payment frequency and volume for specific recipients.
+
+**We switched to a "Scan-All" model:**
+- **No Blind Index Tag**: Uploads are tagged only with `Protocol: NanoNym-Signal`.
+- **Query All**: Recovery involves fetching *all* protocol events since the wallet birthday.
+- **Client-Side Filter**: The client attempts to decrypt every event. Successful decryption = "It's for me".
+- **Privacy Gain**: Observers see only a global stream of encrypted blobs. They cannot correlate payments to specific recipients or see who is receiving how much traffic.
+- **Trade-off**: Recovery is slower (O(n) decryption attempts), but acceptable for a one-time recovery process using pagination and time-based filtering.
+
 ### ANS-104 Implementation Details
 
 Key components that were implemented:

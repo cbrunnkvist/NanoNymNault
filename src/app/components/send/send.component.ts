@@ -1303,10 +1303,6 @@ export class SendComponent implements OnInit {
         return;
       }
 
-      const blindIndex = this.irysDiscovery.deriveBlindIndex(
-        this.nanoNymParsedKeys.nostrPublic
-      );
-
       const { encrypted, nonce, ephemeralPublic } = this.irysDiscovery.encryptPayload(
         notification,
         this.nanoNymParsedKeys.viewPublic
@@ -1314,7 +1310,6 @@ export class SendComponent implements OnInit {
 
       const txId = await this.irysDiscovery.uploadNotification(
         seed,
-        blindIndex,
         encrypted,
         nonce,
         ephemeralPublic
