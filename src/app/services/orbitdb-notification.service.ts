@@ -18,8 +18,6 @@ export class OrbitdbNotificationService {
   private db: any = null;
   private isInitialized = false;
 
-  constructor() {}
-
   /**
    * Initialize Helia and OrbitDB
    * Must be called before using other methods
@@ -61,15 +59,13 @@ export class OrbitdbNotificationService {
    * Get Helia node info for debugging
    */
   async getNodeInfo(): Promise<{ peerId: string; multiaddrs: string[] } | null> {
-    if (!this.helia) {
-      return null;
-    }
+    if (!this.helia) return null;
 
     try {
-      const peerId = this.helia.libp2p.peerId.toString();
-      const multiaddrs = this.helia.libp2p.getMultiaddrs().map((ma: any) => ma.toString());
-
-      return { peerId, multiaddrs };
+      return {
+        peerId: this.helia.libp2p.peerId.toString(),
+        multiaddrs: this.helia.libp2p.getMultiaddrs().map((ma: any) => ma.toString())
+      };
     } catch (error) {
       console.error('[OrbitDB] Failed to get node info:', error);
       return null;
@@ -136,10 +132,7 @@ export class OrbitdbNotificationService {
 
     try {
       const all = await this.db.all();
-      if (since) {
-        return all.filter((entry: any) => entry.value.timestamp >= since);
-      }
-      return all;
+      return since ? all.filter((entry: any) => entry.value.timestamp >= since) : all;
     } catch (error) {
       console.error('[OrbitDB] Failed to get notifications:', error);
       return [];
@@ -166,19 +159,15 @@ export class OrbitdbNotificationService {
    */
   async shutdown(): Promise<void> {
     try {
-      if (this.db) {
-        await this.db.close();
-        this.db = null;
-      }
-      if (this.orbitdb) {
-        await this.orbitdb.stop();
-        this.orbitdb = null;
-      }
-      if (this.helia) {
-        await this.helia.stop();
-        this.helia = null;
-      }
+      if (this.db) await this.db.close();
+      if (this.orbitdb) await this.orbitdb.stop();
+      if (this.helia) await this.helia.stop();
+
+      this.db = null;
+      this.orbitdb = null;
+      this.helia = null;
       this.isInitialized = false;
+
       console.log('[OrbitDB] Shutdown complete');
     } catch (error) {
       console.error('[OrbitDB] Shutdown error:', error);

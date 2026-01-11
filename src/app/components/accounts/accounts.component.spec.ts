@@ -13,10 +13,6 @@ import { LedgerService } from '../../services/ledger.service';
 import { TranslocoService } from '@ngneat/transloco';
 import { NanoNymStorageService } from '../../services/nanonym-storage.service';
 import { NanoNymManagerService } from '../../services/nanonym-manager.service';
-// Imports for future NanoNym tests (currently unused)
-// import { NanoNym } from '../../types/nanonym.types';
-// import { NanoNymAccount } from '../../types/spendable-account.types';
-// import BigNumber from 'bignumber.js';
 
 describe('AccountsComponent', () => {
   let component: AccountsComponent;
