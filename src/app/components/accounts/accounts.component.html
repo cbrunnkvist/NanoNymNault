@@ -196,7 +196,7 @@
               </a>
               <div class="nano-address-actions uk-width-auto copy-container">
                 <ul class="uk-iconnav copy-icons">
-                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy NanoNym Address" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" (click)="$event.stopPropagation()" uk-icon="icon: copy" title="Copy NanoNym Address" uk-tooltip></a></li>
                 </ul>
               </div>
             </div>
