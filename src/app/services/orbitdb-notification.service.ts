@@ -35,8 +35,13 @@ export class OrbitdbNotificationService {
       console.log('[OrbitDB] Initializing Helia with IndexedDB persistence...');
 
       // Dynamic imports to avoid bundling issues
-      const { createHelia } = await import('helia');
+      const { createHelia, libp2pDefaults } = await import('helia');
       const { createOrbitDB } = await import('@orbitdb/core');
+      const { gossipsub } = await import('@chainsafe/libp2p-gossipsub');
+      const { identify } = await import('@libp2p/identify');
+      const { createLibp2p } = await import('libp2p');
+      const { generateKeyPair, privateKeyToProtobuf } = await import('@libp2p/crypto/keys');
+      const { peerIdFromPrivateKey } = await import('@libp2p/peer-id');
 
       // Initialize persistent stores
       const blockstore = new IDBBlockstore('nanonym-ipfs-blocks');
@@ -45,17 +50,66 @@ export class OrbitdbNotificationService {
       await blockstore.open();
       await datastore.open();
 
+      // Generate PeerID with private key FIRST (needed for gossipsub signing)
+      console.log('[OrbitDB] Generating PeerID with private key...');
+      const privateKey = await generateKeyPair('Ed25519');
+      const peerId = await peerIdFromPrivateKey(privateKey);
+      
+      // Patch peerId object to include privateKey in protobuf format (gossipsub v13 expects this)
+      const privKeyProto = privateKeyToProtobuf(privateKey);
+      (peerId as any).privateKey = privKeyProto;
+      
+      console.log('[OrbitDB] PeerID created:', peerId.toString());
+      console.log('[OrbitDB] PeerID privateKey present:', !!(peerId as any).privateKey);
+
+      // Get Helia's default libp2p config and add gossipsub for OrbitDB replication
+      console.log('[OrbitDB] Creating libp2p with gossipsub...');
+      const libp2pOptions = libp2pDefaults();
+      
+      // Ensure services object exists
+      if (!libp2pOptions.services) {
+        (libp2pOptions as any).services = {};
+      }
+
+      // Wrap gossipsub factory to patch components.peerId with privateKey
+      const originalGossipSub = gossipsub({
+        allowPublishToZeroTopicPeers: true
+      });
+
+      (libp2pOptions.services as any).pubsub = (components: any) => {
+        // Patch components.peerId to include privateKey for message signing
+        if (components.peerId && !components.peerId.privateKey) {
+             console.log('[OrbitDB] Patching components.peerId with privateKey...');
+             (components.peerId as any).privateKey = privKeyProto;
+        }
+        return originalGossipSub(components);
+      };
+
+      (libp2pOptions.services as any).identify = identify();
+
+      // Provide the generated peerId to libp2p
+      (libp2pOptions as any).peerId = peerId;
+      (libp2pOptions as any).datastore = datastore;
+
+      // Create libp2p node explicitly
+      console.log('[OrbitDB] Creating libp2p node...');
+      const libp2pNode = await createLibp2p(libp2pOptions);
+      console.log('[OrbitDB] libp2p node created with PeerID:', libp2pNode.peerId.toString());
+
+      console.log('[OrbitDB] Creating Helia...');
       this.helia = await createHelia({
+        libp2p: libp2pNode,
         blockstore,
         datastore
       });
       console.log('[OrbitDB] Helia initialized successfully (Persistent)');
 
+      console.log('[OrbitDB] Creating OrbitDB...');
       this.orbitdb = await createOrbitDB({ ipfs: this.helia });
       console.log('[OrbitDB] OrbitDB initialized successfully');
 
       // Auto-open global log
-      await this.openGlobalLog();
+      // await this.openGlobalLog();
 
       this.isInitialized = true;
       return true;
@@ -101,7 +155,7 @@ export class OrbitdbNotificationService {
 
     try {
       console.log(`[OrbitDB] Opening global log: ${logName}`);
-      this.db = await this.orbitdb.open(logName, { type: 'eventlog' });
+      this.db = await this.orbitdb.open(logName, { type: 'events' });
       console.log(`[OrbitDB] Log opened: ${this.db.address}`);
       return true;
     } catch (error) {
