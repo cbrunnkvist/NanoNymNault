@@ -19,9 +19,13 @@ import { Subscription, Subject, interval } from "rxjs";
 import { NanoBlockService } from "./nano-block.service";
 import { UtilService } from "./util.service";
 import { NotificationService } from "./notification.service";
-import { NoPaddingZerosPipe } from "app/pipes/no-padding-zeros.pipe";
+import { NoPaddingZerosPipe } from "../pipes/no-padding-zeros.pipe";
 import { tools as nanocurrencyWebTools } from "nanocurrency-web";
 const nacl = window["nacl"];
+
+import { AppSettingsService } from "./app-settings.service";
+import { OrbitdbNotificationService } from "./orbitdb-notification.service";
+import { nip59 } from "nostr-tools";
 
 @Injectable({
   providedIn: "root",
@@ -55,9 +59,14 @@ export class NanoNymManagerService {
     private util: UtilService,
     private notifications: NotificationService,
     private noZerosPipe: NoPaddingZerosPipe,
+    private appSettings: AppSettingsService,
+    private orbitdbService: OrbitdbNotificationService,
   ) {
     // Subscribe to incoming Nostr notifications
     this.setupNotificationListener();
+
+    // Setup OrbitDB listener if enabled
+    this.setupOrbitDbListener();
 
     // Subscribe to wallet unlock events to process any pending stealth receives
     this.wallet.wallet.locked$.subscribe(isLocked => {
@@ -636,14 +645,20 @@ export class NanoNymManagerService {
     const nanoNym = this.storage.getNanoNym(nanoNymIndex);
     if (!nanoNym) return;
 
+    console.log(`[Manager] refreshBalances: Querying ${nanoNym.stealthAccounts.length} stealth accounts from Nano node...`);
+    
     for (const stealthAccount of nanoNym.stealthAccounts) {
       try {
         const accountInfo = await this.api.accountInfo(stealthAccount.address);
-        const balance = new BigNumber(accountInfo.balance || 0);
+        const nodeBalance = new BigNumber(accountInfo.balance || 0);
+        const previousBalance = stealthAccount.balance;
+        
+        console.log(`[Manager] ${stealthAccount.address.slice(0, 20)}...: node=${nodeBalance.toString()}, was=${previousBalance?.toString() ?? 'undefined'}, amountRaw=${stealthAccount.amountRaw}`);
+        
         this.storage.updateStealthAccountBalance(
           nanoNymIndex,
           stealthAccount.address,
-          balance,
+          nodeBalance,
         );
       } catch (error) {
         console.error(
@@ -816,6 +831,55 @@ export class NanoNymManagerService {
       } else {
         console.warn(`[Manager] NanoNym not found for pending stealth account ${stealthAccount.address}, removing from queue.`);
         this.removePendingStealthBlock(stealthAccount.address);
+      }
+    }
+  }
+
+  /**
+   * Setup OrbitDB listener if enabled in settings
+   */
+  private async setupOrbitDbListener(): Promise<void> {
+    if (this.appSettings.settings.useOrbitDb) {
+      console.log('[Manager] 🪐 Setting up OrbitDB listener...');
+      const initialized = await this.orbitdbService.initialize();
+      if (initialized) {
+        this.orbitdbService.onNotification((entry) => {
+          this.processOrbitDbEntry(entry);
+        });
+        console.log('[Manager] ✅ OrbitDB listener active');
+      }
+    }
+  }
+
+  /**
+   * Process incoming OrbitDB entry (Trial Decryption)
+   */
+  private async processOrbitDbEntry(entry: any): Promise<void> {
+    // Only process NIP-59 wrapped events
+    if (!entry || entry.type !== 'nip59' || !entry.event) {
+      return;
+    }
+
+    // Try to decrypt with every active NanoNym's private key
+    // This is the "Trial Decryption" approach for the global log
+    const activeNanoNyms = this.storage.getActiveNanoNyms();
+    
+    for (const nanoNym of activeNanoNyms) {
+      try {
+        // Attempt to unwrap (decrypt)
+        const unwrapped = nip59.unwrapEvent(entry.event, nanoNym.keys.nostrPrivate);
+        
+        if (unwrapped && unwrapped.content) {
+          console.log(`[Manager] 🔓 Decrypted OrbitDB notification for ${nanoNym.label}`);
+          const notification = JSON.parse(unwrapped.content);
+          
+          // Process the decrypted notification
+          // This handles deduplication, validation, and stealth derivation
+          await this.processNotification(notification, nanoNym.index);
+        }
+      } catch (error) {
+        // Decryption failed - expected for notifications not meant for this NanoNym
+        // Silent fail
       }
     }
   }

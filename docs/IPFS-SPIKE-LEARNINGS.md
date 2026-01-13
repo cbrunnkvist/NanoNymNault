@@ -1,16 +1,16 @@
 # IPFS Notification Spike Learnings
 
-**Date**: January 10-11, 2026
+**Date**: January 10-12, 2026
 **Branch**: `ipfs_as_notification_alternative`
-**Status**: Unblocked - Angular 17 migration completed
+**Status**: Core Integration Complete (OrbitDB + Helia + Persistence)
 
 ---
 
 ## Summary
 
-Originally blocked by Node.js version and webpack compatibility issues with Angular 13. **Successfully resolved** by upgrading Angular 13 → 17 and Node.js 16 → 20.
+Successfully integrated Helia (IPFS) and OrbitDB v3 into the Angular 17 NanoNymNault application. Solved significant build system challenges related to Node.js polyfills in Webpack 5 and ensured persistent data storage using IndexedDB.
 
-Helia and OrbitDB v3 now install and build successfully.
+The system now supports parallel notifications: sending via both Nostr (existing) and OrbitDB (new), with a UI toggle to control the feature.
 
 ---
 
@@ -36,69 +36,91 @@ Helia and OrbitDB v3 now install and build successfully.
 
 ---
 
-## Current Status
+## Technical Learnings & Solutions
 
-### Working
-- Helia and @orbitdb/core install without errors
-- Build completes successfully (11.2 MB bundle)
-- OrbitDBNotificationService created with dynamic imports
-- Test suite runs (117 passed, 1 flaky mock test, 60 skipped)
-- All 18 cryptography tests pass
+### 1. Webpack 5 Node.js Polyfills (The "node:stream" Error)
+**Problem**: Angular 17 uses Webpack 5, which no longer polyfills Node.js core modules by default. The IPFS stack (Helia/OrbitDB) relies heavily on streams and uses `node:` protocol imports (e.g., `import ... from 'node:stream'`), causing build failures.
 
-### Test Configuration Changes
-- `src/test.ts` simplified (removed `__karma__` handling)
-- `angular.json` test config: added `"include": ["src/**/*.spec.ts"]`
-- `angular.json` test config: polyfills changed to array format including `zone.js/testing`
+**Solution**:
+1. Installed `stream-browserify`.
+2. Installed `@angular-builders/custom-webpack`.
+3. Created `extra-webpack.config.js` to:
+   - Provide a fallback for `stream`.
+   - Alias `node:stream` to `stream-browserify`.
+   - Use `webpack.NormalModuleReplacementPlugin` to strip the `node:` prefix from imports, fixing compatibility with packages that hardcode protocol imports.
 
----
+```javascript
+const webpack = require('webpack');
+module.exports = {
+  resolve: {
+    fallback: {
+      "stream": require.resolve("stream-browserify"),
+      "crypto": false
+    },
+    alias: {
+      "node:stream": require.resolve("stream-browserify"),
+    }
+  },
+  plugins: [
+    new webpack.NormalModuleReplacementPlugin(/^node:/, (resource) => {
+      resource.request = resource.request.replace(/^node:/, '');
+    }),
+  ]
+};
+```
 
-## Previous Blockers (Now Resolved)
+### 2. IndexedDB Persistence for Helia
+**Problem**: Default Helia initialization uses in-memory storage, meaning IPFS identity (PeerID) and data (blocks) are lost on page reload.
 
-### 1. Node.js Version Requirements
-Modern IPFS ecosystem requires Node.js >= 20:
-- `@orbitdb/core@3.0.2` - requires Node >= 20
-- `helia` - multiple dependencies require Node >= 18-20
-- `@noble/curves`, `@noble/hashes` - require Node >= 20.19.0
+**Solution**:
+1. Installed `blockstore-idb` and `datastore-idb`.
+2. Initialized Helia with these persistent stores:
+```typescript
+const blockstore = new IDBBlockstore('nanonym-ipfs-blocks');
+const datastore = new IDBDatastore('nanonym-ipfs-data');
+await blockstore.open();
+await datastore.open();
+this.helia = await createHelia({ blockstore, datastore });
+```
+3. **Result**: The wallet now maintains a stable PeerID and retains notification data across sessions.
 
-**Resolution**: Upgraded to Node.js 20 via Angular 17 migration.
+### 3. Trial Decryption Architecture
+**Design**:
+- **Global Log**: All notifications go to one OrbitDB event log (`nano-nym-alerts-v1`).
+- **Receiver Privacy**: Entries are encrypted NIP-59 gift-wraps (just like Nostr).
+- **Process**:
+  1. Listener receives new log entry.
+  2. Wallet iterates through all active NanoNyms.
+  3. Attempts `nip59.unwrapEvent` with each account's private key.
+  4. If successful, processes the payment (deduplication prevents double-counting if also received via Nostr).
 
-### 2. Webpack `node:` URI Scheme
-Angular 13's webpack couldn't handle `node:` protocol prefix.
-
-**Resolution**: Angular 17's updated webpack configuration handles this natively.
+### 4. P2P Infrastructure Architecture (Zero-Backend)
+**Challenge**: Browsers cannot pin content permanently or reliably serve it to others (ephemeral sessions).
+**Solution**: 
+- **Community Containers**: We can ship a standard IPFS/Kubo Docker container configured to follow and pin the NanoNym topic.
+- **DHT Discovery**: No hardcoded server IPs needed. Browsers and servers discover each other via the topic string (e.g., `/orbitdb/QmGlobalNanoNymAlerts`).
+- **DNSLink Bootstrap**: Optional `_dnslink` TXT records can help browsers find these community super-peers faster than random DHT queries.
+- **Conclusion**: We don't need to run "the" server; we just provide the software for the community to run the infrastructure.
 
 ---
 
 ## Files Created/Modified
 
-| File | Status |
-|------|--------|
-| `docs/IPFS-SPIKE-PLAN.md` | Created - spike planning |
-| `docs/IPFS-SPIKE-LEARNINGS.md` | Updated - this document |
-| `src/app/services/orbitdb-notification.service.ts` | Created - service skeleton |
-| `.nvmrc` | Modified - 16 → 20 |
-| `package.json` | Modified - Angular 17, helia, @orbitdb/core |
-| `angular.json` | Modified - test config updates |
-| `src/test.ts` | Modified - Angular 17 test setup |
-| `src/app/app.component.ts` | Modified - SwUpdate API for Angular 17 |
-| `tsconfig.json` | Modified - added `allowJs: true` |
-| `src/typings/custom/index.d.ts` | Created - nanoidenticons type declaration |
+| File | Status | Description |
+|------|--------|-------------|
+| `src/app/services/orbitdb-notification.service.ts` | **New** | Core service for Helia/OrbitDB lifecycle and log management |
+| `extra-webpack.config.js` | **New** | Webpack overrides for Node.js polyfills |
+| `src/app/services/nanonym-manager.service.ts` | Modified | Added OrbitDB listener and trial-decryption logic |
+| `src/app/components/send/send.component.ts` | Modified | Added parallel sending to OrbitDB |
+| `src/app/components/configure-app/` | Modified | Added "OrbitDB Notifications" toggle UI |
+| `src/app/services/app-settings.service.ts` | Modified | Added persistence for the OrbitDB toggle setting |
+| `angular.json` | Modified | Switched builder to `custom-webpack` |
+| `tsconfig.json` | Modified | Added path mapping for `stream` polyfill |
 
 ---
 
 ## Next Steps
 
-1. **Implement OrbitDB global log** per IPFS-SPIKE-PLAN.md approach #1
-2. **Test Helia/OrbitDB initialization** in browser
-3. **Measure performance** vs Nostr notifications
-4. **Evaluate hybrid approach** (Nostr + IPFS)
-
----
-
-## Reusable Takeaways
-
-1. **Angular major version upgrades** - Must be done one version at a time using `ng update`
-2. **Package peer dependencies** - Check compatibility for each Angular version
-3. **Test configuration** - Angular 17 uses simplified test.ts and explicit `include` in angular.json
-4. **SwUpdate API** - Changed significantly in Angular 17 (use `versionUpdates.pipe(filter(...))`)
-5. **Zone.js** - Import path changed from `zone.js/dist/*` to `zone.js/testing`
+1. **Performance Profiling**: Measure CPU/Memory impact of running Helia in the browser alongside the wallet.
+2. **Reliability Testing**: Verify notification delivery rates compared to Nostr relays.
+3. **Hybrid Strategy**: Refine when to use OrbitDB (e.g., as a backup channel or primary for specific use cases).

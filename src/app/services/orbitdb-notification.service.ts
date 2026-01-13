@@ -1,4 +1,8 @@
 import { Injectable } from '@angular/core';
+import { NanoNymNotification } from './nostr-notification.service';
+import { nip59, nip19 } from 'nostr-tools';
+import { IDBBlockstore } from 'blockstore-idb';
+import { IDBDatastore } from 'datastore-idb';
 
 /**
  * OrbitDB Notification Service
@@ -28,17 +32,30 @@ export class OrbitdbNotificationService {
     }
 
     try {
-      console.log('[OrbitDB] Initializing Helia...');
+      console.log('[OrbitDB] Initializing Helia with IndexedDB persistence...');
 
       // Dynamic imports to avoid bundling issues
       const { createHelia } = await import('helia');
       const { createOrbitDB } = await import('@orbitdb/core');
 
-      this.helia = await createHelia();
-      console.log('[OrbitDB] Helia initialized successfully');
+      // Initialize persistent stores
+      const blockstore = new IDBBlockstore('nanonym-ipfs-blocks');
+      const datastore = new IDBDatastore('nanonym-ipfs-data');
+      
+      await blockstore.open();
+      await datastore.open();
+
+      this.helia = await createHelia({
+        blockstore,
+        datastore
+      });
+      console.log('[OrbitDB] Helia initialized successfully (Persistent)');
 
       this.orbitdb = await createOrbitDB({ ipfs: this.helia });
       console.log('[OrbitDB] OrbitDB initialized successfully');
+
+      // Auto-open global log
+      await this.openGlobalLog();
 
       this.isInitialized = true;
       return true;
@@ -76,7 +93,7 @@ export class OrbitdbNotificationService {
    * Open or create a global notification log
    * This is a shared append-only log for all NanoNym alerts
    */
-  async openGlobalLog(logName: string = 'nano-nym-alerts'): Promise<boolean> {
+  async openGlobalLog(logName: string = 'nano-nym-alerts-v1'): Promise<boolean> {
     if (!this.orbitdb) {
       console.error('[OrbitDB] OrbitDB not initialized');
       return false;
@@ -94,25 +111,45 @@ export class OrbitdbNotificationService {
   }
 
   /**
-   * Add an encrypted notification to the log
-   * @param tag - BLAKE2b hash of shared secret for filtering
-   * @param encryptedPayload - Encrypted notification data
+   * Send a notification to the global log (Encrypted via NIP-59)
    */
-  async postNotification(tag: string, encryptedPayload: string): Promise<string | null> {
+  async sendNotification(
+    notification: NanoNymNotification,
+    senderNostrPrivate: Uint8Array,
+    receiverNostrPublic: Uint8Array
+  ): Promise<string | null> {
     if (!this.db) {
       console.error('[OrbitDB] Database not opened');
       return null;
     }
 
     try {
-      const entry = {
-        tag,
-        encrypted: encryptedPayload,
-        timestamp: Date.now()
+      // Convert keys for NIP-59
+      const receiverPublicHex = this.bytesToHex(receiverNostrPublic);
+      const payloadJson = JSON.stringify(notification);
+
+      // Create NIP-59 gift-wrapped event
+      const rumor = {
+        kind: 14,
+        content: payloadJson,
+        created_at: Math.floor(Date.now() / 1000),
+        tags: [['p', receiverPublicHex]]
       };
 
-      const hash = await this.db.add(entry);
-      console.log(`[OrbitDB] Notification posted: ${hash}`);
+      const giftWrap = nip59.wrapEvent(
+        rumor,
+        senderNostrPrivate,
+        receiverPublicHex
+      );
+
+      // Post the NIP-59 event wrapper to OrbitDB
+      const hash = await this.db.add({
+        type: 'nip59',
+        event: giftWrap,
+        timestamp: Date.now()
+      });
+
+      console.log(`[OrbitDB] 📤 Notification posted: ${hash}`);
       return hash;
     } catch (error) {
       console.error('[OrbitDB] Failed to post notification:', error);
@@ -150,8 +187,18 @@ export class OrbitdbNotificationService {
     }
 
     this.db.events.on('update', (entry: any) => {
-      callback(entry);
+      // The entry.payload.value contains the data we added
+      callback(entry.payload.value);
     });
+  }
+
+  /**
+   * Helper: Convert Uint8Array to hex string
+   */
+  private bytesToHex(bytes: Uint8Array): string {
+    return Array.from(bytes)
+      .map((b) => b.toString(16).padStart(2, '0'))
+      .join('');
   }
 
   /**

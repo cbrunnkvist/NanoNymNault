@@ -28,6 +28,7 @@ import {
 } from "../../types/spendable-account.types";
 import { StealthAccount } from "../../types/nanonym.types";
 import { NanoNymAccountSelectionService } from "../../services/nanonym-account-selection.service";
+import { OrbitdbNotificationService } from "../../services/orbitdb-notification.service";
 
 const nacl = window["nacl"];
 
@@ -130,6 +131,7 @@ export class SendComponent implements OnInit {
     public nostrService: NostrNotificationService,
     private nanoNymManager: NanoNymManagerService,
     private accountSelection: NanoNymAccountSelectionService,
+    private orbitdbService: OrbitdbNotificationService,
   ) {}
 
   async ngOnInit() {
@@ -626,11 +628,11 @@ export class SendComponent implements OnInit {
     }
 
     // 'own-address'
-    const walletAccount = this.walletService.wallet.accounts.find(
+    const targetAccount = this.spendableAccounts.find(
       (a) => a.id === this.toOwnAccountID,
     );
 
-    if (!walletAccount) {
+    if (!targetAccount) {
       // Unable to find receiving account in wallet
       return "";
     }
@@ -646,6 +648,17 @@ export class SendComponent implements OnInit {
   async sendTransaction() {
     // Ensure the selected account is up-to-date before proceeding
     this.onFromAccountChange();
+
+    const possibleDestinationID = this.getDestinationID();
+    if (possibleDestinationID && possibleDestinationID.startsWith("nnym_")) {
+      try {
+        this.nanoNymParsedKeys = this.nanoNymCrypto.decodeNanoNymAddress(possibleDestinationID);
+        this.isNanoNymAddress = true;
+        return await this.sendToNanoNym();
+      } catch (error) {
+        return this.notificationService.sendError(`Invalid NanoNym address: ${error.message}`);
+      }
+    }
 
     // Handle sending TO NanoNym addresses with a separate flow
     if (this.isNanoNymAddress) {
@@ -1283,6 +1296,25 @@ export class SendComponent implements OnInit {
         `[Send] Nostr notification sent to ${acceptedRelays.length} relays:`,
         acceptedRelays,
       );
+
+      if (this.settings.settings.useOrbitDb) {
+        console.log('[Send] 🪐 Sending parallel OrbitDB notification...');
+        
+        // Ensure OrbitDB is initialized before sending
+        await this.orbitdbService.initialize();
+        
+        const orbitHash = await this.orbitdbService.sendNotification(
+          notification,
+          senderNostrKey.private,
+          this.nanoNymParsedKeys.nostrPublic
+        );
+        if (orbitHash) {
+          console.log(`[Send] ✅ OrbitDB notification sent: ${orbitHash}`);
+        } else {
+          console.warn('[Send] ⚠️ OrbitDB notification failed');
+        }
+      }
+
     } catch (error) {
       console.error("[Send] Failed to send Nostr notification:", error);
       this.notificationService.sendWarning(

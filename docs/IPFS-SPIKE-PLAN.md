@@ -3,7 +3,7 @@
 **Date**: January 10, 2026
 **Branch**: `ipfs_as_notification_alternative`
 **Duration**: 1-2 weeks
-**Status**: Planning
+**Status**: Implementation (Phase 1 Complete)
 
 ---
 
@@ -49,7 +49,7 @@ NanoNymNault uses NanoNyms for static, reusable payment codes deriving unique st
 
 ## Approaches (Priority Order)
 
-### 1. OrbitDB with Global Shared Log (First: 1-2 Days)
+### 1. OrbitDB with Global Shared Log (✅ Completed)
 
 **Description**: Append-only log (`/orbitdb/QmGlobalNanoNymAlerts`) via `@orbitdb/core` + Helia.
 - Payer: Encrypt alert JSON; append with tag
@@ -57,21 +57,12 @@ NanoNymNault uses NanoNyms for static, reusable payment codes deriving unique st
 
 **Architecture Decision**: Global over per-user for deniability; append-only DAG ensures immutability vs. Nostr's ephemeral notes.
 
-**Integration Stub**:
-```typescript
-import { createHelia } from 'helia';
-import { createOrbitDB } from '@orbitdb/core';
-
-const ipfs = await createHelia();
-const orbitdb = await createOrbitDB({ ipfs });
-const db = await orbitdb.open('/orbitdb/QmGlobalNanoNymAlerts', { type: 'eventlog' });
-
-// Post:
-db.add({ tag: blake2b(sharedSecret), encrypted: encrypt(alert, pubkey) });
-
-// Sync:
-db.events.on('update', entry => tryDecrypt(entry.payload.value));
-```
+**Implementation Status**:
+- ✅ Helia + OrbitDB v3 integrated
+- ✅ IndexedDB persistence (`blockstore-idb`, `datastore-idb`)
+- ✅ Global log creation (`nano-nym-alerts-v1`)
+- ✅ Send/Receive flow integrated with UI toggle
+- ✅ Build system patched for Webpack 5 compatibility
 
 **Pros**: Persistent replication; real-time via pubsub.
 **Cons/Mitigations**: Bloat → shard by week; spam → custom controller (PoW threshold: 2^20 ops).
@@ -186,7 +177,7 @@ ipfs.libp2p.services.pubsub.addEventListener('message', evt => tryDecrypt(evt.de
 ## Timeline
 
 **Week 1**:
-- Day 1-2: OrbitDB Global Log implementation
+- Day 1-2: OrbitDB Global Log implementation (✅ Done)
 - Day 3: Raw IPFS DHT approach
 - Day 4: libp2p Pubsub approach
 - Day 5: Metrics collection, comparison
@@ -200,10 +191,9 @@ ipfs.libp2p.services.pubsub.addEventListener('message', evt => tryDecrypt(evt.de
 
 ## Next Steps
 
-1. **Setup**: `npm add helia @orbitdb/core libsodium-wrappers`
-2. **Execute**: Approaches 1-3 in order
-3. **Document**: Create `IPFS-SPIKE-LEARNINGS.md` with results
-4. **Review**: GitHub issues; iterate if metrics miss thresholds
+1. **Test**: Run automated tests for `OrbitdbNotificationService`.
+2. **Measure**: Compare OrbitDB propagation speed vs Nostr relays.
+3. **Refine**: Implement pinning/replication strategy for the global log.
 
 ---
 

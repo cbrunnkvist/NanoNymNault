@@ -24,7 +24,10 @@
     "baseUrl": "./",
     "paths": {
       "stream": [
-        "../node_modules/readable-stream/readable.js"
+        "../node_modules/stream-browserify"
+      ],
+      "node:stream": [
+        "../node_modules/stream-browserify"
       ]
     },
     "useDefineForClassFields": false
