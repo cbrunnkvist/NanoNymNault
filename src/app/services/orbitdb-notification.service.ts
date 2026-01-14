@@ -59,8 +59,14 @@ export class OrbitdbNotificationService {
       const privKeyProto = privateKeyToProtobuf(privateKey);
       (peerId as any).privateKey = privKeyProto;
       
+      // Ensure toBytes() method exists (OrbitDB publishing requires this)
+      if (!(peerId as any).toBytes || typeof (peerId as any).toBytes !== 'function') {
+        (peerId as any).toBytes = () => peerId.toMultihash().bytes;
+      }
+      
       console.log('[OrbitDB] PeerID created:', peerId.toString());
       console.log('[OrbitDB] PeerID privateKey present:', !!(peerId as any).privateKey);
+      console.log('[OrbitDB] PeerID toBytes available:', typeof (peerId as any).toBytes === 'function');
 
       // Get Helia's default libp2p config and add gossipsub for OrbitDB replication
       console.log('[OrbitDB] Creating libp2p with gossipsub...');
@@ -80,7 +86,12 @@ export class OrbitdbNotificationService {
         // Patch components.peerId to include privateKey for message signing
         if (components.peerId && !components.peerId.privateKey) {
              console.log('[OrbitDB] Patching components.peerId with privateKey...');
-             (components.peerId as any).privateKey = privKeyProto;
+             components.peerId.privateKey = privKeyProto;
+             
+             // Also ensure toBytes() method exists
+             if (!components.peerId.toBytes || typeof components.peerId.toBytes !== 'function') {
+               components.peerId.toBytes = () => components.peerId.toMultihash().bytes;
+             }
         }
         return originalGossipSub(components);
       };
