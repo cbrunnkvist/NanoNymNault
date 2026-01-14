@@ -1,8 +1,8 @@
 # IPFS Notification Spike Learnings
 
-**Date**: January 10-12, 2026
+**Date**: January 10-13, 2026
 **Branch**: `ipfs_as_notification_alternative`
-**Status**: Core Integration Complete (OrbitDB + Helia + Persistence)
+**Status**: Core Integration Complete (OrbitDB + Helia + Persistence + Gossipsub)
 
 ---
 
@@ -84,7 +84,62 @@ this.helia = await createHelia({ blockstore, datastore });
 ```
 3. **Result**: The wallet now maintains a stable PeerID and retains notification data across sessions.
 
-### 3. Trial Decryption Architecture
+### 3. OrbitDB Requires Gossipsub for Replication
+**Problem**: OrbitDB 3.x uses libp2p pubsub for database replication. Without pubsub configured, OrbitDB throws:
+```
+TypeError: undefined is not an object (evaluating 'pubsub.addEventListener')
+```
+
+**Solution**:
+1. Installed `@chainsafe/libp2p-gossipsub@13` (version 13 required for compatibility with Helia 6's `@libp2p/interface@3.x`).
+2. Extended Helia's default libp2p config to include gossipsub:
+```typescript
+const { createHelia, libp2pDefaults } = await import('helia');
+const { gossipsub } = await import('@chainsafe/libp2p-gossipsub');
+
+const libp2pOptions = libp2pDefaults();
+(libp2pOptions.services as any).pubsub = gossipsub({
+  allowPublishToZeroTopicPeers: true  // Required for single-peer operation
+});
+
+this.helia = await createHelia({
+  libp2p: libp2pOptions,
+  blockstore,
+  datastore
+});
+```
+
+**Version Compatibility Note**: 
+- `@chainsafe/libp2p-gossipsub@14` uses `@libp2p/interface@2.x` which conflicts with Helia 6's `@libp2p/interface@3.x`
+- Use version 13 for compatibility with Helia 6
+
+### 4. Resolving "Cannot sign message, no private key present" Error
+**Problem**: `gossipsub` v13 expects the PeerID object to contain a `privateKey` property (protobuf format). However, `libp2p` v3 (used by `helia` v6) uses `@libp2p/peer-id` v6, which removed this property in favor of a separate Keychain component. This caused `gossipsub` initialization to fail because it couldn't find the key for signing messages.
+
+**Solution**:
+1. **Explicit Key Generation**: Manually generated an Ed25519 key pair using `@libp2p/crypto` and created a PeerID from it.
+2. **PeerID Patching**: Explicitly patched the PeerID object to include the `privateKey` property by marshaling the key to protobuf format (`privateKeyToProtobuf`).
+3. **Factory Wrapper**: Wrapped the `gossipsub` factory function passed to `libp2pOptions`. This interceptor re-applies the patch to the actual PeerID object inside the factory call, ensuring `gossipsub` receives the key even if `libp2p` internals modify/clone the object during initialization.
+
+```typescript
+const { createEd25519PeerId } = await import('@libp2p/peer-id-factory');
+const { privateKeyToProtobuf } = await import('@libp2p/crypto/keys');
+
+// ... generate key and peerId ...
+
+// Wrap gossipsub to patch the PeerID
+const originalGossipSub = gossipsub({ ... });
+
+(libp2pOptions.services as any).pubsub = (components: any) => {
+  if (components.peerId && !components.peerId.privateKey) {
+       const privKeyProto = privateKeyToProtobuf(privateKey);
+       (components.peerId as any).privateKey = privKeyProto;
+  }
+  return originalGossipSub(components);
+};
+```
+
+### 5. Trial Decryption Architecture
 **Design**:
 - **Global Log**: All notifications go to one OrbitDB event log (`nano-nym-alerts-v1`).
 - **Receiver Privacy**: Entries are encrypted NIP-59 gift-wraps (just like Nostr).
@@ -94,7 +149,7 @@ this.helia = await createHelia({ blockstore, datastore });
   3. Attempts `nip59.unwrapEvent` with each account's private key.
   4. If successful, processes the payment (deduplication prevents double-counting if also received via Nostr).
 
-### 4. P2P Infrastructure Architecture (Zero-Backend)
+### 6. P2P Infrastructure Architecture (Zero-Backend)
 **Challenge**: Browsers cannot pin content permanently or reliably serve it to others (ephemeral sessions).
 **Solution**: 
 - **Community Containers**: We can ship a standard IPFS/Kubo Docker container configured to follow and pin the NanoNym topic.

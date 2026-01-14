@@ -1,9 +1,9 @@
 # IPFS Notification Spike Plan
 
-**Date**: January 10, 2026
+**Date**: January 10-13, 2026
 **Branch**: `ipfs_as_notification_alternative`
 **Duration**: 1-2 weeks
-**Status**: Implementation (Phase 1 Complete)
+**Status**: Phase 1 - Core Complete, Manual Testing In Progress
 
 ---
 
@@ -57,12 +57,16 @@ NanoNymNault uses NanoNyms for static, reusable payment codes deriving unique st
 
 **Architecture Decision**: Global over per-user for deniability; append-only DAG ensures immutability vs. Nostr's ephemeral notes.
 
-**Implementation Status**:
+**Implementation Status** (Updated Jan 13, 2026):
 - ✅ Helia + OrbitDB v3 integrated
 - ✅ IndexedDB persistence (`blockstore-idb`, `datastore-idb`)
-- ✅ Global log creation (`nano-nym-alerts-v1`)
+- ✅ libp2p with gossipsub configured (`@chainsafe/libp2p-gossipsub@13`)
+- ✅ PeerID privateKey patching (gossipsub v13 compatibility)
+- ✅ Global log opened (`nano-nym-alerts-v1`)
 - ✅ Send/Receive flow integrated with UI toggle
 - ✅ Build system patched for Webpack 5 compatibility
+- ✅ Security fix: Wallet lock enforced for NanoNym spends
+- 🧪 Manual testing: OrbitDB notification posting (in progress)
 
 **Pros**: Persistent replication; real-time via pubsub.
 **Cons/Mitigations**: Bloat → shard by week; spam → custom controller (PoW threshold: 2^20 ops).
