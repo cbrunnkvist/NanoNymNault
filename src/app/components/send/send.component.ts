@@ -919,6 +919,13 @@ export class SendComponent implements OnInit {
    * Sends multiple transactions, one from each selected stealth account
    */
   async confirmNanoNymSpend() {
+    if (this.walletService.isLocked()) {
+      const wasUnlocked = await this.walletService.requestWalletUnlock();
+      if (wasUnlocked === false) {
+        return;
+      }
+    }
+
     const destinationID = this.getDestinationID();
 
     this.confirmingTransaction = true;
