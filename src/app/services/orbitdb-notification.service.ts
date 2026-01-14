@@ -109,7 +109,7 @@ export class OrbitdbNotificationService {
       console.log('[OrbitDB] OrbitDB initialized successfully');
 
       // Auto-open global log
-      // await this.openGlobalLog();
+      await this.openGlobalLog();
 
       this.isInitialized = true;
       return true;
