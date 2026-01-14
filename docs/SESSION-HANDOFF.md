@@ -26,7 +26,7 @@
 
 ## What We Completed This Session
 
-### 1. ✅ Fixed OrbitDB Gossipsub Integration (Three Fixes)
+### 1. ✅ Fixed OrbitDB Gossipsub Integration (Four Fixes)
 
 **Issue 1**: `TypeError: undefined is not an object (evaluating 'pubsub.addEventListener')`
 - **Cause**: OrbitDB 3.x requires libp2p with pubsub service
@@ -42,6 +42,11 @@
 - **Cause**: `openGlobalLog()` was commented out in initialization
 - **Fix**: Uncommented the call
 - **Commit**: `45eede9` - Enable OrbitDB database opening
+
+**Issue 4**: `TypeError: publishConfig.author.toBytes is not a function`
+- **Cause**: OrbitDB's `buildRawMessage` expects `PeerID.toBytes()` but `@libp2p/peer-id` v6 doesn't expose it
+- **Fix**: Added `.toBytes()` method that wraps `.toMultihash().bytes` to both initial PeerID and runtime components.peerId
+- **Commit**: `5f96bb8` - Fix: Add toBytes() method to PeerID for OrbitDB
 
 ### 2. ✅ Fixed Security Bug: Wallet Lock Bypass
 
