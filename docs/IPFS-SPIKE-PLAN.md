@@ -1,9 +1,9 @@
 # IPFS Notification Spike Plan
 
-**Date**: January 10-13, 2026
+**Date**: January 10-15, 2026
 **Branch**: `ipfs_as_notification_alternative`
 **Duration**: 1-2 weeks
-**Status**: Phase 1 - Core Complete, Manual Testing In Progress
+**Status**: Phase 1 - ✅ COMPLETE (Replication limitations documented)
 
 ---
 
@@ -57,20 +57,31 @@ NanoNymNault uses NanoNyms for static, reusable payment codes deriving unique st
 
 **Architecture Decision**: Global over per-user for deniability; append-only DAG ensures immutability vs. Nostr's ephemeral notes.
 
-**Implementation Status** (Updated Jan 13, 2026):
+**Implementation Status** (Updated Jan 15, 2026):
 - ✅ Helia + OrbitDB v3 integrated
 - ✅ IndexedDB persistence (`blockstore-idb`, `datastore-idb`)
 - ✅ libp2p with gossipsub configured (`@chainsafe/libp2p-gossipsub@13`)
-- ✅ PeerID privateKey patching (gossipsub v13 compatibility)
+- ✅ PeerID privateKey patching (gossipsub v13 compatibility + toBytes() method)
 - ✅ Global log opened (`nano-nym-alerts-v1`)
-- ✅ Send/Receive flow integrated with UI toggle
+- ✅ Send/Receive flow integrated with independent UI toggles (Nostr + OrbitDB)
 - ✅ Build system patched for Webpack 5 compatibility
 - ✅ Security fix: Wallet lock enforced for NanoNym spends
-- 🧪 Manual testing: OrbitDB notification posting (in progress)
+- ✅ Manual testing: OrbitDB notification posting confirmed working
+- ⚠️ **Critical finding**: No cross-instance replication without custom infrastructure
 
-**Pros**: Persistent replication; real-time via pubsub.
+**Pros**: Persistent replication; real-time via pubsub; IndexedDB survives reloads.
 **Cons/Mitigations**: Bloat → shard by week; spam → custom controller (PoW threshold: 2^20 ops).
-**Eval**: Delivery in offline sim; linkability (global entropy hides patterns).
+**Eval Results**: 
+- ✅ Local storage works perfectly
+- ❌ **No cross-instance replication** - each browser creates isolated database
+- ❌ Requires custom relay/bootstrap infrastructure to enable peer discovery
+- 💡 Better suited for local backup than real-time notifications
+
+**Replication Reality Check**:
+- OrbitDB designed for **known peer networks**, not ad-hoc P2P discovery
+- Would need: relay nodes, bootstrap nodes, deterministic DB addresses, WebRTC signaling
+- Infrastructure effort: Similar to running own Nostr relays (~$50/mo hosting)
+- **Recommendation**: Keep Nostr for notifications; explore IPFS for Tier-2 backup instead
 
 ---
 
@@ -193,11 +204,39 @@ ipfs.libp2p.services.pubsub.addEventListener('message', evt => tryDecrypt(evt.de
 
 ---
 
-## Next Steps
+## Phase 1 Outcome
 
-1. **Test**: Run automated tests for `OrbitdbNotificationService`.
-2. **Measure**: Compare OrbitDB propagation speed vs Nostr relays.
-3. **Refine**: Implement pinning/replication strategy for the global log.
+### What We Learned ✅
+1. **OrbitDB technically works** in browser environment
+2. **IndexedDB persistence** provides reliable local storage
+3. **Integration is sound** - can post encrypted notifications successfully
+4. **Parallel operation** with Nostr works without conflicts
+
+### Critical Discovery ⚠️
+**OrbitDB requires custom infrastructure for cross-instance messaging:**
+- Each browser creates **isolated database** with random address
+- No peer discovery between different NanoNymNault instances
+- Browsers cannot directly connect P2P (need relay/signaling servers)
+- Would need deployment of: relay nodes, bootstrap nodes, deterministic addressing
+
+### Recommendations
+
+**For Real-Time Notifications:**
+- ✅ **Continue using Nostr** - already works, proven reliable, no infrastructure
+- Public relays provide immediate cross-device delivery
+- ~100 public relays available with no hosting costs
+
+**For Long-Term Recovery (Tier-2):**
+- 💡 **Pivot IPFS focus to backup/archival** use case
+- OrbitDB/IPFS makes sense for permanent storage, not messaging
+- See `IPFS-BACKUP-SPECIFICATION.md` for recovery architecture
+- Lower infrastructure burden (can be user-optional, self-hosted)
+
+**Next Decision Point:**
+1. ✅ **Phase 1 Complete** - Technology validated, limitations understood
+2. **Option A**: Continue Phase 2/3 (DHT, Pubsub) - still requires infrastructure
+3. **Option B**: Pivot to Tier-2 backup implementation - better fit for IPFS strengths
+4. **Option C**: Close spike - use Nostr exclusively, document learnings
 
 ---
 

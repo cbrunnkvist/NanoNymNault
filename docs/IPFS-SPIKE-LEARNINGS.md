@@ -174,8 +174,142 @@ const originalGossipSub = gossipsub({ ... });
 
 ---
 
-## Next Steps
+---
 
-1. **Performance Profiling**: Measure CPU/Memory impact of running Helia in the browser alongside the wallet.
-2. **Reliability Testing**: Verify notification delivery rates compared to Nostr relays.
-3. **Hybrid Strategy**: Refine when to use OrbitDB (e.g., as a backup channel or primary for specific use cases).
+## Phase 1 Testing Results (January 15, 2026)
+
+### What Works ✅
+
+1. **OrbitDB Posting**: Successfully posts encrypted notifications to local OrbitDB log
+   ```
+   [OrbitDB] 📤 Notification posted: zdpuAqKXDoy2uAKQhiJxSnmsbCsCu7oT4159vqwZs959dhTrX
+   ```
+
+2. **Parallel Operation**: Both Nostr and OrbitDB work simultaneously without interference
+   - Nostr: Published to 3/3 relays
+   - OrbitDB: Posted to local log
+   - Settings toggles control each independently
+
+3. **IndexedDB Persistence**: Data survives page reloads
+   - Stable PeerID across sessions
+   - Notification history retained
+
+4. **NIP-59 Encryption**: Gift-wrapped events work identically to Nostr
+
+### What Doesn't Work (Yet) ⚠️
+
+**Critical Finding: No Cross-Instance Replication**
+
+Each browser instance creates its **own isolated OrbitDB database**:
+- Unique database address: `/orbitdb/zdpu<random-hash>`
+- No peer discovery between instances
+- No shared global log
+- **Cannot read notifications from other browsers/devices**
+
+**Why?**
+1. **No relay infrastructure**: Browsers can't directly connect P2P
+2. **No bootstrap nodes**: No way to discover other NanoNymNault instances
+3. **Random database addresses**: Each instance creates a new log instead of connecting to a shared one
+4. **WebRTC/WebSockets limitations**: Browser-to-browser requires signaling servers
+
+**Evidence from logs:**
+```
+[Error] WebSocket connection to 'wss://<libp2p-peer>.libp2p.direct/' failed: Could not connect
+```
+- Helia tries to connect to public IPFS bootstrap nodes
+- All connection attempts fail (expected - these are generic IPFS nodes, not NanoNym-aware)
+- No custom bootstrap/relay configuration exists
+
+### Replication Requirements (Missing Infrastructure)
+
+To make OrbitDB work as a **global shared log**, we would need:
+
+| Component | Purpose | Effort | Status |
+|-----------|---------|--------|--------|
+| **Relay nodes** | Browser-to-browser connectivity | Medium | ❌ Not implemented |
+| **Bootstrap nodes** | Peer discovery | Low | ❌ Not implemented |
+| **Deterministic DB address** | All instances use same log | Low | ❌ Random per-instance |
+| **Signaling server** | WebRTC coordination | Medium | ❌ Not implemented |
+| **Community infrastructure** | Persistent nodes | High | ❌ Requires deployment |
+
+### Comparison: OrbitDB vs Nostr
+
+| Feature | OrbitDB (Current) | Nostr (Existing) |
+|---------|-------------------|------------------|
+| **Cross-instance delivery** | ❌ No replication | ✅ Works immediately |
+| **Infrastructure required** | Custom relay/bootstrap nodes | Public relays (already exist) |
+| **Setup complexity** | High (custom infra) | Low (use existing relays) |
+| **Persistent storage** | ✅ Local IndexedDB | ❌ Relay retention (7-30 days) |
+| **Privacy** | ✅ NIP-59 encrypted | ✅ NIP-59 encrypted |
+| **Browser compatibility** | ✅ Works | ✅ Works |
+
+### The Infrastructure Reality
+
+**What we learned:**
+- OrbitDB is designed for **known peer networks** (e.g., organizational databases)
+- Not designed for **ad-hoc P2P discovery** across random internet users
+- Requires **always-on infrastructure nodes** to bridge browser instances
+
+**What it would take to match Nostr:**
+1. Deploy 3-5 relay nodes (VPS hosting, ~$50/mo)
+2. Configure libp2p bootstrap addresses
+3. Implement deterministic database addressing
+4. Set up WebRTC signaling servers
+5. Community needs to run persistent Kubo nodes
+
+**vs. Nostr:**
+- Use existing public relays (free, no infrastructure)
+- Works immediately out of the box
+- Already has 100+ public relays with retention
+
+---
+
+## Phase 1 Conclusions
+
+### What Phase 1 Proved ✅
+- OrbitDB technically works in the browser
+- Can store notifications with IndexedDB persistence
+- Integration with NanoNym protocol is sound
+- No showstopper bugs
+
+### What Phase 1 Revealed ⚠️
+- **OrbitDB requires custom infrastructure** to work as a notification system
+- Not a drop-in Nostr replacement without significant deployment effort
+- Current implementation only provides **local storage**, not **global messaging**
+
+### Recommendation
+
+**OrbitDB Spike Assessment:**
+- ✅ **Technology works** - Integration successful
+- ❌ **Wrong tool for the job** - Designed for different use case
+- 💡 **Better suited for Tier-2 backup** - Local persistent storage of notification history
+
+**For real-time notifications:**
+- **Keep using Nostr** - Already works, no infrastructure needed
+- Public relays provide immediate cross-device delivery
+- Proven reliable for messaging use cases
+
+**For long-term recovery (Tier-2):**
+- OrbitDB/IPFS makes more sense for **archival storage**
+- Can complement Nostr by providing permanent backup
+- See `IPFS-BACKUP-SPECIFICATION.md` for recovery strategy
+
+---
+
+## Next Steps (Updated)
+
+### Immediate
+1. ✅ **Phase 1 Complete** - OrbitDB integration validated
+2. **Document findings** - Update spike plan with conclusions
+3. **Decision point**: Continue to Phase 2/3, or pivot to backup implementation?
+
+### Phase 2/3 Options (If Pursuing Replication)
+- **Phase 2**: Raw IPFS DHT (skip OrbitDB overhead)
+- **Phase 3**: libp2p Pubsub only (skip database abstraction)
+- Both still require custom relay/bootstrap infrastructure
+
+### Alternative Path: Tier-2 Backup
+- Focus on using IPFS for **seed-recoverable backups** (not real-time notifications)
+- Use Nostr for primary notifications (continue current implementation)
+- Implement IPFS-based permanent storage for notification history
+- Lower infrastructure requirements (can be user-optional)
