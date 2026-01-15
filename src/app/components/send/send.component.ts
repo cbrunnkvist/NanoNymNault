@@ -777,8 +777,8 @@ export class SendComponent implements OnInit {
       );
 
       if (newHash) {
-        // If NanoNym, send Nostr notification
-        if (this.isNanoNymAddress) {
+        // If NanoNym, send Nostr notification (if enabled)
+        if (this.isNanoNymAddress && this.settings.settings.useNostr) {
           await this.sendNostrNotification(newHash);
         }
 
@@ -1042,6 +1042,7 @@ export class SendComponent implements OnInit {
           const nanoNymAccount = this.selectedSpendableAccount as NanoNymAccount;
           await this.nanoNymManager.refreshBalances(nanoNymAccount.index);
           this.walletService.informBalanceRefresh();
+          stealthAccount.done = true;
         } else {
           console.error(`[Send-NanoNym] ❌ Transaction ${i + 1} failed`);
           // Continue trying other accounts even if one fails

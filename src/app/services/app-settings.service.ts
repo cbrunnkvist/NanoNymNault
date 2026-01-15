@@ -29,6 +29,7 @@ interface AppSettings {
   walletVersion: number | null;
   lightModeEnabled: boolean;
   identiconsStyle: string;
+  useNostr: boolean;
   useOrbitDb: boolean;
 }
 
@@ -59,6 +60,7 @@ export class AppSettingsService {
     walletVersion: 1,
     lightModeEnabled: false,
     identiconsStyle: 'none',
+    useNostr: true,
     useOrbitDb: false,
   };
 
@@ -253,6 +255,7 @@ export class AppSettingsService {
       walletVersion: 1,
       lightModeEnabled: false,
       identiconsStyle: 'none',
+      useNostr: true,
       useOrbitDb: false,
     };
   }
