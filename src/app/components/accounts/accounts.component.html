@@ -185,7 +185,7 @@
                         {{ account.nanoNym.paymentCount }} {{ account.nanoNym.paymentCount === 1 ? 'payment' : 'payments' }}
                       </div>
                     </div>
-                    <div class="nano-address-clickable nano-address-monospace">
+                    <div class="nano-address-clickable nano-address-monospace uk-text-truncate">
                       <app-nano-account-id
                         [accountID]="account.id"
                         middle="auto">
