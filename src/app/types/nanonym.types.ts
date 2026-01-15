@@ -72,6 +72,9 @@ export interface StealthAccount {
 
   /** Account balance (queried from node) */
   balance: BigNumber;
+
+  /** UI state: true when this account's send transaction completed */
+  done?: boolean;
 }
 
 /**

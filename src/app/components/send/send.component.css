@@ -100,3 +100,13 @@
   font-size: 0.85em;
   font-weight: 500;
 }
+
+.stealth-account-done {
+  text-decoration: line-through;
+  opacity: 0.6;
+}
+
+.stealth-account-sending {
+  color: #7c3aed;
+  font-weight: bold;
+}
