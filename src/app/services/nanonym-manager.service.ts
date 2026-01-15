@@ -1,4 +1,4 @@
-import { Injectable } from "@angular/core";
+import { Injectable, OnDestroy } from "@angular/core";
 import BigNumber from "bignumber.js";
 import {
   NanoNym,
@@ -30,7 +30,7 @@ import { nip59 } from "nostr-tools";
 @Injectable({
   providedIn: "root",
 })
-export class NanoNymManagerService {
+export class NanoNymManagerService implements OnDestroy {
   private notificationSubscription: Subscription | null = null;
   private backgroundRetrySubscription: Subscription | null = null;
   // Map nostr private key hex -> NanoNym index for fast notification routing
