@@ -8,7 +8,8 @@ import {UtilService} from './services/util.service';
 import {NotificationService} from './services/notification.service';
 import {WorkPoolService} from './services/work-pool.service';
 import {Router} from '@angular/router';
-import {SwUpdate} from '@angular/service-worker';
+import {SwUpdate, VersionReadyEvent, VersionInstallationFailedEvent} from '@angular/service-worker';
+import {filter} from 'rxjs/operators';
 import {RepresentativeService} from './services/representative.service';
 import {NodeService} from './services/node.service';
 import { DesktopService, LedgerService } from './services';
@@ -184,19 +185,22 @@ export class AppComponent implements OnInit {
     });
     this.desktop.send('deeplink-ready');
 
-    // Notify user if service worker update is available
-    this.updates.available.subscribe((event) => {
-      console.log(`SW update available. Current: ${event.current.hash}. New: ${event.available.hash}`);
+    // Notify user if service worker update is available (Angular 17+ API)
+    this.updates.versionUpdates.pipe(
+      filter((evt): evt is VersionReadyEvent => evt.type === 'VERSION_READY')
+    ).subscribe((event) => {
+      console.log(`SW update available. Current: ${event.currentVersion.hash}. New: ${event.latestVersion.hash}`);
       this.notifications.sendInfo(
         'An update was installed in the background and will be applied on next launch. <a href="#" (click)="applySwUpdate()">Apply immediately</a>',
         { length: 10000 }
       );
     });
 
-    // Notify user after service worker was updated
-    this.updates.activated.subscribe((event) => {
-      console.log(`SW update successful. Current: ${event.current.hash}`);
-      this.notifications.sendSuccess('Nault was updated successfully.');
+    // Notify user if service worker update failed
+    this.updates.versionUpdates.pipe(
+      filter((evt): evt is VersionInstallationFailedEvent => evt.type === 'VERSION_INSTALLATION_FAILED')
+    ).subscribe((event) => {
+      console.error(`SW update failed: ${event.error}`);
     });
 
     // Check how long the wallet has been inactive, and lock it if it's been too long

@@ -51,17 +51,16 @@ export class NanoNymAccountSelectionService {
       }))
     });
 
-    // 1. Filter accounts with non-zero balance
     const funded = availableStealthAccounts.filter(a => {
-      const balance = new BigNumber(a.amountRaw || a.balance || 0);
-      return balance.gt(0);
+      const currentBalance = this.getBalance(a);
+      return currentBalance.gt(0);
     });
 
     console.log('[AccountSelection] Filtered funded accounts:', {
       fundedCount: funded.length,
       funded: funded.map(a => ({
         address: a.address,
-        balance: new BigNumber(a.amountRaw || a.balance || 0).toString()
+        balance: this.getBalance(a).toString()
       }))
     });
 
@@ -74,14 +73,10 @@ export class NanoNymAccountSelectionService {
       };
     }
 
-    // 2. Try single account first (best privacy - no linkage!)
-    const singleAccount = funded.find(a => {
-      const balance = new BigNumber(a.amountRaw || a.balance || 0);
-      return balance.gte(amount);
-    });
+    const singleAccount = funded.find(a => this.getBalance(a).gte(amount));
 
     if (singleAccount) {
-      const singleBalance = new BigNumber(singleAccount.amountRaw || singleAccount.balance || 0);
+      const singleBalance = this.getBalance(singleAccount);
       console.log('[AccountSelection] Single account sufficient', {
         address: singleAccount.address,
         balance: singleBalance.toString(),
@@ -96,30 +91,21 @@ export class NanoNymAccountSelectionService {
 
     console.log('[AccountSelection] No single account sufficient, trying multiple accounts');
 
-    // 3. Need multiple accounts - use minimum with greedy algorithm
-    // Sort by balance descending (largest first)
     const sorted = [...funded].sort((a, b) => {
-      const balanceA = new BigNumber(a.amountRaw || a.balance || 0);
-      const balanceB = new BigNumber(b.amountRaw || b.balance || 0);
-      return balanceB.comparedTo(balanceA);
+      return this.getBalance(b).comparedTo(this.getBalance(a));
     });
 
-    // 4. Find minimal set using greedy approach
     const selected: StealthAccount[] = [];
     let remaining = new BigNumber(amount);
 
     for (const account of sorted) {
       if (remaining.lte(0)) break;
-
-      const accountBalance = new BigNumber(account.amountRaw || account.balance || 0);
       selected.push(account);
-      remaining = remaining.minus(accountBalance);
+      remaining = remaining.minus(this.getBalance(account));
     }
 
-    // Check if we have enough balance
     const totalBalance = selected.reduce((sum, account) => {
-      const balance = new BigNumber(account.amountRaw || account.balance || 0);
-      return sum.plus(balance);
+      return sum.plus(this.getBalance(account));
     }, new BigNumber(0));
 
     console.log('[AccountSelection] Multiple accounts result', {
@@ -158,14 +144,18 @@ export class NanoNymAccountSelectionService {
     };
   }
 
-  /**
-   * Get total balance across all stealth accounts
-   */
   getTotalBalance(stealthAccounts: StealthAccount[]): BigNumber {
     return stealthAccounts.reduce((sum, account) => {
-      const balance = new BigNumber(account.amountRaw || account.balance || 0);
-      return sum.plus(balance);
+      return sum.plus(this.getBalance(account));
     }, new BigNumber(0));
+  }
+
+  /**
+   * Get current balance for a stealth account.
+   * Uses `balance` (refreshed from node) as primary; falls back to `amountRaw` (notification) for legacy data.
+   */
+  private getBalance(account: StealthAccount): BigNumber {
+    return new BigNumber(account.balance ?? account.amountRaw ?? 0);
   }
 
   /**

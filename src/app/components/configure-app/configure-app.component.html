@@ -71,6 +71,40 @@
             </div>
           </div>
 
+          <div class="uk-width-1-1">
+            <div class="uk-form-horizontal">
+              <div class="uk-margin">
+                <label class="uk-form-label">Nostr Notifications</label>
+                <div class="uk-form-controls">
+                  <div class="uk-inline uk-width-1-1">
+                    <select class="uk-select" [(ngModel)]="useNostr">
+                      <option [ngValue]="true">Enabled</option>
+                      <option [ngValue]="false">Disabled</option>
+                    </select>
+                  </div>
+                  <span class="uk-text-meta">Use Nostr relays for NanoNym payment notifications (fast, distributed).</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div class="uk-width-1-1">
+            <div class="uk-form-horizontal">
+              <div class="uk-margin">
+                <label class="uk-form-label">OrbitDB Notifications</label>
+                <div class="uk-form-controls">
+                  <div class="uk-inline uk-width-1-1">
+                    <select class="uk-select" [(ngModel)]="useOrbitDb">
+                      <option [ngValue]="true">Enabled</option>
+                      <option [ngValue]="false">Disabled</option>
+                    </select>
+                  </div>
+                  <span class="uk-text-meta">Experimental: Use IPFS/OrbitDB for parallel notification delivery.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
       <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">

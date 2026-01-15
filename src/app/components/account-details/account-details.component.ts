@@ -584,8 +584,6 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   }
 
   async loadNanoNymDetails(nnymAddress: string) {
-    this.loadingAccountDetails = true;
-
     const allNanoNyms = this.nanoNymManager.getSpendableNanoNymAccounts();
     const nanoNymAccount = allNanoNyms.find(n => n.id === nnymAddress);
 
@@ -597,16 +595,37 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     }
 
     this.nanoNym = nanoNymAccount.nanoNym;
+    this.renderNanoNymUI(nnymAddress);
+    
+    console.log(`[NanoNym Details] Rendered cached data, now refreshing from node...`);
+    this.loadingAccountDetails = true;
+
+    this.nanoNymManager.refreshBalances(nanoNymAccount.nanoNym.index).then(() => {
+      const updatedNanoNyms = this.nanoNymManager.getSpendableNanoNymAccounts();
+      const updatedNanoNymAccount = updatedNanoNyms.find(n => n.id === nnymAddress);
+      
+      if (updatedNanoNymAccount) {
+        this.nanoNym = updatedNanoNymAccount.nanoNym;
+        this.renderNanoNymUI(nnymAddress);
+        console.log(`[NanoNym Details] Updated with fresh balances from node`);
+      }
+      
+      this.loadingAccountDetails = false;
+    }).catch(error => {
+      console.error(`[NanoNym Details] Failed to refresh balances:`, error);
+      this.loadingAccountDetails = false;
+    });
+  }
+
+  private async renderNanoNymUI(nnymAddress: string) {
     this.qrCodeImage = await QRCode.toDataURL(nnymAddress, { scale: 7 });
     this.addressBookEntry = this.nanoNym.label;
     this.addressBookModel = this.nanoNym.label;
 
-    // Calculate fiat balance
     this.nanoNymBalanceFiat = this.util.nano.rawToMnano(this.nanoNym.balance || 0)
       .times(this.price.price.lastPrice)
       .toNumber();
 
-    // Transform stealth accounts into accountHistory format
     this.accountHistory = this.nanoNym.stealthAccounts.map(stealth => ({
       type: 'receive',
       hash: stealth.txHash,
@@ -621,8 +640,6 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     })).sort((a, b) => b.local_timestamp - a.local_timestamp);
 
     this.updateTodayYesterdayDateStrings();
-
-    this.loadingAccountDetails = false;
     this.onAccountDetailsLoadDone();
   }
 

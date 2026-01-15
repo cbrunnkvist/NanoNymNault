@@ -89,8 +89,8 @@
                 <div class="uk-form-controls">
                   <select required class="form-select-destination uk-select" [(ngModel)]="toOwnAccountID" id="form-horizontal-select">
                     <option value="" disabled selected hidden>Account to transfer to</option>
-                    <ng-container *ngFor="let account of accounts">
-                      <option [value]="account.id" *ngIf="account.id !== fromAccountID">{{account.addressBookName ? account.addressBookName + ' - ' : '#' + account.index + ' - ' }} {{ account.id | squeeze }} ({{ account.balance | rai: 'mnano,true' | amountsplit: 0 }}{{ account.balance | rai: 'mnano,true' | amountsplit: 1 }} XNO)</option>
+                    <ng-container *ngFor="let account of spendableAccounts">
+                      <option [value]="account.id" *ngIf="account.id !== fromAccountID">{{ formatAccountLabel(account) }}</option>
                     </ng-container>
                   </select>
                 </div>
@@ -230,10 +230,12 @@
                 <div class="account-label uk-text-truncate">{{ fromAddressBook }}</div>
               </div>
               <div class="uk-card-body" style="max-height: 300px; overflow-y: auto;">
-                <div *ngFor="let account of selectedStealthAccounts; let i = index" class="uk-margin-small-bottom">
+                <div *ngFor="let account of selectedStealthAccounts; let i = index" class="uk-margin-small-bottom" [ngClass]="{ 'stealth-account-done': account.done, 'stealth-account-sending': confirmingTransaction && i === sendProgress.current - 1 }">
                   <div class="uk-grid-small uk-grid uk-grid-match" uk-grid>
                     <div class="uk-width-expand">
                       <div class="nano-address-monospace uk-text-small uk-text-truncate">
+                        <span *ngIf="account.done" uk-icon="icon: check; ratio: 0.8" class="uk-text-success uk-margin-small-right"></span>
+                        <span *ngIf="confirmingTransaction && i === sendProgress.current - 1 && !account.done" uk-spinner="ratio: 0.4" class="uk-margin-small-right"></span>
                         <app-nano-account-id [accountID]="account.address"></app-nano-account-id>
                       </div>
                     </div>

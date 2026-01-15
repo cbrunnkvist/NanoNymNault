@@ -185,7 +185,7 @@
                         {{ account.nanoNym.paymentCount }} {{ account.nanoNym.paymentCount === 1 ? 'payment' : 'payments' }}
                       </div>
                     </div>
-                    <div class="nano-address-clickable nano-address-monospace">
+                    <div class="nano-address-clickable nano-address-monospace uk-text-truncate">
                       <app-nano-account-id
                         [accountID]="account.id"
                         middle="auto">
@@ -196,7 +196,7 @@
               </a>
               <div class="nano-address-actions uk-width-auto copy-container">
                 <ul class="uk-iconnav copy-icons">
-                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" uk-icon="icon: copy" title="Copy NanoNym Address" uk-tooltip></a></li>
+                  <li><a ngxClipboard [cbContent]="account.id" (cbOnSuccess)="copied()" (click)="$event.stopPropagation()" uk-icon="icon: copy" title="Copy NanoNym Address" uk-tooltip></a></li>
                 </ul>
               </div>
             </div>

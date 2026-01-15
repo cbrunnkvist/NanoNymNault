@@ -4,3 +4,7 @@ declare module "worker-loader!*" {
   }
   export default WebpackWorker;
 }
+
+declare module "*/nanoidenticons.min.js" {
+  export function createIcon(options: { seed: string; scale: number }): HTMLCanvasElement;
+}

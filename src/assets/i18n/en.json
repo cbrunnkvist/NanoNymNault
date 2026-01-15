@@ -37,7 +37,10 @@
     "no-payments-received": "No payments received yet",
     "loading-payments": "Loading payments...",
     "view-stealth-account": "View Stealth Account",
-    "copy-stealth-address": "Copy Stealth Address"
+    "copy-stealth-address": "Copy Stealth Address",
+    "nanonym-account": "NanoNym Account",
+    "nanonym-status": "Status",
+    "nanonym-active": "Active"
   },
   "accounts": {
     "account-address-confirmed-on-ledger": "Account address confirmed on Ledger",

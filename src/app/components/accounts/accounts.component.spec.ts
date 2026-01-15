@@ -13,10 +13,6 @@ import { LedgerService } from '../../services/ledger.service';
 import { TranslocoService } from '@ngneat/transloco';
 import { NanoNymStorageService } from '../../services/nanonym-storage.service';
 import { NanoNymManagerService } from '../../services/nanonym-manager.service';
-import { ElementRef } from '@angular/core';
-import { NanoNym } from '../../types/nanonym.types';
-import { NanoNymAccount } from '../../types/spendable-account.types';
-import BigNumber from 'bignumber.js';
 
 describe('AccountsComponent', () => {
   let component: AccountsComponent;
@@ -60,14 +56,6 @@ describe('AccountsComponent', () => {
   beforeEach(() => {
     fixture = TestBed.createComponent(AccountsComponent);
     component = fixture.componentInstance;
-
-    // Mock the modal reference
-    component.nanoNymDetailsModalRef = { nativeElement: {} } as ElementRef;
-    spyOn((window as any)['UIkit'], 'modal').and.returnValue({
-      show: jasmine.createSpy('show'),
-      hide: jasmine.createSpy('hide')
-    });
-
     fixture.detectChanges();
   });
 
@@ -78,57 +66,8 @@ describe('AccountsComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  xdescribe('NanoNym Details Modal', () => {
-    xit('should open details modal and generate QR code', async () => {
-      const mockNanoNym: NanoNym = {
-        index: 0,
-        label: 'Test NanoNym',
-        nnymAddress: 'nnym_test',
-        status: 'active',
-        createdAt: Date.now(),
-        keys: {
-          spendPublic: new Uint8Array(32),
-          spendPrivate: new Uint8Array(32),
-          viewPublic: new Uint8Array(32),
-          viewPrivate: new Uint8Array(32),
-          nostrPublic: new Uint8Array(32),
-          nostrPrivate: new Uint8Array(32)
-        },
-        balance: new BigNumber(0),
-        paymentCount: 0,
-        stealthAccounts: []
-      };
-
-      await component.viewNanoNymDetails(mockNanoNym);
-
-      expect(component.selectedNanoNym).toBe(mockNanoNym);
-      expect(component.nanoNymDetailsModal.show).toHaveBeenCalled();
-      expect(component.detailsNanoNymQR).not.toBeNull();
-    });
-
-    xit('should close details modal', () => {
-      component.closeDetailsModal();
-      expect(component.selectedNanoNym).toBeNull();
-      expect(component.detailsNanoNymQR).toBeNull();
-      expect(component.nanoNymDetailsModal.hide).toHaveBeenCalled();
-    });
-
-    xit('should toggle NanoNym status to archived', async () => {
-      const mockNanoNym: NanoNym = { index: 1, status: 'active', label: 'Test' } as NanoNym;
-      component.nanoNymAccounts = [{ nanoNym: mockNanoNym } as NanoNymAccount];
-      mockNanoNymManager.archiveNanoNym.and.returnValue(Promise.resolve());
-
-      await component.toggleNanoNymStatus(1);
-      expect(mockNanoNymManager.archiveNanoNym).toHaveBeenCalledWith(1);
-    });
-
-    xit('should toggle NanoNym status to active', async () => {
-      const mockNanoNym: NanoNym = { index: 1, status: 'archived', label: 'Test' } as NanoNym;
-      component.nanoNymAccounts = [{ nanoNym: mockNanoNym } as NanoNymAccount];
-      mockNanoNymManager.reactivateNanoNym.and.returnValue(Promise.resolve());
-
-      await component.toggleNanoNymStatus(1);
-      expect(mockNanoNymManager.reactivateNanoNym).toHaveBeenCalledWith(1);
-    });
-  });
+  // TODO: Add NanoNym Details Modal tests when feature is implemented
+  // These tests were removed during Angular 14 migration due to referencing
+  // non-existent component methods. Re-add when viewNanoNymDetails,
+  // closeDetailsModal, toggleNanoNymStatus are implemented.
 });
