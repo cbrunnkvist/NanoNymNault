@@ -8,4 +8,7 @@ export const environment = {
   desktop: false,
   donationAddress:
     "nano_1nnym1fi87ogqqb48ezizfhgfaewn1jmaaw4teaensu8fx9a615if4d96gpc",
+  // Connect directly to local Ceramic daemon (has CORS enabled)
+  // Start with: ceramic-one daemon --network in-memory && nvm exec ceramic daemon --network inmemory
+  ceramicGateway: "http://localhost:7007",
 };

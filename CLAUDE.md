@@ -325,31 +325,88 @@ Notes:
 - Parallel queries across all relays; merge results.
 - Relay set should include at least some long-lived, reliable relays; allow user configuration.
 
-### 7.2 Tier 2 – Additional Backup Mechanisms (Status: TBD)
+### 7.2 Tier 2 – Ceramic Streams Backup (Implemented POC)
 
-**Current Status: Not Implemented**
+**Current Status: Proof-of-Concept Implemented (Phases 1-3A Complete)**
 
-The original design proposed two additional recovery tiers beyond Nostr multi-relay redundancy:
+Ceramic provides append-only, DID-keyed streams for encrypted event persistence that survives Nostr relay pruning.
 
-**Option A: Encrypted Backup Notes on Nostr**
-- Self-send NIP-17 gift-wrapped snapshot backups to public relays
-- **Problem:** Public relays have retention policies (7-30 days typical); self-sent backups get purged just like regular notifications
-- **Conclusion:** Provides no meaningful improvement over Tier 1 unless using custom/paid archival relays
+**Architecture:**
 
-**Option B: Arweave Permanent Storage**
-- Upload encrypted backups to Arweave via Irys for permanent retention
-- **Problems:**
-  - Requires funded accounts (AR tokens)
-  - Per-NanoNym Ethereum keys would require funding N separate accounts (impractical)
-  - Shared wallet key would link all NanoNym backups (privacy leak)
-  - Free tier effectively dead in 2025
-- **Conclusion:** Economic model not feasible without user-funded accounts
+- **Hash-based DID derivation**: Both sender and receiver compute identical DIDs from NanoNym public keys (`BLAKE2b-256("nanonym-ceramic-did-v1" || B_spend || B_view || nostr_public)`)
+- **Per-NanoNym isolation**: Each NanoNym has its own Ceramic stream (separate DIDs prevent cross-linking)
+- **Sender-initiated appends**: After successful Nano send + Nostr notification, sender appends encrypted backup blob to recipient's stream
+- **NaCl box encryption**: All blobs encrypted to `B_view` (Ed25519→Curve25519 conversion); only receiver can decrypt
+- **Non-blocking design**: Ceramic failures never block Nano transactions or Nostr notifications
+- **IPFS anchoring**: Streams are anchored to IPFS for long-term availability
 
-**Potential Solutions Under Consideration:**
-1. **Downloadable encrypted backup files** - User manually saves to their preferred cloud storage
-2. **Optional paid archival relay integration** - For users willing to pay monthly subscription
-3. **Custom relay configuration** - Allow users to specify their own long-term retention relay
-4. **Hybrid approach** - Combine downloadable backups with optional archival services
+**Blob Format (Compact Tier-1 Notification):**
+
+```typescript
+interface NanoNymNotification {
+  _v: number;        // Protocol version (1)
+  _p: string;        // Protocol name ("NNymNotify")
+  R: string;         // Hex-encoded ephemeral public key
+  tx_h: string;      // Nano transaction hash
+  a_raw?: string;    // Transaction amount in Nano RAW (optional)
+}
+```
+
+**Ceramic Record (Tier-2 Wrapper):**
+
+```typescript
+interface NanoNymNotificationsRecord {
+  _v: number;                      // Protocol version (3)
+  _p: string;                      // Protocol name ("NNymRecord")
+  o_ts: number;                    // Open timestamp (earliest tx timestamp)
+  s_txs: NanoNymNotification[];    // Stealth transactions
+}
+```
+
+**Node Access (2025 Reality):**
+
+- **No public gateway exists**: `gateway.ceramic.network` does not resolve
+- **Local node required**: Developers run `ceramic daemon` locally (default: `http://localhost:7007`)
+- **Development**: CORS proxy on `http://localhost:8010/proxy` forwards to local node
+- **Production**: Optional (users must self-host Ceramic node or disable Tier-2)
+
+**Recovery Workflow:**
+
+1. User initiates recovery; wallet derives all NanoNym public keys from seed
+2. For each NanoNym: compute Ceramic DID from public keys
+3. Read all encrypted blobs from DID-keyed stream
+4. Decrypt each blob using `b_view` private key
+5. Extract `{R, tx_h, a_raw}` and import stealth accounts
+6. Deduplicate with Tier-1 Nostr recovery by `tx_h`
+
+**Health Check:**
+
+- Endpoint: `GET /api/v0/node/healthcheck` (returns `"Alive!"` or `"Insufficient resources"`)
+- Triggered on wallet unlock (non-blocking, console-only logging)
+- Verifies Ceramic node connectivity before user attempts transactions
+
+**Privacy Trade-offs:**
+
+- ✅ **Stronger than Nostr**: Indefinite IPFS retention vs 7-30 day relay pruning
+- ⚠️ **Weaker than Nostr**: Actual append timestamps visible (Nostr randomizes ±2 days)
+- ⚠️ **DID derivability**: Anyone with `nnym_` address can compute DID and observe stream metadata (but cannot decrypt blobs)
+- ✅ **Per-NanoNym isolation**: Separate DIDs prevent cross-linking
+
+**Implementation Status:**
+
+- ✅ Phase 1: DID derivation and encoding
+- ✅ Phase 2: Stream handling, encryption, retry logic
+- ✅ Phase 3A: Sender append integration (fire-and-forget after Nano send)
+- ⚠️ Phase 3B: Recovery wizard UI (not yet implemented)
+- ⚠️ Phase 4: Production readiness (node access model TBD)
+
+**Rejected Alternatives:**
+
+1. **Self-send Nostr backups**: No improvement (same relay retention policies)
+2. **Arweave permanent storage**: Requires funded accounts (AR tokens); economic model infeasible
+3. **HD path-based DID**: Sender cannot compute DID without receiver's seed
+
+See `docs/CERAMIC-BACKUP-SPECIFICATION.md` for detailed protocol specification.
 
 ### 7.3 Tier 3 – Blockchain-Based Fallback (Status: TBD)
 
@@ -373,14 +430,20 @@ Recovery fundamentally depends on Nostr notification availability. The protocol 
 | Tier | Method | Status | Expected Success | Dependencies |
 |------|--------|--------|------------------|--------------|
 | 1 | Nostr multi-relay replay | ✅ Implemented | High (with relay redundancy) | 3-5 diverse relays |
-| 2 | Additional backup mechanisms | ⚠️ TBD | - | To be determined |
+| 2 | Ceramic Streams backup | ✅ POC Implemented (Phases 1-3A) | Medium (requires local node) | Self-hosted Ceramic node |
 | 3 | Blockchain-based fallback | ❌ Not feasible | - | Requires `R` from notifications |
 
 **Design Reality:**
-- **Primary recovery mechanism:** Nostr multi-relay redundancy (Tier 1)
-- **Seed-only recovery:** Depends on at least one relay retaining notification history
-- **User responsibility:** Configure reliable relay set (including potential archival relays)
-- **Future work:** Determine practical Tier 2 implementation (likely downloadable backups)
+- **Primary recovery mechanism:** Nostr multi-relay redundancy (Tier 1) - fast, no local infrastructure required
+- **Secondary backup:** Ceramic Streams (Tier 2) - indefinite IPFS retention, requires self-hosted node
+- **Seed-only recovery guarantee:** Depends on either Nostr relay retention OR Ceramic node availability
+- **User responsibility:**
+  - Configure reliable Nostr relay set (3-5 diverse, long-lived relays)
+  - Optionally run local Ceramic node for Tier 2 redundancy
+- **Future work:**
+  - Implement Tier 2 recovery wizard UI (Phase 3B)
+  - Determine production Ceramic node deployment strategy (Phase 4)
+  - Consider downloadable encrypted backup files as Tier 2 alternative
 
 ---
 
