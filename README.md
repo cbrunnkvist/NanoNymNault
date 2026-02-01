@@ -172,8 +172,9 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 
 ### Documentation
 
-- **[CLAUDE.md](CLAUDE.md)** - Original protocol specification (revised after BIP analysis)
-- **[ANALYSIS-CAMONANO-ALTERNATIVES.md](ANALYSIS-CAMONANO-ALTERNATIVES.md)** - Deep dive into CamoNano, BIP protocols, and off-chain notification alternatives
+- **[AGENTS.md](AGENTS.md)** - Agent instructions and Prime Directives
+- **[docs/README.md](docs/README.md)** - Complete documentation index
+- **[docs/ANALYSIS-CAMONANO-ALTERNATIVES.md](docs/ANALYSIS-CAMONANO-ALTERNATIVES.md)** - Deep dive into CamoNano, BIP protocols, and off-chain notification alternatives
 
 ---
 
@@ -198,7 +199,7 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 - Tier 2 backup mechanisms (downloadable encrypted backups)
 - Automated E2E tests (Playwright or similar)
 
-**See:** CLAUDE.md Section 12 (Implementation Roadmap) for detailed status.
+**See:** [docs/roadmap.md](docs/roadmap.md) for detailed implementation status.
 
 ---
 
