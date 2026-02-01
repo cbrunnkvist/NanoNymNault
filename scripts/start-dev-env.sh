@@ -33,13 +33,17 @@ fi
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
 
-# Switch to Node 20 (from .nvmrc)
-nvm use 20 > /dev/null 2>&1 || nvm install 20
+# Read Node version from .nvmrc
+NODE_VERSION=$(cat "$PROJECT_ROOT/.nvmrc" | tr -d '[:space:]')
+
+# Switch to Node version from .nvmrc
+nvm use "$NODE_VERSION" > /dev/null 2>&1 || nvm install "$NODE_VERSION"
 
 NODE_BIN=$(which node)
 NPM_BIN=$(which npm)
+NODE_VERSION=$(cat "$PROJECT_ROOT/.nvmrc" | tr -d '[:space:]')
 
-echo "📦 Using Node: $NODE_BIN"
+echo "📦 Using Node: $NODE_BIN (v$NODE_VERSION from .nvmrc)"
 echo "📦 Using npm: $NPM_BIN"
 echo ""
 
@@ -57,7 +61,7 @@ fi
 (
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  nvm use 20 > /dev/null 2>&1
+  nvm use > /dev/null 2>&1
   export ORBITDB_DATA_DIR="$RELAY_DIR/orbitdb_data"
   $NPM_BIN run dev
 ) > "$RELAY_LOG" 2>&1 &
@@ -97,7 +101,7 @@ fi
 (
   export NVM_DIR="$HOME/.nvm"
   [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
-  nvm use 20 > /dev/null 2>&1
+  nvm use > /dev/null 2>&1
   $NPM_BIN start
 ) > "$WALLET_LOG" 2>&1 &
 
