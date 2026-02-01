@@ -1,0 +1,52 @@
+{
+  "name": "nanonyms-relay",
+  "version": "1.0.0",
+  "description": "Event relay daemon for NanoNym payment notifications (Tier-2 persistent storage)",
+  "type": "module",
+  "main": "dist/index.js",
+  "scripts": {
+    "dev": "ORBITDB_DATA_DIR=$(pwd)/orbitdb_data tsx watch src/index.ts",
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "docker:build": "docker build -t nanonym/relay:latest .",
+    "docker:run": "docker run -p 4001:4001 -p 8081:8081 -p 3000:3000 -v nanonym-relay-data:/data -e ORBITDB_DATA_DIR=/data nanonym/relay:latest",
+    "test": "vitest",
+    "typecheck": "tsc --noEmit"
+  },
+  "engines": {
+    "node": ">=20"
+  },
+  "dependencies": {
+    "@chainsafe/libp2p-gossipsub": "^13.2.0",
+    "@chainsafe/libp2p-noise": "^16.0.0",
+    "@chainsafe/libp2p-yamux": "^7.0.0",
+    "@fastify/cors": "^9.0.1",
+    "@libp2p/crypto": "^5.1.13",
+    "@libp2p/identify": "^3.0.0",
+    "@libp2p/peer-id": "^5.1.9",
+    "@libp2p/tcp": "^10.0.0",
+    "@libp2p/websockets": "^9.0.0",
+    "@orbitdb/core": "^3.0.2",
+    "blockstore-fs": "^3.0.0",
+    "datastore-fs": "^11.0.0",
+    "fastify": "^4.25.0",
+    "helia": "^6.0.14",
+    "libp2p": "^2.0.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.11.0",
+    "tsx": "^4.7.0",
+    "typescript": "^5.3.0",
+    "vitest": "^1.2.0"
+  },
+  "keywords": [
+    "nano",
+    "cryptocurrency",
+    "privacy",
+    "stealth-address",
+    "ipfs",
+    "orbitdb",
+    "libp2p"
+  ],
+  "license": "MIT"
+}

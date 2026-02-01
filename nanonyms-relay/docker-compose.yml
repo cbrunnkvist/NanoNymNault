@@ -1,0 +1,23 @@
+services:
+  relay:
+    build: .
+    container_name: nanonyms-relay
+    restart: unless-stopped
+    ports:
+      - "4001:4001"
+      - "8081:8081"
+      - "3000:3000"
+    volumes:
+      - relay-data:/data
+    environment:
+      - ORBITDB_DATA_DIR=/data
+      - LOG_LEVEL=info
+    healthcheck:
+      test: ["CMD", "wget", "-q", "--spider", "http://localhost:3000/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 40s
+
+volumes:
+  relay-data:
