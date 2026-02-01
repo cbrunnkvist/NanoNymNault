@@ -181,3 +181,48 @@ npm run dev
 # WebSocket: ws://localhost:8081
 # Health: http://localhost:3000/health
 ```
+
+---
+
+## ARCHIVED: OrbitDB/Helia Approach (February 2026)
+
+### Status: **ARCHIVED**
+
+The IPFS-based Tier2 implementation has been archived due to fundamental browser compatibility issues.
+
+### What Worked
+- ✅ Helia initialization with IndexedDB persistence
+- ✅ Basic NIP-59 encryption/decryption
+- ✅ Standalone OrbitDB (local-only, no relay)
+- ✅ HTTP health endpoint and relay discovery
+
+### What Didn't Work
+- ❌ **CBOR decode errors** when opening remote database via libp2p bitswap
+- ❌ **Cross-realm Uint8Array** `instanceof` checks failing in browser P2P contexts
+- ❌ **Node.js to browser serialization** mismatches in IPFS block transfer
+- ❌ **Complexity** - IPFS/OrbitDB is overkill for simple notification relay
+
+### Root Cause
+The CBOR library (`cborg`) uses strict `instanceof Uint8Array` checks. When data crosses JavaScript realms (WebSocket → libp2p → bitswap → browser), the Uint8Array prototype chain differs, causing decode failures. This is a fundamental browser P2P edge case that's hard to patch around without modifying core IPFS libraries.
+
+### Lessons Learned
+1. **IPFS is complex** for simple notification relay use cases
+2. **Browser P2P has sharp edges** that don't exist in Node.js
+3. **Distributed consensus** (OrbitDB's CRDT) is unnecessary for our use case
+4. **Simple HTTP relay** with polling may be more appropriate
+
+### What We Preserved
+- ✅ Node v22 upgrade
+- ✅ Documentation progressive disclosure structure
+- ✅ Dev environment automation scripts
+- ✅ Service interface patterns (as archived stubs)
+- ✅ nanonyms-relay (simplified to HTTP-only)
+
+### Next Steps
+Evaluate simpler Tier2 alternatives:
+1. **Waku** - Status.im messaging protocol (lightweight, browser-native)
+2. **Gun.js** - Graph-based P2P with excellent browser support
+3. **Simple HTTP relay** - REST API with long-polling
+4. **WebRTC signaling** - For direct browser-to-browser (T0)
+
+The service interface in `orbitdb-notification.service.ts` is preserved as an archived stub - new Tier2 will be a drop-in replacement.
