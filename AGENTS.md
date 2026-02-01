@@ -28,7 +28,7 @@ This workflow must remain correct, test-covered, and never broken by any changes
 ### 3. Build Environment
 
 - **Package manager:** npm (NOT yarn/pnpm)
-- **Node version:** v16.20.2 (via nvm)
+- **Node version:** v20 (via nvm - see .nvmrc)
 - **Python version:** 3.11 (for native module compilation)
 - **Build flags required:**
   ```bash
@@ -74,6 +74,6 @@ All architectural decisions, protocol details, and implementation notes are in s
 ## Quick Reference
 
 - **Live preview:** https://cbrunnkvist.github.io/NanoNymNault/
-- **Test suite:** `npm test` (requires Brave Browser + Node v16)
+- **Test suite:** `npm test` (requires Brave Browser + Node v20)
 - **Dev server:** `npm start` → http://localhost:4200/
 - **See docs/README.md for full documentation index**

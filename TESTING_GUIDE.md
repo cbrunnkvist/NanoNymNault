@@ -6,7 +6,7 @@
 
 ## Prerequisites
 
-- Node v16.20.2 (for wallet)
+- Node v20 (for wallet - check .nvmrc)
 - Node v20+ available (for relay - uses separate environment)
 - Python 3.11
 - Brave Browser (for Karma tests)

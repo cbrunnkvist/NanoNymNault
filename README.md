@@ -235,7 +235,7 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 ### For Developers
 
 #### Prerequisites
-- **Node.js v16.20.2** (via nvm)
+- **Node.js v20** (via nvm - check .nvmrc)
 - **Python 3.11** (for native module compilation)
 
 #### Building the Reference Nault Wallet
@@ -247,9 +247,9 @@ The project is forked from Nault. To build and run the stock Nault wallet locall
 git clone https://github.com/yourusername/NanoNymNault.git
 cd NanoNymNault/references/Nault
 
-# Switch to Node v16 (required for native module compatibility)
+# Ensure correct Node version
 source ~/.nvm/nvm.sh
-nvm use 16
+nvm use  # Reads .nvmrc automatically
 
 # Install dependencies
 # IMPORTANT: Use these exact flags for Apple Silicon compatibility
@@ -266,12 +266,12 @@ npm start
 - `npm_config_arch=x64` - Electron 9.4.4 doesn't have ARM64 builds, use Rosetta emulation
 - `PYTHON=/opt/homebrew/opt/python@3.11/bin/python3.11` - Python 3.14 removed `distutils` which node-gyp requires
 - `npm ci` - Uses exact versions from package-lock.json (not `npm install`)
-- `nvm use 16` - Node v16 required for native module (usb, node-hid) C++ compilation
+- `nvm use` - Node v20 required for Angular and native module compatibility
 
 **Troubleshooting:**
 - If port 4200 is in use: `lsof -ti:4200 | xargs kill -9`
 - If Python error: Install Python 3.11 via `brew install python@3.11`
-- If Node version error: Install via `nvm install 16`
+- If Node version error: Install via `nvm install 20`
 
 #### Testing
 

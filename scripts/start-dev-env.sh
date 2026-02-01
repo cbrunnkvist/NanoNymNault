@@ -29,6 +29,10 @@ if [ -f "$WALLET_PID_FILE" ] && kill -0 $(cat "$WALLET_PID_FILE") 2>/dev/null; t
     exit 1
 fi
 
+# Source nvm
+export NVM_DIR="$HOME/.nvm"
+[ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
 # Start relay daemon
 echo "📡 Starting relay daemon..."
 cd "$RELAY_DIR"
@@ -36,11 +40,11 @@ cd "$RELAY_DIR"
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo "   Installing relay dependencies..."
-    npm install
+    nvm exec npm install
 fi
 
-# Start relay in background
-ORBITDB_DATA_DIR="$RELAY_DIR/orbitdb_data" nohup npm run dev > "$RELAY_LOG" 2>&1 &
+# Start relay in background (Node 20 from .nvmrc)
+ORBITDB_DATA_DIR="$RELAY_DIR/orbitdb_data" nohup nvm exec npm run dev > "$RELAY_LOG" 2>&1 &
 RELAY_PID=$!
 echo $RELAY_PID > "$RELAY_PID_FILE"
 echo "   ✅ Relay started (PID: $RELAY_PID)"
@@ -65,12 +69,13 @@ echo ""
 echo "🌐 Starting wallet dev server..."
 cd "$PROJECT_ROOT"
 
-# Source nvm
-if [ -f "$HOME/.nvm/nvm.sh" ]; then
-    source "$HOME/.nvm/nvm.sh"
+# Install dependencies if needed
+if [ ! -d "node_modules" ]; then
+    echo "   Installing wallet dependencies..."
+    nvm exec npm ci
 fi
 
-# Start wallet in background
+# Start wallet in background (uses .nvmrc Node version)
 nohup nvm exec npm start > "$WALLET_LOG" 2>&1 &
 WALLET_PID=$!
 echo $WALLET_PID > "$WALLET_PID_FILE"
@@ -90,5 +95,5 @@ echo "🛑 Stop servers:"
 echo "   ./scripts/stop-dev-env.sh"
 echo ""
 echo "🧪 Test connectivity:"
-echo "   cd nanonyms-relay && node test-connectivity.mjs"
+echo "   cd nanonyms-relay && nvm exec node test-connectivity.mjs"
 echo ""
