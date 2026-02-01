@@ -3,6 +3,7 @@ import { NanoNymNotification } from './nostr-notification.service';
 import { nip59, nip19 } from 'nostr-tools';
 import { IDBBlockstore } from 'blockstore-idb';
 import { IDBDatastore } from 'datastore-idb';
+import { createLibp2p } from 'libp2p';
 
 /**
  * OrbitDB Notification Service
@@ -49,7 +50,6 @@ export class OrbitdbNotificationService {
       const { createOrbitDB } = await import('@orbitdb/core');
       const { gossipsub } = await import('@chainsafe/libp2p-gossipsub');
       const { identify } = await import('@libp2p/identify');
-      const { createLibp2p } = await import('libp2p');
       const { generateKeyPair, privateKeyToProtobuf } = await import('@libp2p/crypto/keys');
       const { peerIdFromPrivateKey } = await import('@libp2p/peer-id');
 
@@ -132,7 +132,7 @@ export class OrbitdbNotificationService {
 
       console.log('[OrbitDB] Creating Helia...');
       this.helia = await createHelia({
-        libp2p: libp2pNode,
+        libp2p: libp2pNode as any,
         blockstore,
         datastore
       });
