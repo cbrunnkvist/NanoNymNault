@@ -134,6 +134,9 @@
     "uikit": "3.9.4",
     "worker-loader": "^3.0.8"
   },
+  "overrides": {
+    "libp2p": "^2.0.0"
+  },
   "build": {
     "appId": "cc.nault",
     "buildVersion": "1.0.0",
