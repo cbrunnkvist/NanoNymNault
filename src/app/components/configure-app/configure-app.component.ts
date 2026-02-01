@@ -112,6 +112,9 @@ export class ConfigureAppComponent implements OnInit {
   ];
   selectedIdenticonOption = this.identiconOptions[0].value;
 
+  useNostr = true;
+  useOrbitDb = false;
+
   inactivityOptions = [
     { name: this.translocoService.translate('configure-app.identicon-options.never'), value: 0 },
     { name: this.translocoService.translate('configure-app.identicon-options.1-minute'), value: 1 },
@@ -273,6 +276,9 @@ export class ConfigureAppComponent implements OnInit {
     const matchingIdenticonOptions = this.identiconOptions.find(d => d.value === settings.identiconsStyle);
     this.selectedIdenticonOption = matchingIdenticonOptions.value || this.identiconOptions[0].value;
 
+    this.useNostr = settings.useNostr !== undefined ? settings.useNostr : true;
+    this.useOrbitDb = settings.useOrbitDb || false;
+
     const matchingStorage = this.storageOptions.find(d => d.value === settings.walletStore);
     this.selectedStorage = matchingStorage.value || this.storageOptions[0].value;
 
@@ -319,6 +325,8 @@ export class ConfigureAppComponent implements OnInit {
     }
 
     this.appSettings.setAppSetting('identiconsStyle', this.selectedIdenticonOption);
+    this.appSettings.setAppSetting('useNostr', this.useNostr);
+    this.appSettings.setAppSetting('useOrbitDb', this.useOrbitDb);
 
     const newCurrency = this.selectedCurrency;
     // const updatePrefixes = this.appSettings.settings.displayPrefix !== this.selectedPrefix;

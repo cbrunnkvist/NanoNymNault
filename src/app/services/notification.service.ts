@@ -15,6 +15,23 @@ export class NotificationService {
   // It exposes an observable that the actual component uses to grab new notifications
 
   sendNotification(type: NotificationType, message: string, options = {}) {
+    // Log all notifications to console for debugging/capture
+    const logPrefix = '[Notification]';
+    switch (type) {
+      case 'error':
+        console.error(logPrefix, '💥', message);
+        break;
+      case 'warning':
+        console.warn(logPrefix, '⚠️', message);
+        break;
+      case 'success':
+        console.log(logPrefix, '✅', message);
+        break;
+      case 'info':
+      default:
+        console.debug(logPrefix, 'ℹ️', message);
+        break;
+    }
     this.notifications$.next({ type, message, options });
   }
 

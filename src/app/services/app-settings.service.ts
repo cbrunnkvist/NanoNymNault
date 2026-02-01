@@ -29,6 +29,8 @@ interface AppSettings {
   walletVersion: number | null;
   lightModeEnabled: boolean;
   identiconsStyle: string;
+  useNostr: boolean;
+  useOrbitDb: boolean;
 }
 
 @Injectable()
@@ -58,6 +60,8 @@ export class AppSettingsService {
     walletVersion: 1,
     lightModeEnabled: false,
     identiconsStyle: 'none',
+    useNostr: true,
+    useOrbitDb: false,
   };
 
   serverOptions = [
@@ -251,6 +255,8 @@ export class AppSettingsService {
       walletVersion: 1,
       lightModeEnabled: false,
       identiconsStyle: 'none',
+      useNostr: true,
+      useOrbitDb: false,
     };
   }
 
