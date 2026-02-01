@@ -8,10 +8,14 @@ import { IDBDatastore } from 'datastore-idb';
  * OrbitDB Notification Service
  *
  * IPFS-based notification channel for NanoNym payments.
- * This is an alternative/complement to the Nostr notification system.
+ * This is Tier-2 (T2) persistent storage for seed recovery.
  *
- * Status: Spike/Prototype
- * See: docs/IPFS-SPIKE-PLAN.md
+ * Architecture:
+ * - Browser wallet connects to relay daemon via WebSocket
+ * - Relay stores notifications permanently in OrbitDB
+ * - Wallet can fetch historical notifications for seed recovery
+ *
+ * See: docs/SESSION-HANDOFF.md
  */
 @Injectable({
   providedIn: 'root'
@@ -21,6 +25,12 @@ export class OrbitdbNotificationService {
   private orbitdb: any = null;
   private db: any = null;
   private isInitialized = false;
+
+  private readonly DEFAULT_RELAY_WS = 'ws://localhost:8081';
+  private readonly DEFAULT_RELAY_HTTP = 'http://localhost:3000';
+  private relayWsUrl: string = this.DEFAULT_RELAY_WS;
+  private relayHttpUrl: string = this.DEFAULT_RELAY_HTTP;
+  private remoteDbAddress: string | null = null;
 
   /**
    * Initialize Helia and OrbitDB
@@ -102,6 +112,19 @@ export class OrbitdbNotificationService {
       (libp2pOptions as any).peerId = peerId;
       (libp2pOptions as any).datastore = datastore;
 
+      // Allow connections to localhost/private IPs (for local relay testing)
+      (libp2pOptions as any).connectionGater = {
+        denyDialMultiaddr: () => false,
+        denyDialPeer: () => false,
+        denyInboundConnection: () => false,
+        denyOutboundConnection: () => false,
+        denyInboundEncryptedConnection: () => false,
+        denyOutboundEncryptedConnection: () => false,
+        denyInboundUpgradedConnection: () => false,
+        denyOutboundUpgradedConnection: () => false,
+        filterMultiaddrForPeer: async () => true
+      };
+
       // Create libp2p node explicitly
       console.log('[OrbitDB] Creating libp2p node...');
       const libp2pNode = await createLibp2p(libp2pOptions);
@@ -119,7 +142,7 @@ export class OrbitdbNotificationService {
       this.orbitdb = await createOrbitDB({ ipfs: this.helia });
       console.log('[OrbitDB] OrbitDB initialized successfully');
 
-      // Auto-open global log
+      await this.connectToRelayPeer();
       await this.openGlobalLog();
 
       this.isInitialized = true;
@@ -130,16 +153,15 @@ export class OrbitdbNotificationService {
     }
   }
 
-  /**
-   * Check if the service is initialized and ready
-   */
   isReady(): boolean {
     return this.isInitialized;
   }
 
-  /**
-   * Get Helia node info for debugging
-   */
+  configureRelay(wsUrl: string, httpUrl: string): void {
+    this.relayWsUrl = wsUrl;
+    this.relayHttpUrl = httpUrl;
+  }
+
   async getNodeInfo(): Promise<{ peerId: string; multiaddrs: string[] } | null> {
     if (!this.helia) return null;
 
@@ -154,23 +176,84 @@ export class OrbitdbNotificationService {
     }
   }
 
-  /**
-   * Open or create a global notification log
-   * This is a shared append-only log for all NanoNym alerts
-   */
-  async openGlobalLog(logName: string = 'nano-nym-alerts-v1'): Promise<boolean> {
+  async fetchRelayInfo(): Promise<{ dbAddress: string; peerId: string; addresses: string[] } | null> {
+    try {
+      const response = await fetch(`${this.relayHttpUrl}/health`);
+      if (!response.ok) {
+        console.error('[OrbitDB] Relay health check failed:', response.status);
+        return null;
+      }
+      const data = await response.json();
+      if (data.status !== 'ok' || !data.dbAddress) {
+        console.error('[OrbitDB] Relay not ready:', data);
+        return null;
+      }
+      console.log('[OrbitDB] Relay info:', data);
+      return {
+        dbAddress: data.dbAddress,
+        peerId: data.peerId,
+        addresses: data.addresses || []
+      };
+    } catch (error) {
+      console.error('[OrbitDB] Failed to fetch relay info:', error);
+      return null;
+    }
+  }
+
+  async connectToRelayPeer(): Promise<boolean> {
+    if (!this.helia) {
+      console.error('[OrbitDB] Helia not initialized');
+      return false;
+    }
+
+    try {
+      const relayInfo = await this.fetchRelayInfo();
+      if (!relayInfo) {
+        console.warn('[OrbitDB] Could not fetch relay info, running in standalone mode');
+        return false;
+      }
+
+      const wsAddress = relayInfo.addresses.find(addr => addr.includes('/ws/'));
+      if (!wsAddress) {
+        console.warn('[OrbitDB] No WebSocket address found in relay info');
+        return false;
+      }
+
+      console.log('[OrbitDB] Connecting to relay peer:', wsAddress);
+      const { multiaddr } = await import('@multiformats/multiaddr');
+      await this.helia.libp2p.dial(multiaddr(wsAddress));
+      console.log('[OrbitDB] Connected to relay peer');
+
+      this.remoteDbAddress = relayInfo.dbAddress;
+      return true;
+    } catch (error) {
+      console.error('[OrbitDB] Failed to connect to relay:', error);
+      return false;
+    }
+  }
+
+  async openGlobalLog(): Promise<boolean> {
     if (!this.orbitdb) {
       console.error('[OrbitDB] OrbitDB not initialized');
       return false;
     }
 
     try {
-      console.log(`[OrbitDB] Opening global log: ${logName}`);
-      this.db = await this.orbitdb.open(logName, { type: 'events' });
-      console.log(`[OrbitDB] Log opened: ${this.db.address}`);
+      const addressToOpen = this.remoteDbAddress || 'nano-nym-alerts-v2';
+      const isRemote = addressToOpen.startsWith('/orbitdb/');
+      
+      console.log(`[OrbitDB] Opening database: ${addressToOpen} (remote: ${isRemote})`);
+      
+      if (isRemote) {
+        this.db = await this.orbitdb.open(addressToOpen);
+      } else {
+        this.db = await this.orbitdb.open(addressToOpen, { type: 'events' });
+      }
+      
+      console.log(`[OrbitDB] Database opened: ${this.db.address}`);
       return true;
     } catch (error) {
-      console.error('[OrbitDB] Failed to open log:', error);
+      console.error('[OrbitDB] Failed to open database:', error);
       return false;
     }
   }
