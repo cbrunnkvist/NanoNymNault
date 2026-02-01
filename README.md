@@ -235,7 +235,7 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 ### For Developers
 
 #### Prerequisites
-- **Node.js v20** (via nvm - check .nvmrc)
+- **Node.js v22** (via nvm - check .nvmrc)
 - **Python 3.11** (for native module compilation)
 
 #### Building the Reference Nault Wallet

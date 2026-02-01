@@ -29,9 +29,19 @@ if [ -f "$WALLET_PID_FILE" ] && kill -0 $(cat "$WALLET_PID_FILE") 2>/dev/null; t
     exit 1
 fi
 
-# Source nvm
+# Get Node binary paths
 export NVM_DIR="$HOME/.nvm"
 [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+
+# Switch to Node 20 (from .nvmrc)
+nvm use 20 > /dev/null 2>&1 || nvm install 20
+
+NODE_BIN=$(which node)
+NPM_BIN=$(which npm)
+
+echo "📦 Using Node: $NODE_BIN"
+echo "📦 Using npm: $NPM_BIN"
+echo ""
 
 # Start relay daemon
 echo "📡 Starting relay daemon..."
@@ -40,11 +50,18 @@ cd "$RELAY_DIR"
 # Check if node_modules exists
 if [ ! -d "node_modules" ]; then
     echo "   Installing relay dependencies..."
-    nvm exec npm install
+    $NPM_BIN install
 fi
 
-# Start relay in background (Node 20 from .nvmrc)
-ORBITDB_DATA_DIR="$RELAY_DIR/orbitdb_data" nohup nvm exec npm run dev > "$RELAY_LOG" 2>&1 &
+# Start relay in background using subshell with proper environment
+(
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  nvm use 20 > /dev/null 2>&1
+  export ORBITDB_DATA_DIR="$RELAY_DIR/orbitdb_data"
+  $NPM_BIN run dev
+) > "$RELAY_LOG" 2>&1 &
+
 RELAY_PID=$!
 echo $RELAY_PID > "$RELAY_PID_FILE"
 echo "   ✅ Relay started (PID: $RELAY_PID)"
@@ -55,11 +72,12 @@ echo ""
 
 # Wait for relay to initialize
 echo "⏳ Waiting for relay to initialize..."
-sleep 3
+sleep 4
 
 # Check relay health
 if curl -s http://localhost:3000/health > /dev/null 2>&1; then
     echo "   ✅ Relay healthy"
+    curl -s http://localhost:3000/health | jq -r '"     Database: \(.dbAddress)"' 2>/dev/null || true
 else
     echo "   ⚠️  Relay health check failed (may still be starting)"
 fi
@@ -72,11 +90,17 @@ cd "$PROJECT_ROOT"
 # Install dependencies if needed
 if [ ! -d "node_modules" ]; then
     echo "   Installing wallet dependencies..."
-    nvm exec npm ci
+    $NPM_BIN ci
 fi
 
-# Start wallet in background (uses .nvmrc Node version)
-nohup nvm exec npm start > "$WALLET_LOG" 2>&1 &
+# Start wallet in background using subshell with proper environment
+(
+  export NVM_DIR="$HOME/.nvm"
+  [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh"
+  nvm use 20 > /dev/null 2>&1
+  $NPM_BIN start
+) > "$WALLET_LOG" 2>&1 &
+
 WALLET_PID=$!
 echo $WALLET_PID > "$WALLET_PID_FILE"
 echo "   ✅ Wallet started (PID: $WALLET_PID)"
@@ -95,5 +119,5 @@ echo "🛑 Stop servers:"
 echo "   ./scripts/stop-dev-env.sh"
 echo ""
 echo "🧪 Test connectivity:"
-echo "   cd nanonyms-relay && nvm exec node test-connectivity.mjs"
+echo "   cd nanonyms-relay && node test-connectivity.mjs"
 echo ""
