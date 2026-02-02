@@ -58,6 +58,7 @@
     "@types/crypto-js": "^3.1.38",
     "@types/w3c-web-hid": "^1.0.2",
     "@types/w3c-web-usb": "^1.0.5",
+    "@waku/sdk": "^0.0.36",
     "@zxing/browser": "^0.1.5",
     "@zxing/library": "^0.21.3",
     "@zxing/ngx-scanner": "^17.0.4",
