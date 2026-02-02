@@ -1,0 +1,107 @@
+version: "3.8"
+
+services:
+  nwaku:
+    image: ${NWAKU_IMAGE:-harbor.status.im/wakuorg/nwaku:v0.37.0-beta}
+    restart: on-failure
+    ports:
+      # P2P ports
+      - "30304:30304/tcp"
+      - "30304:30304/udp"
+      # Discovery port
+      - "9005:9005/udp"
+      # Metrics
+      - "127.0.0.1:8003:8003"
+      # REST API
+      - "127.0.0.1:8645:8645"
+    logging:
+      driver: json-file
+      options:
+        max-size: "100m"
+        max-file: "10"
+        compress: "true"
+        tag: "nwaku-{{.ID}}"
+    environment:
+      # Node configuration
+      NODEKEY: ${NODEKEY:-}
+      LOG_LEVEL: ${LOG_LEVEL:-DEBUG}
+      
+      # Protocol configuration
+      RELAY_ENABLED: "true"
+      FILTER_ENABLED: "true"
+      LIGHTPUSH_ENABLED: "true"
+      STORE_ENABLED: "true"
+      
+      # Store protocol - 30-day retention
+      STORE_RETENTION_DAYS: "30"
+      STORAGE_SIZE: ${STORAGE_SIZE:-30GB}
+      
+      # Database configuration
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test123}
+      POSTGRES_DB: ${POSTGRES_DB:-waku}
+      
+      # REST API configuration
+      REST_ENABLED: "true"
+      REST_ADMIN: "true"
+      REST_ADDRESS: "0.0.0.0"
+      REST_PORT: "8645"
+      
+      # Metrics
+      METRICS_ENABLED: "true"
+      METRICS_PORT: "8003"
+      
+      # Network configuration
+      TCP_PORT: "30304"
+      UDP_PORT: "9005"
+      MAX_CONNECTIONS: "150"
+      KEEP_ALIVE: "true"
+      
+      # Cluster configuration
+      CLUSTER_ID: "1"
+      
+      # Discovery
+      DISCV5_ENABLED: "true"
+      DISCV5_UDP_PORT: "9005"
+      DISCV5_ENR_AUTO_UPDATE: "true"
+    volumes:
+      - ./run_node.sh:/opt/run_node.sh:Z
+      - ./keystore:/keystore:Z
+    entrypoint: sh
+    command:
+      - /opt/run_node.sh
+    depends_on:
+      postgres:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8645/debug/v1/info"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 60s
+
+  postgres:
+    image: postgres:15.4-alpine3.18
+    restart: on-failure
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-test123}
+      POSTGRES_DB: ${POSTGRES_DB:-waku}
+    volumes:
+      - ./postgres_cfg/postgresql.conf:/etc/postgresql/postgresql.conf:Z
+      - ./postgres_cfg/db.sql:/docker-entrypoint-initdb.d/db.sql:Z
+      - ${PG_DATA_DIR:-./postgresql}:/var/lib/postgresql/data:Z
+    command: postgres -c config_file=/etc/postgresql/postgresql.conf
+    ports:
+      - "127.0.0.1:5432:5432"
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-waku}"]
+      interval: 30s
+      timeout: 60s
+      retries: 5
+      start_period: 80s
+    shm_size: ${POSTGRES_SHM:-1g}
+
+volumes:
+  postgresql:
+    driver: local
