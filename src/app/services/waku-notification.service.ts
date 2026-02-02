@@ -5,8 +5,10 @@ import { deriveContentTopic, deriveBucket } from "./waku-topics";
 import type { NanoNymNotification } from "./nostr-notification.service";
 
 import { createLightNode, waitForRemotePeer, Protocols } from "@waku/sdk";
-import { createEncoder } from "@waku/sdk";
-import type { LightNode, IEncoder, IRoutingInfo } from "@waku/sdk";
+import { createEncoder, createDecoder } from "@waku/sdk";
+import { AutoShardingRoutingInfo } from "@waku/utils";
+import type { LightNode, IEncoder, IDecoder, IDecodedMessage } from "@waku/sdk";
+import type { AutoSharding, IRoutingInfo } from "@waku/interfaces";
 
 /**
  * Result of a Waku send operation
@@ -24,6 +26,42 @@ export interface WakuConnectionStatus {
   connected: boolean;
   peerCount: number;
   error?: string;
+}
+
+/**
+ * Progress callback for recovery operations
+ */
+export type WakuRecoveryProgressCallback = (progress: WakuRecoveryProgress) => void;
+
+/**
+ * Progress information for recovery operations
+ */
+export interface WakuRecoveryProgress {
+  /** Current day being processed (1-indexed) */
+  currentDay: number;
+  /** Total days to process */
+  totalDays: number;
+  /** Messages found so far */
+  messagesFound: number;
+  /** Current date being queried */
+  currentDate: Date;
+}
+
+/**
+ * Result of a Store recovery operation
+ */
+export interface WakuRecoveryResult {
+  success: boolean;
+  /** Total unique messages recovered */
+  messagesRecovered: number;
+  /** Number of duplicates filtered out */
+  duplicatesFiltered: number;
+  /** Days successfully queried */
+  daysProcessed: number;
+  /** Any errors encountered */
+  errors: string[];
+  /** Recovered notifications (decrypted if possible) */
+  notifications: NanoNymNotification[];
 }
 
 /**
@@ -57,6 +95,25 @@ export class WakuNotificationService {
     peerCount: 0,
   });
 
+  public incomingNotifications$ = new Rx.Subject<{
+    notification: NanoNymNotification;
+    receiverNostrPrivate: Uint8Array;
+  }>();
+
+  private subscriptions = new Map<
+    string,
+    {
+      subscription: any;
+      nostrPrivate: Uint8Array;
+      contentTopic: string;
+    }
+  >();
+
+  private reconnectAttempts = 0;
+  private readonly MAX_RECONNECT_ATTEMPTS = 5;
+  private readonly RECONNECT_DELAY_MS = 3000;
+  private reconnectTimer: any = null;
+
   constructor() {}
 
   /**
@@ -68,9 +125,13 @@ export class WakuNotificationService {
       .join("");
   }
 
-  /**
-   * Convert hex string to Uint8Array
-   */
+  private createRoutingInfo(pubkey: Uint8Array): IRoutingInfo {
+    const bucket = deriveBucket(pubkey);
+    const shardId = bucket % DEFAULT_NUM_SHARDS;
+    const pubsubTopic = `/waku/2/rs/${DEFAULT_CLUSTER_ID}/${shardId}`;
+    return { clusterId: DEFAULT_CLUSTER_ID, shardId, pubsubTopic };
+  }
+
   private hexToBytes(hex: string): Uint8Array {
     const bytes = new Uint8Array(hex.length / 2);
     for (let i = 0; i < hex.length; i += 2) {
@@ -113,9 +174,9 @@ export class WakuNotificationService {
         console.log("[Waku] ✅ Connected to nwaku via WS endpoint");
       }
 
-      // Wait for LightPush protocol to be available
-      console.log("[Waku] Waiting for LightPush protocol...");
-      await waitForRemotePeer(this.node, [Protocols.LightPush], 10000);
+      // Wait for LightPush, Store, and Filter protocols to be available
+      console.log("[Waku] Waiting for LightPush, Store, and Filter protocols...");
+      await waitForRemotePeer(this.node, [Protocols.LightPush, Protocols.Store, Protocols.Filter], 10000);
 
       const peers = await this.node.libp2p.getPeers();
       console.log(`[Waku] ✅ Connected with ${peers.length} peers`);
@@ -242,10 +303,11 @@ export class WakuNotificationService {
       const giftWrapJson = JSON.stringify(giftWrap);
       const messagePayload = new TextEncoder().encode(giftWrapJson);
 
-      // Create encoder for this content topic
+      const routingInfo = this.createRoutingInfo(receiverNostrPublic);
       const encoder: IEncoder = createEncoder({
         contentTopic,
-        ephemeral: false, // Store in nwaku for retrieval
+        routingInfo,
+        ephemeral: false,
       });
 
       console.log(
@@ -260,9 +322,9 @@ export class WakuNotificationService {
       // Check result
       if (sendResult.failures && sendResult.failures.length > 0) {
         const failureMsg = sendResult.failures
-          .map((f) => f.error?.message || "Unknown error")
+          .map((f) => String(f.error))
           .join(", ");
-        console.warn("[Waku Send] ⚠️ Some failures:", failureMsg);
+        console.warn("[Waku Send] Some failures:", failureMsg);
 
         // If all failed, return error
         if (
@@ -307,5 +369,307 @@ export class WakuNotificationService {
    */
   getContentTopic(receiverNostrPublic: Uint8Array): string {
     return deriveContentTopic(receiverNostrPublic);
+  }
+
+  /**
+   * Recover notifications from Store protocol using 24h chunked queries.
+   * Waku Store has ~24h query limit, so we iterate day-by-day.
+   *
+   * @param startDate - Start of recovery window
+   * @param endDate - End of recovery window
+   * @param receiverNostrPublic - Receiver's Nostr public key (for content topic derivation)
+   * @param receiverNostrPrivate - Receiver's Nostr private key (for decryption)
+   * @param onProgress - Optional callback for progress updates
+   * @returns Recovery result with notifications
+   */
+  async recoverNotifications(
+    startDate: Date,
+    endDate: Date,
+    receiverNostrPublic: Uint8Array,
+    receiverNostrPrivate: Uint8Array,
+    onProgress?: WakuRecoveryProgressCallback,
+  ): Promise<WakuRecoveryResult> {
+    const result: WakuRecoveryResult = {
+      success: false,
+      messagesRecovered: 0,
+      duplicatesFiltered: 0,
+      daysProcessed: 0,
+      errors: [],
+      notifications: [],
+    };
+
+    if (!this.node) {
+      const connected = await this.connect();
+      if (!connected) {
+        result.errors.push("Failed to connect to Waku network");
+        return result;
+      }
+    }
+
+    const seenMessageIds = new Set<string>();
+    const receiverPublicHex = this.bytesToHex(receiverNostrPublic);
+
+    const start = new Date(startDate);
+    start.setUTCHours(0, 0, 0, 0);
+    const end = new Date(endDate);
+    end.setUTCHours(23, 59, 59, 999);
+
+    const totalDays = Math.ceil((end.getTime() - start.getTime()) / (24 * 60 * 60 * 1000));
+
+    console.log(`[Waku Recovery] Starting recovery from ${start.toISOString()} to ${end.toISOString()} (${totalDays} days)`);
+
+    let currentDay = 0;
+    const currentDate = new Date(start);
+
+    while (currentDate <= end) {
+      currentDay++;
+      const dayStart = new Date(currentDate);
+      const dayEnd = new Date(currentDate);
+      dayEnd.setUTCHours(23, 59, 59, 999);
+
+      const contentTopic = deriveContentTopic(receiverNostrPublic, currentDate);
+
+      console.log(`[Waku Recovery] Day ${currentDay}/${totalDays}: ${currentDate.toISOString().split('T')[0]} - Topic: ${contentTopic}`);
+
+      if (onProgress) {
+        onProgress({
+          currentDay,
+          totalDays,
+          messagesFound: result.messagesRecovered,
+          currentDate: new Date(currentDate),
+        });
+      }
+
+      try {
+        const routingInfo = this.createRoutingInfo(receiverNostrPublic);
+        const decoder = createDecoder(contentTopic, routingInfo);
+        const messagesForDay: IDecodedMessage[] = [];
+
+        await this.node!.store.queryWithOrderedCallback(
+          [decoder],
+          (message: IDecodedMessage) => {
+            if (message && message.payload) {
+              messagesForDay.push(message);
+            }
+          },
+        );
+
+        console.log(`[Waku Recovery] Day ${currentDay}: Found ${messagesForDay.length} messages`);
+
+        for (const message of messagesForDay) {
+          try {
+            const payloadText = new TextDecoder().decode(message.payload);
+            const giftWrap = JSON.parse(payloadText);
+            const messageId = giftWrap.id;
+
+            if (seenMessageIds.has(messageId)) {
+              result.duplicatesFiltered++;
+              continue;
+            }
+            seenMessageIds.add(messageId);
+
+            const unwrapped = nip59.unwrapEvent(giftWrap, receiverNostrPrivate);
+            if (unwrapped && unwrapped.content) {
+              const notification = JSON.parse(unwrapped.content) as NanoNymNotification;
+              result.notifications.push(notification);
+              result.messagesRecovered++;
+            }
+          } catch (decryptError) {
+            // Message not for us or corrupted - skip silently
+          }
+        }
+
+        result.daysProcessed++;
+      } catch (dayError) {
+        const errorMsg = dayError instanceof Error ? dayError.message : String(dayError);
+        console.warn(`[Waku Recovery] Error querying day ${currentDay}: ${errorMsg}`);
+        result.errors.push(`Day ${currentDay}: ${errorMsg}`);
+      }
+
+      currentDate.setUTCDate(currentDate.getUTCDate() + 1);
+    }
+
+    result.success = result.errors.length === 0 || result.messagesRecovered > 0;
+
+    console.log(`[Waku Recovery] Complete: ${result.messagesRecovered} messages recovered, ${result.duplicatesFiltered} duplicates filtered, ${result.daysProcessed}/${totalDays} days processed`);
+
+    return result;
+  }
+
+  async subscribeToNotifications(
+    nostrPublic: Uint8Array,
+    nostrPrivate: Uint8Array,
+  ): Promise<void> {
+    const nostrPublicHex = this.bytesToHex(nostrPublic);
+    const nostrNpub = nip19.npubEncode(nostrPublicHex);
+
+    console.debug("[Waku Filter] Nostr public key (hex):", nostrPublicHex.slice(0, 16) + "...");
+    console.debug("[Waku Filter] Nostr public key (npub):", nostrNpub);
+
+    if (this.subscriptions.has(nostrPublicHex)) {
+      console.debug("[Waku Filter] Already subscribed to:", nostrNpub.substring(0, 16) + "...");
+      return;
+    }
+
+    if (!this.node) {
+      const connected = await this.connect();
+      if (!connected) {
+        console.error("[Waku Filter] Failed to connect to Waku network");
+        return;
+      }
+    }
+
+    const contentTopic = deriveContentTopic(nostrPublic);
+    console.debug("[Waku Filter] Content topic:", contentTopic);
+
+    try {
+      const routingInfo = this.createRoutingInfo(nostrPublic);
+      const decoder: IDecoder = createDecoder(contentTopic, routingInfo);
+
+      const callback = (message: IDecodedMessage) => {
+        if (!message || !message.payload) return;
+        this.handleIncomingMessage(message, nostrPrivate);
+      };
+
+      console.log(`[Waku Filter] 📡 Creating subscription for ${nostrNpub.substring(0, 16)}...`);
+
+      const { error, subscription } = await this.node!.filter.createSubscription(
+        { contentTopics: [contentTopic] }
+      );
+
+      if (error) {
+        console.error("[Waku Filter] ❌ Subscription creation failed:", error);
+        this.scheduleReconnect(nostrPublic, nostrPrivate);
+        return;
+      }
+
+      await subscription.subscribe([decoder], callback);
+
+      this.subscriptions.set(nostrPublicHex, {
+        subscription,
+        nostrPrivate,
+        contentTopic,
+      });
+
+      this.reconnectAttempts = 0;
+      console.log(`[Waku Filter] ✅ Subscription active for ${nostrNpub.substring(0, 16)}...`);
+
+    } catch (error) {
+      const errorMessage = error instanceof Error ? error.message : String(error);
+      console.error("[Waku Filter] ❌ Error creating subscription:", errorMessage);
+      this.scheduleReconnect(nostrPublic, nostrPrivate);
+    }
+  }
+
+  private handleIncomingMessage(
+    message: IDecodedMessage,
+    nostrPrivate: Uint8Array,
+  ): void {
+    try {
+      const payloadText = new TextDecoder().decode(message.payload);
+      const giftWrap = JSON.parse(payloadText);
+
+      let unwrapped;
+      try {
+        unwrapped = nip59.unwrapEvent(giftWrap, nostrPrivate);
+      } catch (decryptError) {
+        return;
+      }
+
+      if (!unwrapped) {
+        return;
+      }
+
+      const notification: NanoNymNotification = JSON.parse(unwrapped.content);
+
+      if (!this.validateNotification(notification)) {
+        console.warn("[Waku Filter] Invalid notification format:", notification);
+        return;
+      }
+
+      console.log("[Waku Filter] ✅ Payment notification received:", {
+        tx_hash: notification.tx_hash,
+        amount: notification.amount || "unknown",
+      });
+
+      this.incomingNotifications$.next({
+        notification,
+        receiverNostrPrivate: nostrPrivate,
+      });
+    } catch (error) {
+      console.error("[Waku Filter] Error processing incoming message:", error);
+    }
+  }
+
+  private validateNotification(notification: any): notification is NanoNymNotification {
+    return (
+      notification &&
+      typeof notification === "object" &&
+      notification.version === 1 &&
+      notification.protocol === "nanoNymNault" &&
+      typeof notification.R === "string" &&
+      typeof notification.tx_hash === "string"
+    );
+  }
+
+  private scheduleReconnect(nostrPublic: Uint8Array, nostrPrivate: Uint8Array): void {
+    if (this.reconnectAttempts >= this.MAX_RECONNECT_ATTEMPTS) {
+      console.error("[Waku Filter] ❌ Max reconnection attempts reached");
+      return;
+    }
+
+    if (this.reconnectTimer) {
+      clearTimeout(this.reconnectTimer);
+    }
+
+    this.reconnectAttempts++;
+    const delay = this.RECONNECT_DELAY_MS * this.reconnectAttempts;
+
+    console.log(`[Waku Filter] 🔄 Scheduling reconnect attempt ${this.reconnectAttempts}/${this.MAX_RECONNECT_ATTEMPTS} in ${delay}ms`);
+
+    this.reconnectTimer = setTimeout(async () => {
+      console.log(`[Waku Filter] 🔄 Reconnecting (attempt ${this.reconnectAttempts})...`);
+
+      const nostrPublicHex = this.bytesToHex(nostrPublic);
+      this.subscriptions.delete(nostrPublicHex);
+
+      try {
+        if (!this.node || !this.isConnected()) {
+          await this.disconnect();
+          await this.connect();
+        }
+        await this.subscribeToNotifications(nostrPublic, nostrPrivate);
+      } catch (error) {
+        console.error("[Waku Filter] Reconnection failed:", error);
+        this.scheduleReconnect(nostrPublic, nostrPrivate);
+      }
+    }, delay);
+  }
+
+  async unsubscribeFromNotifications(nostrPublic: Uint8Array): Promise<void> {
+    const nostrPublicHex = this.bytesToHex(nostrPublic);
+    const subData = this.subscriptions.get(nostrPublicHex);
+
+    if (!subData) {
+      console.debug("[Waku Filter] No subscription found for:", nostrPublicHex.slice(0, 16) + "...");
+      return;
+    }
+
+    try {
+      await subData.subscription.unsubscribe([subData.contentTopic]);
+      console.log("[Waku Filter] ✅ Unsubscribed from:", nostrPublicHex.slice(0, 16) + "...");
+    } catch (error) {
+      console.warn("[Waku Filter] Error during unsubscribe:", error);
+    }
+
+    this.subscriptions.delete(nostrPublicHex);
+  }
+
+  getActiveSubscriptionCount(): number {
+    return this.subscriptions.size;
+  }
+
+  getActiveSubscriptions(): string[] {
+    return Array.from(this.subscriptions.keys());
   }
 }
