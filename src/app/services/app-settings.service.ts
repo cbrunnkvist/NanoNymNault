@@ -31,6 +31,7 @@ interface AppSettings {
   identiconsStyle: string;
   useNostr: boolean;
   useOrbitDb: boolean;
+  useWaku: boolean;
 }
 
 @Injectable()
@@ -62,6 +63,7 @@ export class AppSettingsService {
     identiconsStyle: 'none',
     useNostr: true,
     useOrbitDb: false,
+    useWaku: false,
   };
 
   serverOptions = [
@@ -257,6 +259,7 @@ export class AppSettingsService {
       identiconsStyle: 'none',
       useNostr: true,
       useOrbitDb: false,
+      useWaku: false,
     };
   }
 

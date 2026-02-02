@@ -180,17 +180,66 @@ describe('WakuNotificationService', () => {
       const topic = service.getContentTopic(keys.nostr.public);
 
       // Topic format: /nanoNym/1/{bucket}/{date}/proto
+      // Split gives: ['', 'nanoNym', '1', '{bucket}', '{date}', 'proto']
       const parts = topic.split('/');
-      expect(parts.length).toBe(5);
+      expect(parts.length).toBe(6);
       expect(parts[1]).toBe('nanoNym');
       expect(parts[2]).toBe('1');
-      // parts[3] is bucket (0-255)
       const bucket = parseInt(parts[3], 10);
       expect(bucket).toBeGreaterThanOrEqual(0);
       expect(bucket).toBeLessThanOrEqual(255);
-      // parts[4] should be date in YYYY-MM-DD format followed by /proto
       const dateMatch = parts[4].match(/^\d{4}-\d{2}-\d{2}$/);
       expect(dateMatch).toBeTruthy();
+      expect(parts[5]).toBe('proto');
+    });
+  });
+
+  describe('iOS foreground recovery', () => {
+    it('should have destroyVisibilityHandler method', () => {
+      expect(typeof service.destroyVisibilityHandler).toBe('function');
+    });
+
+    it('should start with no active subscriptions', () => {
+      expect(service.getActiveSubscriptionCount()).toBe(0);
+      expect(service.getActiveSubscriptions()).toEqual([]);
+    });
+
+    it('should track active subscriptions count', () => {
+      expect(service.getActiveSubscriptionCount()).toBe(0);
+    });
+
+    it('should return empty array when no active subscriptions', () => {
+      const subs = service.getActiveSubscriptions();
+      expect(Array.isArray(subs)).toBe(true);
+      expect(subs.length).toBe(0);
+    });
+
+    it('should handle destroyVisibilityHandler gracefully when not set', () => {
+      expect(() => service.destroyVisibilityHandler()).not.toThrow();
+    });
+  });
+
+  describe('subscription management', () => {
+    const mnemonic =
+      'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+
+    it('should have subscribeToNotifications method', () => {
+      expect(typeof service.subscribeToNotifications).toBe('function');
+    });
+
+    it('should have unsubscribeFromNotifications method', () => {
+      expect(typeof service.unsubscribeFromNotifications).toBe('function');
+    });
+
+    it('should handle unsubscribe for non-existent subscription gracefully', async () => {
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+      let error: Error | null = null;
+      try {
+        await service.unsubscribeFromNotifications(keys.nostr.public);
+      } catch (e) {
+        error = e as Error;
+      }
+      expect(error).toBeNull();
     });
   });
 });

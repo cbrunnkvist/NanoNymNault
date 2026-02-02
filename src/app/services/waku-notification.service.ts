@@ -6,9 +6,8 @@ import type { NanoNymNotification } from "./nostr-notification.service";
 
 import { createLightNode, waitForRemotePeer, Protocols } from "@waku/sdk";
 import { createEncoder, createDecoder } from "@waku/sdk";
-import { AutoShardingRoutingInfo } from "@waku/utils";
-import type { LightNode, IEncoder, IDecoder, IDecodedMessage } from "@waku/sdk";
-import type { AutoSharding, IRoutingInfo } from "@waku/interfaces";
+import type { LightNode, IEncoder, IDecodedMessage } from "@waku/sdk";
+import type { IRoutingInfo } from "@waku/interfaces";
 
 /**
  * Result of a Waku send operation
@@ -103,7 +102,7 @@ export class WakuNotificationService {
   private subscriptions = new Map<
     string,
     {
-      subscription: any;
+      decoder: ReturnType<typeof createDecoder>;
       nostrPrivate: Uint8Array;
       contentTopic: string;
     }
@@ -114,7 +113,105 @@ export class WakuNotificationService {
   private readonly RECONNECT_DELAY_MS = 3000;
   private reconnectTimer: any = null;
 
-  constructor() {}
+  private lastVisibleTimestamp: number = Date.now();
+  private visibilityChangeHandler: (() => void) | null = null;
+  private recoveryInProgress = false;
+  private readonly FOREGROUND_RECOVERY_THRESHOLD_MS = 5000;
+
+  constructor() {
+    this.setupVisibilityHandler();
+  }
+
+  private setupVisibilityHandler(): void {
+    if (typeof document === "undefined") return;
+
+    this.visibilityChangeHandler = () => {
+      if (document.visibilityState === "visible") {
+        this.handleForegroundResume();
+      } else {
+        this.lastVisibleTimestamp = Date.now();
+      }
+    };
+
+    document.addEventListener("visibilitychange", this.visibilityChangeHandler);
+    console.log("[Waku] ✅ Page Visibility handler registered");
+  }
+
+  private async handleForegroundResume(): Promise<void> {
+    const hiddenDurationMs = Date.now() - this.lastVisibleTimestamp;
+    const hiddenDurationSec = Math.round(hiddenDurationMs / 1000);
+
+    if (hiddenDurationMs < this.FOREGROUND_RECOVERY_THRESHOLD_MS) {
+      console.debug(`[Waku] Foreground resume after ${hiddenDurationSec}s - skipping (threshold: ${this.FOREGROUND_RECOVERY_THRESHOLD_MS / 1000}s)`);
+      return;
+    }
+
+    if (this.recoveryInProgress || this.subscriptions.size === 0) {
+      return;
+    }
+
+    console.log(`[Waku] 📱 Foreground resume after ${hiddenDurationSec}s - recovering ${this.subscriptions.size} subscription(s)`);
+    this.recoveryInProgress = true;
+
+    try {
+      const startDate = new Date(this.lastVisibleTimestamp);
+      const endDate = new Date();
+
+      for (const [nostrPublicHex, subData] of this.subscriptions) {
+        const nostrPublic = this.hexToBytes(nostrPublicHex);
+
+        try {
+          const result = await this.recoverNotifications(startDate, endDate, nostrPublic, subData.nostrPrivate);
+          if (result.messagesRecovered > 0) {
+            console.log(`[Waku] ✅ Recovered ${result.messagesRecovered} notification(s) for ${nostrPublicHex.slice(0, 16)}...`);
+          }
+        } catch (error) {
+          console.warn(`[Waku] Recovery failed for ${nostrPublicHex.slice(0, 16)}...:`, error);
+        }
+      }
+
+      // iOS PWA kills WebSocket when backgrounded - re-establish subscriptions
+      await this.resubscribeAll();
+    } finally {
+      this.recoveryInProgress = false;
+      this.lastVisibleTimestamp = Date.now();
+    }
+  }
+
+  private async resubscribeAll(): Promise<void> {
+    if (!this.isConnected()) {
+      console.log("[Waku] Reconnecting after foreground resume...");
+      const connected = await this.connect();
+      if (!connected) {
+        console.error("[Waku] Failed to reconnect after foreground resume");
+        return;
+      }
+    }
+
+    const subscriptionData = Array.from(this.subscriptions.entries()).map(([pubHex, data]) => ({
+      nostrPublic: this.hexToBytes(pubHex),
+      nostrPrivate: data.nostrPrivate,
+    }));
+
+    this.subscriptions.clear();
+
+    for (const { nostrPublic, nostrPrivate } of subscriptionData) {
+      try {
+        await this.subscribeToNotifications(nostrPublic, nostrPrivate);
+      } catch (error) {
+        console.warn("[Waku] Failed to resubscribe:", error);
+      }
+    }
+
+    console.log(`[Waku] ✅ Re-established ${this.subscriptions.size} subscription(s)`);
+  }
+
+  destroyVisibilityHandler(): void {
+    if (this.visibilityChangeHandler && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.visibilityChangeHandler);
+      this.visibilityChangeHandler = null;
+    }
+  }
 
   /**
    * Convert Uint8Array to hex string
@@ -524,7 +621,7 @@ export class WakuNotificationService {
 
     try {
       const routingInfo = this.createRoutingInfo(nostrPublic);
-      const decoder: IDecoder = createDecoder(contentTopic, routingInfo);
+      const decoder = createDecoder(contentTopic, routingInfo);
 
       const callback = (message: IDecodedMessage) => {
         if (!message || !message.payload) return;
@@ -533,20 +630,16 @@ export class WakuNotificationService {
 
       console.log(`[Waku Filter] 📡 Creating subscription for ${nostrNpub.substring(0, 16)}...`);
 
-      const { error, subscription } = await this.node!.filter.createSubscription(
-        { contentTopics: [contentTopic] }
-      );
+      const success = await this.node!.filter.subscribe(decoder, callback);
 
-      if (error) {
-        console.error("[Waku Filter] ❌ Subscription creation failed:", error);
+      if (!success) {
+        console.error("[Waku Filter] ❌ Subscription creation failed");
         this.scheduleReconnect(nostrPublic, nostrPrivate);
         return;
       }
 
-      await subscription.subscribe([decoder], callback);
-
       this.subscriptions.set(nostrPublicHex, {
-        subscription,
+        decoder,
         nostrPrivate,
         contentTopic,
       });
@@ -656,7 +749,7 @@ export class WakuNotificationService {
     }
 
     try {
-      await subData.subscription.unsubscribe([subData.contentTopic]);
+      await this.node?.filter.unsubscribe(subData.decoder);
       console.log("[Waku Filter] ✅ Unsubscribed from:", nostrPublicHex.slice(0, 16) + "...");
     } catch (error) {
       console.warn("[Waku Filter] Error during unsubscribe:", error);

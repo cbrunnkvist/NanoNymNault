@@ -105,6 +105,23 @@
             </div>
           </div>
 
+          <div class="uk-width-1-1">
+            <div class="uk-form-horizontal">
+              <div class="uk-margin">
+                <label class="uk-form-label">Waku Notifications</label>
+                <div class="uk-form-controls">
+                  <div class="uk-inline uk-width-1-1">
+                    <select class="uk-select" [(ngModel)]="useWaku">
+                      <option [ngValue]="true">Enabled</option>
+                      <option [ngValue]="false">Disabled</option>
+                    </select>
+                  </div>
+                  <span class="uk-text-meta">Experimental: Use Waku (Logos ecosystem) for notification delivery. Requires local nwaku node.</span>
+                </div>
+              </div>
+            </div>
+          </div>
+
         </div>
       </div>
       <div class="uk-card-footer uk-text-right@s uk-text-center nlt-button-group">
