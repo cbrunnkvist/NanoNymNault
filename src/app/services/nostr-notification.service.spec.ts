@@ -1,23 +1,27 @@
-import { TestBed } from '@angular/core/testing';
+import { TestBed, fakeAsync, tick } from '@angular/core/testing';
 import { NostrNotificationService, NanoNymNotification } from './nostr-notification.service';
 import { NanoNymCryptoService } from './nanonym-crypto.service';
+import { NostrSyncStateService } from './nostr-sync-state.service';
 import { UtilService } from './util.service';
 
 describe('NostrNotificationService', () => {
   let service: NostrNotificationService;
   let cryptoService: NanoNymCryptoService;
+  let syncStateService: NostrSyncStateService;
 
   beforeEach(() => {
+    localStorage.clear();
     TestBed.configureTestingModule({
-      providers: [NostrNotificationService, NanoNymCryptoService, UtilService]
+      providers: [NostrNotificationService, NanoNymCryptoService, NostrSyncStateService, UtilService]
     });
     service = TestBed.inject(NostrNotificationService);
     cryptoService = TestBed.inject(NanoNymCryptoService);
+    syncStateService = TestBed.inject(NostrSyncStateService);
   });
 
   afterEach(() => {
-    // Clean up subscriptions
     service.destroy();
+    localStorage.clear();
   });
 
   it('should be created', () => {
@@ -240,5 +244,149 @@ describe('NostrNotificationService', () => {
 
     // In real scenario, would wait for incomingNotifications$ to emit
     // This requires live relay connections, so marked as pending
+  });
+
+  describe('Integration: Cold Recovery with sinceOverride', () => {
+    it('should use sinceOverride timestamp in subscription filter', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+
+      const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 86400);
+
+      service.subscribeToNotifications(
+        keys.nostr.public,
+        keys.nostr.private,
+        0,
+        thirtyDaysAgo
+      );
+
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+
+    it('should accept nanoNymIndex parameter for sync state tracking', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys0 = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+      const keys1 = cryptoService.deriveNanoNymKeys(mnemonic, 1);
+
+      service.subscribeToNotifications(keys0.nostr.public, keys0.nostr.private, 0);
+      service.subscribeToNotifications(keys1.nostr.public, keys1.nostr.private, 1);
+
+      expect(service.getActiveSubscriptionCount()).toBe(2);
+    });
+
+    it('should use default 4-day lookback when sinceOverride is not provided', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+
+      const beforeSubscribe = Math.floor(Date.now() / 1000);
+
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0);
+
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+  });
+
+  describe('Integration: Event Deduplication', () => {
+    it('should track processed events via NostrSyncStateService', fakeAsync(() => {
+      syncStateService.updateState(0, 'event_id_123', 1700000000);
+      tick(1100);
+
+      expect(syncStateService.isEventProcessed(0, 'event_id_123')).toBeTrue();
+      expect(syncStateService.isEventProcessed(0, 'event_id_456')).toBeFalse();
+    }));
+
+    it('should not process duplicate events after restart', fakeAsync(() => {
+      syncStateService.updateState(0, 'persistent_event', 1700000000);
+      tick(1100);
+
+      const newSyncService = new NostrSyncStateService();
+
+      expect(newSyncService.isEventProcessed(0, 'persistent_event')).toBeTrue();
+    }));
+
+    it('should maintain separate dedup state per NanoNym', fakeAsync(() => {
+      syncStateService.updateState(0, 'event_for_nym_0', 1700000000);
+      syncStateService.updateState(1, 'event_for_nym_1', 1700000001);
+      tick(1100);
+
+      expect(syncStateService.isEventProcessed(0, 'event_for_nym_0')).toBeTrue();
+      expect(syncStateService.isEventProcessed(0, 'event_for_nym_1')).toBeFalse();
+      expect(syncStateService.isEventProcessed(1, 'event_for_nym_0')).toBeFalse();
+      expect(syncStateService.isEventProcessed(1, 'event_for_nym_1')).toBeTrue();
+    }));
+
+    it('should update sync state when processing valid notifications', fakeAsync(() => {
+      const eventId = 'new_event_abc';
+      const timestamp = 1700000500;
+
+      syncStateService.updateState(0, eventId, timestamp);
+      tick(1100);
+
+      const state = syncStateService.getState(0);
+      expect(state).not.toBeNull();
+      expect(state!.lastSeenTimestamp).toBe(timestamp);
+      expect(state!.processedEventIds).toContain(eventId);
+    }));
+  });
+
+  describe('Integration: Manual Rescan', () => {
+    it('should allow unsubscribe and resubscribe with different sinceOverride', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0);
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+
+      service.unsubscribeFromNotifications(keys.nostr.public);
+      expect(service.getActiveSubscriptionCount()).toBe(0);
+
+      const thirtyDaysAgo = Math.floor(Date.now() / 1000) - (30 * 86400);
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0, thirtyDaysAgo);
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+
+    it('should not create duplicate subscriptions on rescan', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0);
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0);
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0);
+
+      expect(service.getActiveSubscriptionCount()).toBe(1);
+    });
+
+    it('should properly clean up on unsubscribe before rescan', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+
+      service.subscribeToNotifications(keys.nostr.public, keys.nostr.private, 0);
+
+      const activeBefore = service.getActiveSubscriptions();
+      expect(activeBefore.length).toBe(1);
+
+      service.unsubscribeFromNotifications(keys.nostr.public);
+
+      const activeAfter = service.getActiveSubscriptions();
+      expect(activeAfter.length).toBe(0);
+    });
+
+    it('should support multiple rescan cycles', () => {
+      const mnemonic = 'abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon abandon about';
+      const keys = cryptoService.deriveNanoNymKeys(mnemonic, 0);
+
+      for (let cycle = 0; cycle < 3; cycle++) {
+        service.subscribeToNotifications(
+          keys.nostr.public,
+          keys.nostr.private,
+          0,
+          Math.floor(Date.now() / 1000) - ((cycle + 1) * 7 * 86400)
+        );
+        expect(service.getActiveSubscriptionCount()).toBe(1);
+
+        service.unsubscribeFromNotifications(keys.nostr.public);
+        expect(service.getActiveSubscriptionCount()).toBe(0);
+      }
+    });
   });
 });

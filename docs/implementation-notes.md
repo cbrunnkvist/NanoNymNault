@@ -246,3 +246,136 @@ it('should derive keys from BIP-39 mnemonic', () => {
 - Recovery from seed (gap limit discovery)
 - Multi-payment aggregation
 - Balance persistence across wallet restarts
+
+---
+
+## 8. Nostr Domain Objects (JSON Examples)
+
+This section documents the JSON structures used in Nostr notification handling, useful for debugging and developer reference.
+
+### 8.1 NanoNymNotification
+
+The core payload sent inside Nostr events to notify recipients of incoming payments:
+
+```json
+{
+  "version": 1,
+  "protocol": "nanoNymNault",
+  "R": "a1b2c3d4e5f6789012345678901234567890123456789012345678901234abcd",
+  "tx_hash": "ABC123DEF456789012345678901234567890123456789012345678901234WXYZ",
+  "amount": "1.5",
+  "amount_raw": "1500000000000000000000000000000",
+  "memo": "optional_encrypted_memo"
+}
+```
+
+| Field | Type | Required | Description |
+|-------|------|----------|-------------|
+| `version` | number | Yes | Protocol version (currently `1`) |
+| `protocol` | string | Yes | Must be `"nanoNymNault"` |
+| `R` | string | Yes | Ephemeral public key (64-char hex) for stealth address derivation |
+| `tx_hash` | string | Yes | Nano transaction hash (64-char hex) |
+| `amount` | string | No | Human-readable XNO amount |
+| `amount_raw` | string | No | Raw amount in 10^-30 XNO |
+| `memo` | string | No | Encrypted memo (future use) |
+
+### 8.2 Gift-Wrapped Event (NIP-59 kind:1059)
+
+The outer envelope that wraps the encrypted notification for transport via Nostr relays:
+
+```json
+{
+  "id": "event_id_64_hex_chars",
+  "pubkey": "ephemeral_sender_pubkey_64_hex_chars",
+  "created_at": 1707840000,
+  "kind": 1059,
+  "tags": [
+    ["p", "receiver_nostr_pubkey_64_hex_chars"]
+  ],
+  "content": "base64_encrypted_seal_containing_NanoNymNotification...",
+  "sig": "signature_128_hex_chars"
+}
+```
+
+**Important NIP-59 behavior:**
+- `created_at` is randomized by ±2 days for privacy (prevents timing correlation)
+- `pubkey` is an ephemeral key (not the sender's real identity)
+- `content` contains a sealed rumor (kind:14) with the actual `NanoNymNotification`
+- Receivers must attempt decryption on all kind:1059 events (cannot filter by `#p` tag reliably)
+
+### 8.3 QueuedNotification (Send Queue Item)
+
+Used by `NostrSendQueueService` to persist pending notifications in localStorage:
+
+```json
+{
+  "id": "550e8400-e29b-41d4-a716-446655440000",
+  "notification": {
+    "version": 1,
+    "protocol": "nanoNymNault",
+    "R": "a1b2c3...",
+    "tx_hash": "ABC123..."
+  },
+  "senderNostrPrivateHex": "sender_private_key_64_hex",
+  "receiverNostrPublicHex": "receiver_public_key_64_hex",
+  "status": "pending",
+  "createdAt": 1707840000,
+  "attempts": 0,
+  "maxRetries": 10,
+  "relayResults": {
+    "wss://relay.damus.io": "pending",
+    "wss://nos.lol": "pending",
+    "wss://relay.primal.net": "pending"
+  },
+  "lastAttemptAt": null,
+  "nextRetryAt": null
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `id` | string | UUID for this queue item |
+| `notification` | object | The `NanoNymNotification` to send |
+| `senderNostrPrivateHex` | string | Sender's Nostr private key (hex, for signing) |
+| `receiverNostrPublicHex` | string | Receiver's Nostr public key (hex, for encryption) |
+| `status` | string | `"pending"` \| `"sending"` \| `"partial"` \| `"complete"` \| `"failed"` |
+| `createdAt` | number | Unix timestamp when queued |
+| `attempts` | number | Number of send attempts so far |
+| `maxRetries` | number | Maximum retry attempts (default: 10) |
+| `relayResults` | object | Per-relay status: `"pending"` \| `"ok"` \| `"error"` |
+| `lastAttemptAt` | number? | Unix timestamp of last attempt |
+| `nextRetryAt` | number? | Unix timestamp for next retry (exponential backoff) |
+
+**localStorage key:** `nostr_send_queue`
+
+**Note:** Relay response `"OK duplicate:"` is treated as success per NIP-01.
+
+### 8.4 NostrSyncState (Receiver State)
+
+Used by `NostrSyncStateService` to track received notifications per NanoNym:
+
+```json
+{
+  "lastSeenTimestamp": 1707840000,
+  "lastSeenEventId": "event_id_64_hex_chars",
+  "processedEventIds": [
+    "id_1_64_hex",
+    "id_2_64_hex",
+    "id_3_64_hex"
+  ],
+  "updatedAt": 1707840123
+}
+```
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `lastSeenTimestamp` | number | Unix timestamp of newest processed event |
+| `lastSeenEventId` | string | Event ID of newest processed event (for debugging) |
+| `processedEventIds` | string[] | Rolling window of last 1000 event IDs (for deduplication) |
+| `updatedAt` | number | Unix timestamp when state was last persisted |
+
+**localStorage key pattern:** `nostr_sync_${nanoNymIndex}` (e.g., `nostr_sync_0`, `nostr_sync_1`)
+
+**Subscription `since` calculation:**
+- If state exists: `since = lastSeenTimestamp - 6 days` (buffer for NIP-59 randomization)
+- If no state (cold recovery): `since = now - 90 days`
