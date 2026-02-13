@@ -3,6 +3,7 @@ import { SimplePool, nip59, nip19 } from "nostr-tools";
 import type { Event } from "nostr-tools/lib/types/core";
 import * as Rx from "rxjs";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
+import { NostrSyncStateService } from "./nostr-sync-state.service";
 
 export interface NanoNymNotification {
   version: number;
@@ -44,15 +45,32 @@ export class NostrNotificationService {
     receiverNostrPrivate: Uint8Array;
   }>();
 
-  // Active subscriptions map (nostrPublicHex -> subscription)
-  private subscriptions = new Map<string, any>();
+  // Active subscriptions map (nostrPublicHex -> { sub, nanoNymIndex })
+  private subscriptions = new Map<string, { sub: any; nanoNymIndex: number }>();
+
+  // Map: private key hex -> nanoNymIndex for fast dedup checks
+  private privateKeyHexToNanoNymIndex = new Map<string, number>();
 
   // Relay connection tracking
   private relayFirstSeen = new Map<string, number>();
   private relayEventCount = new Map<string, number>();
 
-  constructor(private nanoNymCrypto: NanoNymCryptoService) {
-    this.pool = new SimplePool();
+  constructor(
+    private nanoNymCrypto: NanoNymCryptoService,
+    private syncStateService: NostrSyncStateService,
+  ) {
+    this.pool = new SimplePool({
+      enablePing: true,
+      enableReconnect: (filters) => {
+        const lastSeen = this.getLastSeenTimestamp();
+        const SIX_DAYS = 6 * 86400;
+        const FOUR_DAYS = 4 * 86400;
+        const now = Math.floor(Date.now() / 1000);
+        const fallback = now - FOUR_DAYS;
+        const since = lastSeen ? Math.max(lastSeen - SIX_DAYS, fallback) : fallback;
+        return filters.map((f) => ({ ...f, since }));
+      },
+    });
     this.initializeRelays();
   }
 
@@ -183,10 +201,14 @@ export class NostrNotificationService {
    *
    * @param nostrPublic - The Nostr public key to monitor (from NanoNym address)
    * @param nostrPrivate - The Nostr private key for decryption
+   * @param nanoNymIndex - The index of the NanoNym for sync state tracking
+   * @param sinceOverride - Optional timestamp to override default lookback window (e.g., for cold recovery)
    */
   subscribeToNotifications(
     nostrPublic: Uint8Array,
     nostrPrivate: Uint8Array,
+    nanoNymIndex: number = 0,
+    sinceOverride?: number,
   ): void {
     const nostrPublicHex = this.bytesToHex(nostrPublic);
     const nostrNpub = nip19.npubEncode(nostrPublicHex);
@@ -200,15 +222,11 @@ export class NostrNotificationService {
       return;
     }
 
-    // Subscribe to kind:1059 (gift-wrapped) events
-    // Note: NIP-59 gift wraps use ephemeral keys in the outer envelope,
-    // so we cannot filter by #p tag. We must receive all gift wraps and
-    // attempt to decrypt them.
     const filter = {
       kinds: [1059],
-      // NIP-59 randomizes timestamps by ±2 days, so we need to look back 4 days
-      // to catch all events (2 days randomization + 2 days buffer)
-      since: Math.floor(Date.now() / 1000) - 4 * 86400, // Last 4 days
+      since: sinceOverride !== undefined 
+        ? sinceOverride 
+        : Math.floor(Date.now() / 1000) - 4 * 86400,
     };
 
     console.debug(
@@ -259,7 +277,10 @@ export class NostrNotificationService {
       },
     });
 
-    this.subscriptions.set(nostrPublicHex, sub);
+    this.subscriptions.set(nostrPublicHex, { sub, nanoNymIndex });
+    // Map private key hex to nanoNymIndex for dedup checks during incoming events
+    const nostrPrivateHex = this.bytesToHex(nostrPrivate);
+    this.privateKeyHexToNanoNymIndex.set(nostrPrivateHex, nanoNymIndex);
     console.log(
       `[Nostr] ✅ Subscription active for ${nostrNpub.substring(0, 16)}...`,
     );
@@ -273,10 +294,10 @@ export class NostrNotificationService {
   unsubscribeFromNotifications(nostrPublic: Uint8Array): void {
     const nostrPublicHex = this.bytesToHex(nostrPublic);
     const nostrNpub = nip19.npubEncode(nostrPublicHex);
-    const sub = this.subscriptions.get(nostrPublicHex);
+    const entry = this.subscriptions.get(nostrPublicHex);
 
-    if (sub) {
-      sub.close();
+    if (entry) {
+      entry.sub.close();
       this.subscriptions.delete(nostrPublicHex);
       console.log(`[Nostr] 🔌 Disconnected: Stopped subscription for ${nostrNpub.substring(0, 16)}...`);
     }
@@ -290,6 +311,22 @@ export class NostrNotificationService {
     nostrPrivate: Uint8Array,
   ): Promise<void> {
     try {
+      // Determine nanoNymIndex from private key (dedup scope)
+      const privateHex = this.bytesToHex(nostrPrivate);
+      const nanoNymIndex = this.privateKeyHexToNanoNymIndex.get(privateHex);
+      if (typeof nanoNymIndex !== "number") {
+        console.warn(
+          `[Nostr] Unable to map incoming event to a nanoNymIndex for private key ${privateHex.substring(0, 8)}...`,
+        );
+        return;
+      }
+
+      // Check for duplicate events before any processing
+      if (this.syncStateService.isEventProcessed(nanoNymIndex, event.id)) {
+        console.log(`[Nostr] ⏭️ Skipping duplicate event ${event.id}`);
+        return;
+      }
+
       // Unwrap the gift-wrapped event using NIP-59
       // This may throw an error if the event is not meant for us (wrong key)
       let unwrapped;
@@ -326,6 +363,9 @@ export class NostrNotificationService {
         notification,
         receiverNostrPrivate: nostrPrivate,
       });
+
+      // AFTER successful processing, mark the event as processed for this nanoNymIndex
+      this.syncStateService.updateState(nanoNymIndex, event.id, event.created_at);
     } catch (error) {
       console.error("[Nostr] Error processing incoming Nostr event:", error);
     }
@@ -384,7 +424,7 @@ export class NostrNotificationService {
     const subscriptionCount = this.subscriptions.size;
 
     // Close all subscriptions
-    this.subscriptions.forEach((sub) => sub.close());
+    this.subscriptions.forEach(({ sub }) => sub.close());
     this.subscriptions.clear();
 
     // Clear tracking maps
@@ -415,5 +455,16 @@ export class NostrNotificationService {
       bytes[i / 2] = parseInt(hex.substr(i, 2), 16);
     }
     return bytes;
+  }
+
+  private getLastSeenTimestamp(): number | null {
+    let maxTimestamp: number | null = null;
+    for (const { nanoNymIndex } of this.subscriptions.values()) {
+      const ts = this.syncStateService.getLastSeenTimestamp(nanoNymIndex);
+      if (ts !== null && (maxTimestamp === null || ts > maxTimestamp)) {
+        maxTimestamp = ts;
+      }
+    }
+    return maxTimestamp;
   }
 }

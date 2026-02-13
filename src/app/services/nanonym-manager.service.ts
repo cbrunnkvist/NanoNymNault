@@ -12,6 +12,7 @@ import {
 import { NanoNymStorageService } from "./nanonym-storage.service";
 import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrNotificationService } from "./nostr-notification.service";
+import { NostrSyncStateService } from "./nostr-sync-state.service";
 import { ApiService } from "./api.service";
 import { WalletService, WalletAccount } from "./wallet.service";
 import { WebsocketService } from "./websocket.service";
@@ -52,6 +53,7 @@ export class NanoNymManagerService implements OnDestroy {
     private storage: NanoNymStorageService,
     private crypto: NanoNymCryptoService,
     private nostr: NostrNotificationService,
+    private nostrSyncState: NostrSyncStateService,
     private api: ApiService,
     private wallet: WalletService,
     private websocket: WebsocketService,
@@ -313,9 +315,24 @@ export class NanoNymManagerService implements OnDestroy {
       );
       console.debug(`[Manager] Nostr public key: ${nostrPublicHex}`);
 
+      const COLD_RECOVERY_LOOKBACK_DAYS = 90;
+      const NIP59_BUFFER_DAYS = 6;
+      const syncState = this.nostrSyncState.getState(nanoNym.index);
+      let sinceTimestamp: number | undefined;
+
+      if (!syncState) {
+        sinceTimestamp = Math.floor(Date.now() / 1000) - (COLD_RECOVERY_LOOKBACK_DAYS * 24 * 60 * 60);
+        console.log(`[Manager] Cold recovery: scanning ${COLD_RECOVERY_LOOKBACK_DAYS} days back for NanoNym ${nanoNym.index}`);
+      } else {
+        sinceTimestamp = syncState.lastSeenTimestamp - (NIP59_BUFFER_DAYS * 24 * 60 * 60);
+        console.log(`[Manager] Using sync state: scanning from ${new Date(sinceTimestamp * 1000).toISOString()} (${NIP59_BUFFER_DAYS} day buffer) for NanoNym ${nanoNym.index}`);
+      }
+
       await this.nostr.subscribeToNotifications(
         nanoNym.keys.nostrPublic,
         nanoNym.keys.nostrPrivate,
+        nanoNym.index,
+        sinceTimestamp,
       );
 
       // Add to routing map
