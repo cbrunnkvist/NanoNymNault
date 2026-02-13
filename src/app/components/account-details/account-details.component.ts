@@ -18,6 +18,7 @@ import {NinjaService} from '../../services/ninja.service';
 import { QrModalService } from '../../services/qr-modal.service';
 import { TranslocoService } from '@ngneat/transloco';
 import { NanoNymManagerService } from '../../services/nanonym-manager.service';
+import { NostrNotificationService } from '../../services/nostr-notification.service';
 
 @Component({
   selector: 'app-account-details',
@@ -60,7 +61,8 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   loadingIncomingTxList = false;
   loadingTxList = false;
   showAdvancedOptions = false;
-  showEditAddressBook = false;
+  isRescanning = false;
+  showRescanDropdown = false;
   addressBookModel = '';
   representativeModel = '';
   representativeResults$ = new BehaviorSubject([]);
@@ -84,6 +86,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
   // Remote signing
   addressBookResults$ = new BehaviorSubject([]);
   showAddressBook = false;
+  showEditAddressBook = false;
   addressBookMatch = '';
   amounts = [
     { name: 'XNO', shortName: 'XNO', value: 'mnano' },
@@ -130,6 +133,7 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
     private qrModalService: QrModalService,
     private ninja: NinjaService,
     private translocoService: TranslocoService,
+    private nostrNotificationService: NostrNotificationService,
     private nanoNymManager: NanoNymManagerService) {
       // to detect when the account changes if the view is already active
       route.events.subscribe((val) => {
@@ -657,6 +661,48 @@ export class AccountDetailsComponent implements OnInit, OnDestroy {
       await this.loadNanoNymDetails(this.accountID);
     } catch (error) {
       this.notifications.sendError(`Failed to update NanoNym: ${error.message}`);
+    }
+  }
+
+  async rescan(days: number) {
+    if (!this.nanoNym) return;
+
+    this.isRescanning = true;
+    this.showRescanDropdown = false;
+    this.notifications.sendInfo('Starting rescan...', { identifier: 'rescan-status' });
+
+    try {
+      const nostrPublic = this.nanoNym.nostr.public;
+      const nostrPrivate = this.nanoNym.nostr.private;
+      const nanoNymIndex = this.nanoNym.index;
+
+      // Unsubscribe from old notifications
+      this.nostrNotificationService.unsubscribeFromNotifications(nostrPublic);
+
+      // Calculate new 'since' timestamp
+      const now = Math.floor(Date.now() / 1000);
+      const sinceTimestamp = now - (days * 24 * 60 * 60);
+
+      // Resubscribe with the new timeframe
+      await this.nostrNotificationService.subscribeToNotifications(
+        nostrPublic,
+        nostrPrivate,
+        nanoNymIndex,
+        sinceTimestamp
+      );
+
+      // Refresh balances after rescan
+      await this.nanoNymManager.refreshBalances(nanoNymIndex);
+      await this.loadNanoNymDetails(this.accountID); // Reload UI
+
+      this.notifications.removeNotification('rescan-status');
+      this.notifications.sendSuccess('Rescan complete!');
+    } catch (error) {
+      console.error('Rescan failed:', error);
+      this.notifications.removeNotification('rescan-status');
+      this.notifications.sendError(`Rescan failed: ${error.message}`);
+    } finally {
+      this.isRescanning = false;
     }
   }
 

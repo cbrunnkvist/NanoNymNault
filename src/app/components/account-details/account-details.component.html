@@ -697,6 +697,25 @@
               <div>{{ nanoNym.createdAt | date: 'MMM d, y HH:mm' }}</div>
             </div>
           </div>
+          <div class="advanced-option">
+            <div>
+              <div>{{ 'Rescan Notifications' | transloco }}:</div>
+              <div class="rescan-section">
+                <button class="uk-button uk-button-small" [disabled]="isRescanning" (click)="showRescanDropdown = !showRescanDropdown">
+                  <span *ngIf="!isRescanning">Rescan...</span>
+                  <span *ngIf="isRescanning"><div uk-spinner="ratio: 0.5"></div> Rescanning...</span>
+                </button>
+                <div *ngIf="showRescanDropdown" class="rescan-dropdown uk-card uk-card-default uk-card-body uk-position-absolute">
+                  <ul class="uk-nav uk-nav-default">
+                    <li><a (click)="rescan(7)">Last 7 days</a></li>
+                    <li><a (click)="rescan(30)">Last 30 days</a></li>
+                    <li><a (click)="rescan(90)">Last 90 days</a></li>
+                    <li><a (click)="rescan(365)">All time</a></li>
+                  </ul>
+                </div>
+              </div>
+            </div>
+          </div>
         </div>
       </div>
 

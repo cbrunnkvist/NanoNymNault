@@ -313,3 +313,27 @@
     background-color: #6c757d;
     color: white;
 }
+
+.rescan-section {
+  position: relative;
+  display: inline-block;
+}
+
+.rescan-dropdown {
+  position: absolute;
+  top: 100%;
+  left: 0;
+  z-index: 1000;
+  padding: 10px;
+  margin-top: 5px;
+  min-width: 160px;
+}
+
+.rescan-dropdown .uk-nav-default > li > a {
+  padding: 5px 10px;
+  cursor: pointer;
+}
+
+.rescan-dropdown .uk-nav-default > li > a:hover {
+  background-color: #f5f5f5;
+}
