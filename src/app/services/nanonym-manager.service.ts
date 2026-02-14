@@ -71,9 +71,10 @@ export class NanoNymManagerService implements OnDestroy {
     this.setupOrbitDbListener();
 
     // Subscribe to wallet unlock events to process any pending stealth receives
-    this.wallet.wallet.locked$.subscribe(isLocked => {
+    this.wallet.wallet.locked$.subscribe(async (isLocked) => {
       if (!isLocked) { // Wallet is unlocked
-        this.processPendingStealthBlocks();
+        await this.processPendingStealthBlocks();
+        await this.refreshAllBalances();
       }
     });
 
@@ -517,6 +518,8 @@ export class NanoNymManagerService implements OnDestroy {
       console.debug(`[Manager] Private key derived`);
 
       // 6. Create stealth account object
+      // Determine on-chain verification status based on accountInfo result
+      const verifiedOnChain = accountInfo && !accountInfo.error && !!accountInfo.balance;
       const stealthAccount: StealthAccount = {
         address: stealth.address,
         publicKey: stealth.publicKey,
@@ -528,6 +531,7 @@ export class NanoNymManagerService implements OnDestroy {
         receivedAt: Date.now(),
         parentNanoNymIndex: nanoNymIndex,
         balance: new BigNumber(accountBalance),
+        verifiedOnChain: verifiedOnChain ?? false,
       };
 
       // 7. Store stealth account

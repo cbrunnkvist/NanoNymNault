@@ -73,6 +73,13 @@ export interface StealthAccount {
   /** Account balance (queried from node) */
   balance: BigNumber;
 
+  /**
+   * Indicates whether this stealth account's balance has been verified against the on-chain state.
+   * Set to true after successfully querying the node and confirming the account exists.
+   * Optional for backward compatibility with legacy data/models.
+   */
+  verifiedOnChain?: boolean;
+
   /** UI state: true when this account's send transaction completed */
   done?: boolean;
 }
@@ -123,5 +130,6 @@ export interface StoredStealthAccount {
   memo?: string;
   receivedAt: number;
   parentNanoNymIndex: number;
-  balance: string; // Stored as string for JSON serialization
+  balance: string;
+  verifiedOnChain?: boolean;
 }

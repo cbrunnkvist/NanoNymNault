@@ -56,7 +56,7 @@ export class NanoNymStorageService {
    */
   addNanoNym(nanoNym: NanoNym): void {
     const current = this.nanonymsSubject.value;
-    const updated = [...current, nanoNym];
+    const updated = [...current, this.withComputedBalance(nanoNym)];
     this.nanonymsSubject.next(updated);
     this.saveToStorage(updated);
   }
@@ -67,7 +67,7 @@ export class NanoNymStorageService {
   updateNanoNym(index: number, updates: Partial<NanoNym>): void {
     const current = this.nanonymsSubject.value;
     const updated = current.map((nn) =>
-      nn.index === index ? { ...nn, ...updates } : nn,
+      nn.index === index ? this.withComputedBalance({ ...nn, ...updates }) : nn,
     );
     this.nanonymsSubject.next(updated);
     this.saveToStorage(updated);
@@ -113,13 +113,10 @@ export class NanoNymStorageService {
     // Add to stealth accounts array
     const updatedStealthAccounts = [...nanoNym.stealthAccounts, stealthAccount];
 
-    // Update payment count and balance
-    const balance = this.calculateAggregatedBalance(updatedStealthAccounts);
     const paymentCount = updatedStealthAccounts.length;
 
     this.updateNanoNym(nanoNymIndex, {
       stealthAccounts: updatedStealthAccounts,
-      balance,
       paymentCount,
     });
   }
@@ -139,13 +136,8 @@ export class NanoNymStorageService {
       sa.address === stealthAddress ? { ...sa, balance } : sa,
     );
 
-    const aggregatedBalance = this.calculateAggregatedBalance(
-      updatedStealthAccounts,
-    );
-
     this.updateNanoNym(nanoNymIndex, {
       stealthAccounts: updatedStealthAccounts,
-      balance: aggregatedBalance,
     });
   }
 
@@ -204,10 +196,6 @@ export class NanoNymStorageService {
   
         const parsed: StoredNanoNym[] = JSON.parse(stored);
         const nanonyms = parsed.map((stored) => this.deserializeNanoNym(stored));
-        // Recalculate aggregated balances from stealth accounts
-        nanonyms.forEach(nn => {
-          nn.balance = this.calculateAggregatedBalance(nn.stealthAccounts);
-        });
         this.nanonymsSubject.next(nanonyms);
         console.log(
           `[NanoNymStorage] Loaded ${nanonyms.length} NanoNyms from localStorage`,
@@ -264,6 +252,9 @@ export class NanoNymStorageService {
    * Convert StoredNanoNym back to NanoNym (base64 -> Uint8Array)
    */
   private deserializeNanoNym(stored: StoredNanoNym): NanoNym {
+    const stealthAccounts = stored.stealthAccounts.map((sa) =>
+      this.deserializeStealthAccount(sa),
+    );
     return {
       index: stored.index,
       label: stored.label,
@@ -278,11 +269,16 @@ export class NanoNymStorageService {
         nostrPublic: this.base64ToUint8(stored.keys.nostrPublic),
         nostrPrivate: this.base64ToUint8(stored.keys.nostrPrivate),
       },
-      balance: new BigNumber(0), // Will be calculated
-      paymentCount: stored.stealthAccounts.length,
-      stealthAccounts: stored.stealthAccounts.map((sa) =>
-        this.deserializeStealthAccount(sa),
-      ),
+      balance: this.calculateAggregatedBalance(stealthAccounts),
+      paymentCount: stealthAccounts.length,
+      stealthAccounts,
+    };
+  }
+
+  private withComputedBalance(nanoNym: NanoNym): NanoNym {
+    return {
+      ...nanoNym,
+      balance: this.calculateAggregatedBalance(nanoNym.stealthAccounts || []),
     };
   }
 
@@ -300,7 +296,8 @@ export class NanoNymStorageService {
       memo: sa.memo,
       receivedAt: sa.receivedAt,
       parentNanoNymIndex: sa.parentNanoNymIndex,
-      balance: sa.balance.toString(), // Convert BigNumber to string for JSON serialization
+      balance: sa.balance.toString(),
+      verifiedOnChain: sa.verifiedOnChain ?? false,
     };
   }
 
@@ -320,7 +317,11 @@ export class NanoNymStorageService {
       memo: stored.memo,
       receivedAt: stored.receivedAt,
       parentNanoNymIndex: stored.parentNanoNymIndex,
-      balance: new BigNumber(stored.balance || 0), // Restore from storage, or 0 if not present
+      balance: new BigNumber(stored.balance || 0),
+      verifiedOnChain:
+        typeof stored.verifiedOnChain === "boolean"
+          ? stored.verifiedOnChain
+          : false,
     };
   }
 
