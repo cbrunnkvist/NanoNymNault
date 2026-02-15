@@ -39,6 +39,20 @@ All 4 E2E tests are documented and ready to execute. You're now at the **verific
 3. Document any edge cases or issues
 4. Report findings
 
+### Option D: Playwright (New)
+1. **Prerequisite**: Ensure correct Node version.
+   ```bash
+   nvm use  # Must use Node v22 (see .nvmrc)
+   ```
+2. **Run Headless**: `npm run e2e:pw`
+   - Runs the new Playwright PoC test.
+   - Starts the dev server automatically (if not running).
+3. **Run with UI**: `npm run e2e:pw:ui`
+   - Opens the interactive Playwright UI.
+   - Great for debugging and seeing the browser.
+4. **Troubleshooting**:
+   - If tests hang, port 4200 might be in use. Run: `lsof -ti:4200 | xargs kill -9`
+
 ## File Reference
 
 | Document | Purpose | Read Time |

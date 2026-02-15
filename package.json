@@ -5,6 +5,9 @@
   "description": "Wallet for interacting with nano",
   "author": "Conny Brunnkvist <cbrunnkvist@gmail.com>",
   "main": "desktop-app/dist/desktop-app.js",
+  "engines": {
+    "node": ">=22.0.0"
+  },
   "scripts": {
     "ng": "npm run version && ng",
     "start": "npm run ng -- serve",
@@ -24,7 +27,9 @@
     "desktop:build": "npm run wallet:build-desktop && npm run desktop:compile",
     "desktop:build-local": "npm run desktop:build && npm run desktop:local",
     "desktop:dev": "npm run desktop:compile && electron desktop-app/dist/desktop-app.js",
-    "desktop:local": "electron-builder -p never"
+    "desktop:local": "electron-builder -p never",
+    "e2e:pw": "npx playwright test",
+    "e2e:pw:ui": "npx playwright test --ui"
   },
   "private": true,
   "dependencies": {
@@ -102,6 +107,7 @@
     "@angular/cli": "^17.3.17",
     "@angular/compiler-cli": "^17.3.12",
     "@angular/language-service": "^17.3.12",
+    "@playwright/test": "^1.58.2",
     "@types/bip39": "^2.4.0",
     "@types/jasmine": "~3.6.0",
     "@types/jasminewd2": "~2.0.2",

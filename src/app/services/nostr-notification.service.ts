@@ -55,11 +55,36 @@ export class NostrNotificationService {
   private relayFirstSeen = new Map<string, number>();
   private relayEventCount = new Map<string, number>();
 
+  // Track subscription state for re-establishment after pool recreation
+  private activeSubscriptionState = new Map<
+    string,
+    {
+      nostrPublic: Uint8Array;
+      nostrPrivate: Uint8Array;
+      nanoNymIndex: number;
+    }
+  >();
+
+  // Visibility change handler bound reference for cleanup
+  private boundVisibilityHandler: (() => void) | null = null;
+
+  // Track when tab was last hidden (for reconnection decision)
+  private tabHiddenAt: number | null = null;
+
+  // Minimum time tab must be hidden before forcing reconnect (30 seconds)
+  private readonly RECONNECT_THRESHOLD_MS = 30000;
+
   constructor(
     private nanoNymCrypto: NanoNymCryptoService,
     private syncStateService: NostrSyncStateService,
   ) {
-    this.pool = new SimplePool({
+    this.pool = this.createPool();
+    this.initializeRelays();
+    this.setupVisibilityListener();
+  }
+
+  private createPool(): SimplePool {
+    return new SimplePool({
       enablePing: true,
       enableReconnect: (filters) => {
         const lastSeen = this.getLastSeenTimestamp();
@@ -71,7 +96,81 @@ export class NostrNotificationService {
         return filters.map((f) => ({ ...f, since }));
       },
     });
+  }
+
+  private setupVisibilityListener(): void {
+    if (typeof document === "undefined") {
+      return;
+    }
+
+    this.boundVisibilityHandler = () => {
+      if (document.visibilityState === "hidden") {
+        this.tabHiddenAt = Date.now();
+        console.debug("[Nostr] Tab hidden, tracking time...");
+      } else if (document.visibilityState === "visible") {
+        this.handleTabVisible();
+      }
+    };
+
+    document.addEventListener("visibilitychange", this.boundVisibilityHandler);
+  }
+
+  private handleTabVisible(): void {
+    const hiddenDuration = this.tabHiddenAt
+      ? Date.now() - this.tabHiddenAt
+      : 0;
+    this.tabHiddenAt = null;
+
+    if (hiddenDuration < this.RECONNECT_THRESHOLD_MS) {
+      console.debug(
+        `[Nostr] Tab visible after ${Math.round(hiddenDuration / 1000)}s - no reconnect needed`,
+      );
+      return;
+    }
+
+    console.log(
+      `[Nostr] 🔄 Tab visible after ${Math.round(hiddenDuration / 1000)}s - reconnecting pool...`,
+    );
+
+    this.reconnectPool();
+  }
+
+  private reconnectPool(): void {
+    this.subscriptions.forEach(({ sub }) => {
+      try {
+        sub.close();
+      } catch {
+        // Ignore errors closing stale subscriptions
+      }
+    });
+    this.subscriptions.clear();
+
+    try {
+      this.pool.close(this.defaultRelays);
+    } catch {
+      // Ignore errors closing stale pool
+    }
+
+    this.relayFirstSeen.clear();
+    this.relayEventCount.clear();
+
+    this.pool = this.createPool();
     this.initializeRelays();
+
+    this.activeSubscriptionState.forEach((state, nostrPublicHex) => {
+      console.log(
+        `[Nostr] 🔄 Re-subscribing to ${nostrPublicHex.substring(0, 16)}...`,
+      );
+      this.subscribeToNotifications(
+        state.nostrPublic,
+        state.nostrPrivate,
+        state.nanoNymIndex,
+      );
+    });
+
+    console.log(
+      `[Nostr] ✅ Pool reconnected with ${this.activeSubscriptionState.size} subscriptions`,
+    );
   }
 
   /**
@@ -222,6 +321,13 @@ export class NostrNotificationService {
       return;
     }
 
+    // Store state for re-establishment after pool reconnection
+    this.activeSubscriptionState.set(nostrPublicHex, {
+      nostrPublic,
+      nostrPrivate,
+      nanoNymIndex,
+    });
+
     const filter = {
       kinds: [1059],
       since: sinceOverride !== undefined 
@@ -299,6 +405,7 @@ export class NostrNotificationService {
     if (entry) {
       entry.sub.close();
       this.subscriptions.delete(nostrPublicHex);
+      this.activeSubscriptionState.delete(nostrPublicHex);
       console.log(`[Nostr] 🔌 Disconnected: Stopped subscription for ${nostrNpub.substring(0, 16)}...`);
     }
   }
@@ -423,9 +530,15 @@ export class NostrNotificationService {
   destroy(): void {
     const subscriptionCount = this.subscriptions.size;
 
+    if (this.boundVisibilityHandler && typeof document !== "undefined") {
+      document.removeEventListener("visibilitychange", this.boundVisibilityHandler);
+      this.boundVisibilityHandler = null;
+    }
+
     // Close all subscriptions
     this.subscriptions.forEach(({ sub }) => sub.close());
     this.subscriptions.clear();
+    this.activeSubscriptionState.clear();
 
     // Clear tracking maps
     this.relayFirstSeen.clear();
