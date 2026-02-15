@@ -42,6 +42,11 @@ This workflow must remain correct, test-covered, and never broken by any changes
 **ALWAYS** use `nvm exec npm [args]` (except in CI).  
 You may need to `source ~/.nvm/nvm.sh` if the alias isn't present.
 
+### 5. macOS npm Invocation Constraint
+
+- On macOS, ALL npm interactions for all tasks (build, test, serve, e2e) MUST be executed via `nvm exec npm ...`. Enforce this in all automation scripts (CI included when running on macOS) and in manual commands.
+- Update any scripts that call `npm` directly to prefix with `nvm exec` (e.g., `nvm exec npm run build`). If a script cannot be changed, wrap the npm call in a shell that runs under nvm, or document the exception with a justification.
+
 ### 5. Commit Message Format
 
 - **Subject line:** WHAT you intend to change and WHY it matters (the purpose/problem)
