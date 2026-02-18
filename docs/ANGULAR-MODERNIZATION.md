@@ -1,8 +1,8 @@
 # Angular Modernization Analysis
 
-> **Status**: Analyzed February 2026
+> **Status**: Completed February 2026
 > **Angular Version**: 17.3.12
-> **RxJS Version**: 6.5.5 (severely outdated)
+> **RxJS Version**: 7.8.0+ ✅
 
 This document catalogs Angular best practice violations and modernization opportunities. Each item can be addressed independently in separate sessions.
 
@@ -12,11 +12,24 @@ This document catalogs Angular best practice violations and modernization opport
 
 The codebase has **significant technical debt** from legacy Angular patterns. While the application functions correctly, there are:
 
-- **3 critical architecture issues** (NgModule, RxJS version, memory leaks)
-- **3 high-priority performance issues** (change detection, signals, DI)
+- **3 critical architecture issues** (NgModule, RxJS version, memory leaks) — **2 FIXED**
+- **3 high-priority performance issues** (change detection, signals, DI) — **1 FIXED**
 - **1 medium priority maintainability issue** (type safety)
 
-**Estimated effort**: 3-5 sessions for core fixes, 2-3 additional sessions for full modernization.
+**Completed (February 2026)**:
+- ✅ RxJS upgraded to 7.8.0 (removed rxjs-compat, ~30KB savings)
+- ✅ toPromise() → firstValueFrom() migration in 5 files
+- ✅ Memory leak fixes in 6 components (DestroyRef + takeUntilDestroyed)
+- ✅ Service DI modernization (18 services → providedIn: 'root')
+- ✅ Added RxJS regression tests
+
+**Remaining**:
+- OnPush change detection adoption
+- Angular Signals adoption
+- Type safety improvements
+- Standalone component migration
+
+**Estimated remaining effort**: 2-3 sessions
 
 ---
 
@@ -49,15 +62,16 @@ Phase 4: Remove app.module.ts entirely
 
 ---
 
-### 2. RxJS Version: 6.5.5 (Incompatible)
+### 2. RxJS Version: 7.8.0+ ✅ FIXED
 
 **Location**: `package.json` lines 89-90
 
-**Current State**:
+**Current State** (February 2026):
 ```json
-"rxjs": "^6.5.5",
-"rxjs-compat": "^6.5.5"
+"rxjs": "^7.8.0"
 ```
+- Removed rxjs-compat (~30KB bundle savings)
+- Migrated deprecated toPromise() → firstValueFrom()
 
 **Why This Matters**:
 - Angular 17 requires RxJS 6.6+ minimum
@@ -78,48 +92,30 @@ npm uninstall rxjs-compat
 
 ---
 
-### 3. Memory Leaks: Missing Subscription Cleanup
+### 3. Memory Leaks: Missing Subscription Cleanup ✅ FIXED
 
 **Location**: Multiple components
 
-**Current State**: 52 `.subscribe()` calls across 22 files, but only 6 files have cleanup.
+**Status** (February 2026): All 6 components fixed with DestroyRef + takeUntilDestroyed() pattern.
 
-| File | Subscriptions | Has Cleanup? |
-|------|---------------|--------------|
-| `change-rep-widget.component.ts` | 5 | ❌ NO |
-| `wallet-widget.component.ts` | 3 | ❌ NO |
-| `app.component.ts` | 3 | ❌ NO |
-| `sign.component.ts` | 1+ | ❌ NO |
-| `manage-wallet.component.ts` | 1+ | ❌ NO |
-| `representatives.component.ts` | 1+ | ❌ NO |
+| File | Subscriptions | Status |
+|------|---------------|--------|
+| `change-rep-widget.component.ts` | 5 | ✅ Fixed |
+| `wallet-widget.component.ts` | 3 | ✅ Fixed |
+| `app.component.ts` | 3 | ✅ Fixed |
+| `sign.component.ts` | 1+ | ✅ Fixed |
+| `manage-wallet.component.ts` | 1+ | ✅ Fixed |
+| `representatives.component.ts` | 1+ | ✅ Fixed |
 
-**Example of the Problem** (`change-rep-widget.component.ts`):
+**Pattern Applied** (Angular 16+):
 ```typescript
-// Lines 31-62: Subscriptions never cleaned up
-this.repService.walletReps$.subscribe(async reps => { ... });
-this.walletService.wallet.selectedAccount$.subscribe(async acc => { ... });
-this.walletService.wallet.newWallet$.subscribe(shouldReload => { ... });
-this.blockService.newOpenBlock$.subscribe(async shouldReload => { ... });
-this.repService.changeableReps$.subscribe(async reps => { ... });
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
-// No ngOnDestroy! These subscriptions live forever.
-```
-
-**Recommendation**:
-```typescript
-// Use DestroyRef (Angular 16+)
 constructor(private destroyRef: DestroyRef) {
-  this.walletService.wallet.selectedAccount$
+  this.service.observable$
     .pipe(takeUntilDestroyed(this.destroyRef))
     .subscribe(...);
-}
-
-// Or use takeUntil with Subject (legacy but reliable)
-private destroy$ = new Subject<void>();
-
-ngOnDestroy() {
-  this.destroy$.next();
-  this.destroy$.complete();
 }
 ```
 
@@ -194,51 +190,21 @@ export class SendComponent {
 
 ---
 
-### 6. Dependency Injection: Legacy Module Providers
+### 6. Dependency Injection: Legacy Module Providers ✅ FIXED
 
 **Location**: `src/app/app.module.ts` lines 128-152
 
-**Current State**: 18 services provided in NgModule instead of `providedIn: 'root'`
+**Status** (February 2026): All 18 services now use `providedIn: 'root'`, removed from app.module.ts providers array.
 
-**Services Missing `providedIn: 'root'`**:
-- `UtilService`
-- `WalletService`
-- `NotificationService`
-- `ApiService`
-- `AddressBookService`
-- `ModalService`
-- `WorkPoolService`
-- `AppSettingsService`
-- `WebsocketService`
-- `NanoBlockService`
-- `PriceService`
-- `PowService`
-- `RepresentativeService`
-- `NodeService`
-- `LedgerService`
-- `DesktopService`
-- `RemoteSignService`
-- `NinjaService`
+**Services Updated**:
+- `UtilService`, `WalletService`, `NotificationService`, `ApiService`, `AddressBookService`, `ModalService`
+- `WorkPoolService`, `AppSettingsService`, `WebsocketService`, `NanoBlockService`, `PriceService`, `PowService`
+- `RepresentativeService`, `NodeService`, `LedgerService`, `DesktopService`, `RemoteSignService`, `NinjaService`
 
-**Why This Matters**:
-- Services provided in module are eagerly instantiated
-- `providedIn: 'root'` enables tree-shaking and lazy instantiation
+**Benefits**:
+- Tree-shakeable (only bundled if used)
+- Lazy-loaded modules get same singleton instance
 - Makes testing easier (no need to provide in test module)
-
-**Recommendation**:
-```typescript
-// CURRENT (app.module.ts)
-providers: [
-  WalletService,
-  // ...
-]
-
-// RECOMMENDED (wallet.service.ts)
-@Injectable({ providedIn: 'root' })
-export class WalletService { }
-```
-
-**Note**: 10 services already use this pattern - just need to fix the remaining 18.
 
 ---
 
@@ -294,21 +260,25 @@ export interface WalletAccountInfo {
 
 ## 📋 Prioritized Action Items
 
-### Session 1: Fix Memory Leaks (High Impact, Low Risk)
+### Session 1: Fix Memory Leaks (High Impact, Low Risk) ✅ DONE
 
-- [ ] Add `ngOnDestroy` + subscription cleanup to `change-rep-widget.component.ts`
-- [ ] Add `ngOnDestroy` + subscription cleanup to `wallet-widget.component.ts`
-- [ ] Add `ngOnDestroy` + subscription cleanup to `app.component.ts`
-- [ ] Add `ngOnDestroy` + subscription cleanup to `sign.component.ts`
-- [ ] Add `ngOnDestroy` + subscription cleanup to `manage-wallet.component.ts`
-- [ ] Add `ngOnDestroy` + subscription cleanup to `representatives.component.ts`
+- [x] Add `ngOnDestroy` + subscription cleanup to `change-rep-widget.component.ts`
+- [x] Add `ngOnDestroy` + subscription cleanup to `wallet-widget.component.ts`
+- [x] Add `ngOnDestroy` + subscription cleanup to `app.component.ts`
+- [x] Add `ngOnDestroy` + subscription cleanup to `sign.component.ts`
+- [x] Add `ngOnDestroy` + subscription cleanup to `manage-wallet.component.ts`
+- [x] Add `ngOnDestroy` + subscription cleanup to `representatives.component.ts`
 
-### Session 2: Update RxJS (Medium Impact, Low Risk)
+**Pattern used**: Angular 16+ DestroyRef + takeUntilDestroyed() (preferred over legacy ngOnDestroy)
 
-- [ ] Update RxJS from 6.5.5 to 7.x in package.json
-- [ ] Remove rxjs-compat dependency
-- [ ] Run tests to verify nothing broke
-- [ ] Check for any deprecated operator usage
+### Session 2: Update RxJS (Medium Impact, Low Risk) ✅ DONE
+
+- [x] Update RxJS from 6.5.5 to 7.x in package.json
+- [x] Remove rxjs-compat dependency
+- [x] Run tests to verify nothing broke
+- [x] Check for any deprecated operator usage
+
+**Note**: Migrated 5 files from deprecated `toPromise()` to `firstValueFrom()` (api.service.ts, send.component.ts, ninja.service.ts x2, price.service.ts)
 
 ### Session 3: Add OnPush Change Detection (High Impact, Medium Risk)
 
@@ -317,10 +287,10 @@ export interface WalletAccountInfo {
 - [ ] Add OnPush to heavy computational components (accounts, send, receive)
 - [ ] Test thoroughly - OnPush can break apps that mutate state incorrectly
 
-### Session 4: Fix Service DI (Medium Impact, Low Risk)
+### Session 4: Fix Service DI (Medium Impact, Low Risk) ✅ DONE
 
-- [ ] Add `providedIn: 'root'` to remaining 18 services
-- [ ] Remove from app.module.ts providers array (after all added)
+- [x] Add `providedIn: 'root'` to remaining 18 services
+- [x] Remove from app.module.ts providers array (after all added)
 
 ### Session 5+: Type Safety Improvements (Ongoing)
 
