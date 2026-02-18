@@ -4,6 +4,7 @@ import {HttpHeaders} from '@angular/common/http';
 import {NodeService} from './node.service';
 import {AppSettingsService} from './app-settings.service';
 import { TxType } from './util.service';
+import { firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class ApiService {
@@ -36,53 +37,51 @@ export class ApiService {
           }
         );
     }
-    return await this.http.post(apiUrl, data, options).toPromise()
-      .then(res => {
-        if ( typeof validateResponse === 'function' ) {
-          const { err } = validateResponse(res);
-          const isValidResponse = (err == null);
-
-          if (isValidResponse === false) {
-            throw {
-              isValidationFailure: true,
-              status: 500,
-              reason: err,
-              res,
-            };
+    try {
+      const res = await firstValueFrom(this.http.post(apiUrl, data, options));
+      if (typeof validateResponse === 'function') {
+        const { err } = validateResponse(res);
+        const isValidResponse = err == null;
+        if (!isValidResponse) {
+          throw {
+            isValidationFailure: true,
+            status: 500,
+            reason: err,
+            res,
           };
-        };
-
-        this.node.setOnline();
-        return res;
-      })
-      .catch(async err => {
-        if (skipError) return;
-
-        if ( err.isValidationFailure === true ) {
-          console.log(
-            'Node response failed validation.',
-            err.reason,
-            err.res
-          );
-        } else {
-          console.log('Node responded with error', err.status);
         }
+      }
+      this.node.setOnline();
+      return res;
+    } catch (err) {
+      const errorAny: any = err;
+      if (skipError) return;
 
-        if (this.appSettings.settings.serverName === 'random') {
-          // choose a new backend and do the request again
-          this.appSettings.loadServerSettings();
-          await this.sleep(1000); // delay if all servers are down
-          return this.request(action, data, skipError, '', validateResponse);
+      if (errorAny && errorAny.isValidationFailure === true) {
+        console.log(
+          'Node response failed validation.',
+          errorAny.reason,
+          errorAny.res
+        );
+      } else {
+        console.log('Node responded with error', errorAny?.status);
+      }
+
+      if (this.appSettings.settings.serverName === 'random') {
+        // choose a new backend and do the request again
+        this.appSettings.loadServerSettings();
+        await this.sleep(1000); // delay if all servers are down
+        return this.request(action, data, skipError, '', validateResponse);
+      } else {
+        // hard exit
+        if (errorAny?.status === 429) {
+          this.node.setOffline('Too Many Requests to the node. Try again later or choose a different node.');
         } else {
-          // hard exit
-          if (err.status === 429) {
-            this.node.setOffline('Too Many Requests to the node. Try again later or choose a different node.');
-          } else {
-            this.node.setOffline();
-          }
-          throw err;
+          this.node.setOffline();
         }
-      });
+        throw errorAny;
+      }
+    }
   }
 
   async accountsBalances(accounts: string[]): Promise<{balances: any }> {
