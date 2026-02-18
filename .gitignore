@@ -57,3 +57,6 @@ src/environments/version.ts
 playwright-report/
 test-results/
 tests-playwright-results/
+
+# Sisyphus agent (oh-my-opencode)
+.sisyphus/
