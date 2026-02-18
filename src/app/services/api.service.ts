@@ -6,7 +6,7 @@ import {AppSettingsService} from './app-settings.service';
 import { TxType } from './util.service';
 import { firstValueFrom } from 'rxjs';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class ApiService {
   storeKey = `nanovault-active-difficulty`;
   constructor(private http: HttpClient, private node: NodeService, private appSettings: AppSettingsService) { }

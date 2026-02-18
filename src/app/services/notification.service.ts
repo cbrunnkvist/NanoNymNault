@@ -3,7 +3,7 @@ import * as Rx from 'rxjs';
 
 type NotificationType = 'info'|'success'|'warning'|'error';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class NotificationService {
 
   notifications$ = new Rx.BehaviorSubject(null);

@@ -30,9 +30,7 @@ export class NostrSyncStateService {
       .subscribe({
         next: (nanoNymIndex) => this.persistState(nanoNymIndex),
         error: (err) => console.error('[NostrSyncState] debounce persist error', err),
-        complete: () => {
-          // no-op
-        },
+        complete: () => {},
       });
   }
 

@@ -7,18 +7,16 @@ import {HttpClientModule} from '@angular/common/http';
 import {FormsModule, ReactiveFormsModule} from '@angular/forms';
 import {WelcomeComponent} from './welcome/welcome.component';
 import {AppRoutingModule} from './app-routing.module';
-import {UtilService} from './services/util.service';
-import {WalletService} from './services/wallet.service';
 import {ConfigureWalletComponent} from './components/configure-wallet/configure-wallet.component';
-import {NotificationService} from './services/notification.service';
+ 
 import {NotificationsComponent} from './components/notifications/notifications.component';
 import {RaiPipe} from './pipes/rai.pipe';
 import {AccountsComponent} from './components/accounts/accounts.component';
-import {ApiService} from './services/api.service';
-import {AddressBookService} from './services/address-book.service';
+// import {ApiService} from './services/api.service';
+// import {AddressBookService} from './services/address-book.service';
 import {SendComponent} from './components/send/send.component';
 import {SqueezePipe} from './pipes/squeeze.pipe';
-import {ModalService} from './services/modal.service';
+// import {ModalService} from './services/modal.service';
 import {AddressBookComponent} from './components/address-book/address-book.component';
 import {ClipboardModule} from 'ngx-clipboard';
 import {ReceiveComponent} from './components/receive/receive.component';
@@ -126,12 +124,6 @@ import { NoPaddingZerosPipe } from './pipes/no-padding-zeros.pipe';
     TranslocoRootModule,
   ],
   providers: [
-    UtilService,
-    WalletService,
-    NotificationService,
-    ApiService,
-    AddressBookService,
-    ModalService,
     WorkPoolService,
     AppSettingsService,
     WebsocketService,
