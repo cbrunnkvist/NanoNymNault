@@ -124,12 +124,6 @@ import { NoPaddingZerosPipe } from './pipes/no-padding-zeros.pipe';
     TranslocoRootModule,
   ],
   providers: [
-    WorkPoolService,
-    AppSettingsService,
-    WebsocketService,
-    NanoBlockService,
-    PriceService,
-    PowService,
     RepresentativeService,
     NodeService,
     LedgerService,

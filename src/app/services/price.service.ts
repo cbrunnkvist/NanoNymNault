@@ -3,7 +3,7 @@ import {HttpClient} from '@angular/common/http';
 import { firstValueFrom } from 'rxjs';
 import {BehaviorSubject} from 'rxjs';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class PriceService {
   storeKey = `nanovault-price`;
   apiUrl = `https://api.coingecko.com/api/v3/coins/nano?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`;

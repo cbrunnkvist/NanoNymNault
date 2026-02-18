@@ -3,7 +3,7 @@ import {PowService, baseThreshold, workState} from './pow.service';
 import {NotificationService} from './notification.service';
 import {UtilService} from './util.service';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class WorkPoolService {
   storeKey = `nanovault-workcache`;
 

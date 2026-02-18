@@ -14,7 +14,7 @@ const workerCount = Math.max(hardwareConcurrency - 1, 1);
 let workerList = [];
 export enum workState {'success', 'cancelled', 'error'}
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class PowService {
 
   webGLAvailable = false;
@@ -235,7 +235,7 @@ export class PowService {
   getHashCPUSync(hash) {
     const response = this.getDeferredPromise();
 
-    const PoW = mod.cwrap('launchPoW', 'string', ['string']);
+    const PoW = (mod as any).cwrap('launchPoW', 'string', ['string']);
     const start = Date.now();
     let work;
     do { work = PoW(hash); } while (work === '0000000000000000');

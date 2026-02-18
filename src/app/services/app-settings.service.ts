@@ -33,7 +33,7 @@ interface AppSettings {
   useOrbitDb: boolean;
 }
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class AppSettingsService {
   storeKey = `nanovault-appsettings`;
 
