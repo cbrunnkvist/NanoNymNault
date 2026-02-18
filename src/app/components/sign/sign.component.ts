@@ -133,6 +133,22 @@ export class SignComponent implements OnInit, OnDestroy {
 
   @ViewChild('dataAddFocus') _el: ElementRef;
 
+  // Hermes event listener management with a simple unsubscribe registry
+  private _hermesUnsubs: Array<() => void> = [];
+
+  private registerHermes(event: string, handler: (data: any) => void) {
+    hermes.on(event, handler);
+    this._hermesUnsubs.push(() => {
+      try {
+        // Prefer removing the specific handler if supported
+        hermes.off(event, handler);
+      } catch {
+        // Fallback to removing all listeners for the event
+        try { hermes.off(event); } catch {}
+      }
+    });
+  }
+
   async ngOnInit() {
     const UIkit = window['UIkit'];
     const qrModal = UIkit.modal('#qr-code-modal');
@@ -142,7 +158,7 @@ export class SignComponent implements OnInit, OnDestroy {
     this.signTypeSelected = this.walletService.isConfigured() ? this.signTypes[0] : this.signTypes[1];
 
     // Multisig tab listening functions
-    hermes.on('tab-ping', (data) => {
+    this.registerHermes('tab-ping', (data) => {
       console.log('Tab was pinged');
       if (this.blockHash === data[0]) {
         // Init step for remote tab
@@ -161,7 +177,7 @@ export class SignComponent implements OnInit, OnDestroy {
     });
 
     // Dual tab mode for auto signing
-    hermes.on('sign-remote', (data) => {
+    this.registerHermes('sign-remote', (data) => {
       console.log('Receiving data from other tab: ' + data);
       if (!this.tabData.includes(data[1])) {
         this.tabData.push(data[1]);
@@ -169,13 +185,13 @@ export class SignComponent implements OnInit, OnDestroy {
     });
 
     // Multi-tab mode checkbox
-    hermes.on('multi-tab', (data) => {
+    this.registerHermes('multi-tab', (data) => {
       console.log('Multi-tab mode enabled');
       this.tabChecked = data;
     });
 
     // Multi-tab mode participant changes
-    hermes.on('participants', (data) => {
+    this.registerHermes('participants', (data) => {
       console.log('Participant count changed');
       this.participants = data;
     });
