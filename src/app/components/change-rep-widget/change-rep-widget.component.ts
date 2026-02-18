@@ -1,4 +1,5 @@
-import {Component, OnInit} from '@angular/core';
+import {Component, OnInit, DestroyRef} from '@angular/core';
+import {takeUntilDestroyed} from '@angular/core/rxjs-interop';
 import {WalletService} from '../../services/wallet.service';
 import {NanoBlockService} from '../../services/nano-block.service';
 import {RepresentativeService} from '../../services/representative.service';
@@ -24,11 +25,12 @@ export class ChangeRepWidgetComponent implements OnInit {
     private walletService: WalletService,
     private blockService: NanoBlockService,
     private repService: RepresentativeService,
-    private router: Router
+    private router: Router,
+    private destroyRef: DestroyRef
     ) { }
 
   async ngOnInit() {
-    this.repService.walletReps$.subscribe(async reps => {
+    this.repService.walletReps$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async reps => {
       if ( reps[0] === null ) {
         // initial state from new BehaviorSubject([null])
         return;
@@ -40,26 +42,26 @@ export class ChangeRepWidgetComponent implements OnInit {
       this.initialLoadComplete = true;
     });
 
-    this.walletService.wallet.selectedAccount$.subscribe(async acc => {
+    this.walletService.wallet.selectedAccount$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async acc => {
       this.selectedAccount = acc;
       this.updateDisplayedRepresentatives();
     });
 
     // Detect if a wallet is reset
-    this.walletService.wallet.newWallet$.subscribe(shouldReload => {
+    this.walletService.wallet.newWallet$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(shouldReload => {
       if (shouldReload) {
         this.resetRepresentatives();
       }
     });
 
     // Detect if a new open block is received
-    this.blockService.newOpenBlock$.subscribe(async shouldReload => {
+    this.blockService.newOpenBlock$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async shouldReload => {
       if (shouldReload) {
         await this.repService.getRepresentativesOverview(); // calls walletReps$.next
       }
     });
 
-    this.repService.changeableReps$.subscribe(async reps => {
+    this.repService.changeableReps$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async reps => {
       // Includes both acceptable and bad reps
       // When user clicks 'Rep Change Required' action, acceptable reps will also be included
       this.changeableRepresentatives = reps;
