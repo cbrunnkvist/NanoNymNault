@@ -58,6 +58,16 @@ This is your guide to the NanoNymNault documentation structure.
 - Manual testing procedures
 - Test running instructions
 
+### Technical Debt & Modernization
+
+**[ANGULAR-MODERNIZATION.md](ANGULAR-MODERNIZATION.md)** - Angular technical debt analysis
+- NgModule to standalone component migration plan
+- RxJS 6.5.5 → 7.x upgrade path
+- Memory leak fixes (16+ files)
+- OnPush change detection adoption
+- Dependency injection improvements
+- Type safety improvements
+
 ---
 
 ## Supporting Documentation
@@ -110,6 +120,7 @@ This is your guide to the NanoNymNault documentation structure.
 - **When to warn users about privacy impact** → protocol-specification.md (Section 7)
 - **What the current implementation status is** → roadmap.md
 - **How to write a proper commit message** → coding-standards.md
+- **Angular modernization plan** → ANGULAR-MODERNIZATION.md
 
 ---
 
