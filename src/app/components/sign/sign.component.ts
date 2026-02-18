@@ -8,6 +8,8 @@ import {UtilService, StateBlock, TxType} from '../../services/util.service';
 import {WorkPoolService} from '../../services/work-pool.service';
 import {AppSettingsService} from '../../services/app-settings.service';
 import {ActivatedRoute, Router} from '@angular/router';
+import { DestroyRef, OnDestroy } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {NanoBlockService} from '../../services/nano-block.service';
 import {ApiService} from '../../services/api.service';
 import {PriceService} from '../../services/price.service';
@@ -29,7 +31,7 @@ enum navSource {'remote', 'multisig'}
   styleUrls: ['./sign.component.css']
 })
 
-export class SignComponent implements OnInit {
+export class SignComponent implements OnInit, OnDestroy {
   paramsString = '';
   activePanel = 'error';
   shouldSign: boolean = null; // if a block has been scanned for signing (or if it is a block to process)
@@ -126,7 +128,8 @@ export class SignComponent implements OnInit {
     private util: UtilService,
     private qrModalService: QrModalService,
     private musigService: MusigService,
-    public price: PriceService) { }
+    public price: PriceService,
+    private destroyRef: DestroyRef) { }
 
   @ViewChild('dataAddFocus') _el: ElementRef;
 
@@ -299,6 +302,15 @@ export class SignComponent implements OnInit {
         this.fromAccountID = recipientInfo.block_account;
       }
     }
+  }
+
+  ngOnDestroy(): void {
+  // Cleanup Hermes listeners to prevent potential memory leaks when the component is destroyed
+  try { hermes.off('tab-ping'); } catch {}
+    try { hermes.off('sign-remote'); } catch {}
+    try { hermes.off('multi-tab'); } catch {}
+    try { hermes.off('participants'); } catch {}
+    try { hermes.off('tab-pong'); } catch {}
   }
 
   setFocus() {
