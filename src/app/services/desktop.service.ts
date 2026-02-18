@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import {NotificationService} from './notification.service';
 import { IpcRenderer } from 'electron';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class DesktopService {
 
   private _ipc: IpcRenderer | undefined;

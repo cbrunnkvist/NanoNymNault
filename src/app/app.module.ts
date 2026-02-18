@@ -22,35 +22,24 @@ import {ClipboardModule} from 'ngx-clipboard';
 import {ReceiveComponent} from './components/receive/receive.component';
 import {WalletWidgetComponent} from './components/wallet-widget/wallet-widget.component';
 import {ManageWalletComponent} from './components/manage-wallet/manage-wallet.component';
-import {WorkPoolService} from './services/work-pool.service';
 import {ConfigureAppComponent} from './components/configure-app/configure-app.component';
-import {AppSettingsService} from './services/app-settings.service';
-import {WebsocketService} from './services/websocket.service';
-import {NanoBlockService} from './services/nano-block.service';
 import { AccountDetailsComponent } from './components/account-details/account-details.component';
 import { TransactionDetailsComponent } from './components/transaction-details/transaction-details.component';
-import {PriceService} from './services/price.service';
 import { FiatPipe } from './pipes/fiat.pipe';
 import { AmountSplitPipe } from './pipes/amount-split.pipe';
 import { ImportWalletComponent } from './components/import-wallet/import-wallet.component';
 import { NanoAccountIdComponent } from './components/helpers/nano-account-id/nano-account-id.component';
 import { NanoIdenticonComponent } from './components/helpers/nano-identicon/nano-identicon.component';
-import {PowService} from './services/pow.service';
 import { ImportAddressBookComponent } from './components/import-address-book/import-address-book.component';
 import { CurrencySymbolPipe } from './pipes/currency-symbol.pipe';
 import { RepresentativesComponent } from './components/representatives/representatives.component';
-import {RepresentativeService} from './services/representative.service';
 import {ManageRepresentativesComponent} from './components/manage-representatives/manage-representatives.component';
-import {NodeService} from './services/node.service';
-import {LedgerService} from './services/ledger.service';
-import {DesktopService} from './services/desktop.service';
 import { AccountPipe } from './pipes/account.pipe';
 import { ChangeRepWidgetComponent } from './components/change-rep-widget/change-rep-widget.component';
 import { SweeperComponent } from './components/sweeper/sweeper.component';
 import { QrScanComponent } from './components/qr-scan/qr-scan.component';
 import {SignComponent} from './components/sign/sign.component';
 import {RemoteSigningComponent} from './components/remote-signing/remote-signing.component';
-import {RemoteSignService} from './services/remote-sign.service';
 import { InstallWidgetComponent } from './components/install-widget/install-widget.component';
 import { QrModalComponent } from './components/qr-modal/qr-modal.component';
 import { QrModalService } from './services/qr-modal.service';
@@ -59,7 +48,7 @@ import {MusigService} from './services/musig.service';
 
 // QR code module
 import { ZXingScannerModule } from '@zxing/ngx-scanner';
-import { DeeplinkService, NinjaService } from './services';
+import { DeeplinkService } from './services';
 import { ConverterComponent } from './components/converter/converter.component';
 import { QrGeneratorComponent } from './components/qr-generator/qr-generator.component';
 import { ServiceWorkerModule } from '@angular/service-worker';
@@ -124,12 +113,6 @@ import { NoPaddingZerosPipe } from './pipes/no-padding-zeros.pipe';
     TranslocoRootModule,
   ],
   providers: [
-    RepresentativeService,
-    NodeService,
-    LedgerService,
-    DesktopService,
-    RemoteSignService,
-    NinjaService,
     NgbActiveModal,
     QrModalService,
     DeeplinkService,

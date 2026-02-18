@@ -4,7 +4,7 @@ import { HttpClient } from '@angular/common/http';
 import { NotificationService } from './notification.service';
 import { UtilService } from './util.service';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class NinjaService {
 
   // URL to MyNanoNinja-compatible representative health check API
