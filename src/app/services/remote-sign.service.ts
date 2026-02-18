@@ -3,7 +3,7 @@ import { NotificationService } from './notification.service';
 import { Router } from '@angular/router';
 import { UtilService } from './util.service';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class RemoteSignService {
 
 

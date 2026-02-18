@@ -1,8 +1,9 @@
 import { Injectable } from '@angular/core';
 import {HttpClient} from '@angular/common/http';
+import { firstValueFrom } from 'rxjs';
 import {BehaviorSubject} from 'rxjs';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class PriceService {
   storeKey = `nanovault-price`;
   apiUrl = `https://api.coingecko.com/api/v3/coins/nano?localization=false&tickers=false&market_data=true&community_data=false&developer_data=false&sparkline=false`;
@@ -19,7 +20,7 @@ export class PriceService {
 
   async getPrice(currency = 'USD') {
     if (!currency) return; // No currency defined, do not refetch
-    const response: any = await this.http.get(`${this.apiUrl}`).toPromise();
+    const response: any = await firstValueFrom(this.http.get(`${this.apiUrl}`));
     if (!response) {
       return this.price.lastPrice;
     }

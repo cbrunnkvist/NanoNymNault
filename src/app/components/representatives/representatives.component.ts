@@ -1,4 +1,4 @@
-import {Component, OnInit, ViewChild} from '@angular/core';
+import {Component, OnInit, ViewChild, DestroyRef} from '@angular/core';
 import {ActivatedRoute} from '@angular/router';
 import BigNumber from 'bignumber.js';
 import {BehaviorSubject} from 'rxjs';
@@ -16,6 +16,7 @@ import {
   NinjaService
 } from '../../services';
 import { TranslocoService } from '@ngneat/transloco';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-representatives',
@@ -63,13 +64,14 @@ export class RepresentativesComponent implements OnInit {
     public settings: AppSettingsService,
     private ninja: NinjaService,
     private qrModalService: QrModalService,
-    private translocoService: TranslocoService) { }
+    private translocoService: TranslocoService,
+    private destroyRef: DestroyRef) { }
 
   async ngOnInit() {
     this.representativeService.loadRepresentativeList();
 
     // Listen for query parameters that set defaults
-    this.router.queryParams.subscribe(params => {
+    this.router.queryParams.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(params => {
       this.hideOverview = params && params.hideOverview;
       this.showRecommendedReps = params && params.showRecommended;
 

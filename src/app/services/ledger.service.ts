@@ -42,7 +42,7 @@ export interface LedgerLog {
 
 const zeroBlock = '0000000000000000000000000000000000000000000000000000000000000000';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class LedgerService {
   walletPrefix = `44'/165'/`;
 

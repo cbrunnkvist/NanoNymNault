@@ -98,7 +98,7 @@ export interface WalletApiAccount extends BaseApiAccount {
   id?: string;
 }
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class WalletService {
   nano = 1000000000000000000000000;
   storeKey = `nanovault-wallet`;

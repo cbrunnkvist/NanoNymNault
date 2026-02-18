@@ -2,7 +2,7 @@ import { Injectable } from '@angular/core';
 import { BehaviorSubject } from 'rxjs';
 import {AppSettingsService} from './app-settings.service';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class WebsocketService {
 
   queuedCommands = [];

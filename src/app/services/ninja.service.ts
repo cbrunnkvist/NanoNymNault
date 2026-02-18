@@ -1,9 +1,10 @@
 import { Injectable } from '@angular/core';
+import { firstValueFrom } from 'rxjs';
 import { HttpClient } from '@angular/common/http';
 import { NotificationService } from './notification.service';
 import { UtilService } from './util.service';
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class NinjaService {
 
   // URL to MyNanoNinja-compatible representative health check API
@@ -20,13 +21,12 @@ export class NinjaService {
       return Promise.resolve(null);
     }
 
-    return await this.http.get(this.ninjaUrl + action).toPromise()
-      .then(res => {
-        return res;
-      })
-      .catch(err => {
-        return;
-      });
+    try {
+      const res = await firstValueFrom(this.http.get(this.ninjaUrl + action));
+      return res;
+    } catch (err) {
+      return;
+    }
   }
 
   private randomizeByScore(replist: any) {
@@ -82,18 +82,16 @@ export class NinjaService {
 
     const REQUEST_TIMEOUT_MS = 10000;
 
-    const successPromise =
-      this.http.get(this.ninjaUrl + 'accounts/' + account).toPromise()
-        .then(res => {
-          return res;
-        })
-        .catch(err => {
-          if (err.status === 404) {
-            return false;
-          }
-
-          return null;
-        });
+    const successPromise = (async () => {
+      try {
+        return await firstValueFrom(this.http.get(this.ninjaUrl + 'accounts/' + account));
+      } catch (err) {
+        if (err.status === 404) {
+          return false;
+        }
+        return null;
+      }
+    })();
 
     const timeoutPromise =
       new Promise(resolve => {

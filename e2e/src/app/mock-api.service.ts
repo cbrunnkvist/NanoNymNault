@@ -1,6 +1,6 @@
 import { Injectable } from '@angular/core';
 import { ApiService } from '../../src/app/services/api.service';
-import { of } from 'rxjs';
+import { of, firstValueFrom } from 'rxjs';
 
 @Injectable()
 export class MockApiService extends ApiService {

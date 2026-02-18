@@ -2,6 +2,7 @@ import { Component, OnInit } from "@angular/core";
 import BigNumber from "bignumber.js";
 import { AddressBookService } from "../../services/address-book.service";
 import { BehaviorSubject } from "rxjs";
+import { firstValueFrom } from 'rxjs';
 import { debounceTime } from "rxjs/operators";
 import { WalletService } from "../../services/wallet.service";
 import { NotificationService } from "../../services/notification.service";
@@ -430,90 +431,87 @@ export class SendComponent implements OnInit {
       ...aliasLookup,
     };
 
-    await this.http
-      .get<any>(lookupUrl)
-      .toPromise()
-      .then((res) => {
-        const isOutdatedRequest =
-          this.aliasLookupInProgress.fullText !== aliasFullText;
+    try {
+      const res = await firstValueFrom(this.http.get<any>(lookupUrl));
+      const isOutdatedRequest =
+        this.aliasLookupInProgress.fullText !== aliasFullText;
 
-        if (isOutdatedRequest === true) {
-          return;
-        }
+      if (isOutdatedRequest === true) {
+        return;
+      }
 
-        this.aliasLookupInProgress = {
-          ...this.ALIAS_LOOKUP_DEFAULT_STATE,
-        };
+      this.aliasLookupInProgress = {
+        ...this.ALIAS_LOOKUP_DEFAULT_STATE,
+      };
 
-        try {
-          const aliasesInJsonCount =
-            Array.isArray(res.names) === true ? res.names.length : 0;
+      try {
+        const aliasesInJsonCount =
+          Array.isArray(res.names) === true ? res.names.length : 0;
 
-          if (aliasesInJsonCount === 0) {
-            this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(
-              `Alias @${aliasName} not found on ${aliasDomain}`,
-            );
-            return;
-          }
-
-          const matchingAccount = res.names.find(
-            (account) => account.name === aliasName,
-          );
-
-          if (matchingAccount == null) {
-            this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(
-              `Alias @${aliasName} not found on ${aliasDomain}`,
-            );
-            return;
-          }
-
-          if (!this.util.account.isValidAccount(matchingAccount.address)) {
-            this.toAccountStatus = 0; // Error state
-            this.notificationService.sendWarning(
-              `Alias ${aliasFullText} does not have a valid address`,
-            );
-            return;
-          }
-
-          this.toAccountID = matchingAccount.address;
-
-          this.aliasLookupLatestSuccessful = {
-            ...aliasLookup,
-            address: this.toAccountID,
-          };
-
-          this.onDestinationAddressInput();
-          this.validateDestination();
-
-          return;
-        } catch (err) {
+        if (aliasesInJsonCount === 0) {
           this.toAccountStatus = 0; // Error state
           this.notificationService.sendWarning(
-            `Unknown error has occurred while trying to lookup ${aliasFullText}`,
+            `Alias @${aliasName} not found on ${aliasDomain}`,
           );
           return;
         }
-      })
-      .catch((err) => {
-        this.aliasLookupInProgress = {
-          ...this.ALIAS_LOOKUP_DEFAULT_STATE,
-        };
-        this.toAccountStatus = 0; // Error state
 
-        if (err.status === 404) {
+        const matchingAccount = res.names.find(
+          (account) => account.name === aliasName,
+        );
+
+        if (matchingAccount == null) {
+          this.toAccountStatus = 0; // Error state
           this.notificationService.sendWarning(
-            `No aliases found on ${aliasDomain}`,
+            `Alias @${aliasName} not found on ${aliasDomain}`,
           );
-        } else {
-          this.notificationService.sendWarning(
-            `Could not reach domain ${aliasDomain}`,
-          );
+          return;
         }
 
+        if (!this.util.account.isValidAccount(matchingAccount.address)) {
+          this.toAccountStatus = 0; // Error state
+          this.notificationService.sendWarning(
+            `Alias ${aliasFullText} does not have a valid address`,
+          );
+          return;
+        }
+
+        this.toAccountID = matchingAccount.address;
+
+        this.aliasLookupLatestSuccessful = {
+          ...aliasLookup,
+          address: this.toAccountID,
+        };
+
+        this.onDestinationAddressInput();
+        this.validateDestination();
+
         return;
-      });
+      } catch (err) {
+        this.toAccountStatus = 0; // Error state
+        this.notificationService.sendWarning(
+          `Unknown error has occurred while trying to lookup ${aliasFullText}`,
+        );
+        return;
+      }
+    } catch (err) {
+      this.aliasLookupInProgress = {
+        ...this.ALIAS_LOOKUP_DEFAULT_STATE,
+      };
+      this.toAccountStatus = 0; // Error state
+
+      if (err.status === 404) {
+        this.notificationService.sendWarning(
+          `No aliases found on ${aliasDomain}`,
+        );
+      } else {
+        this.notificationService.sendWarning(
+          `Could not reach domain ${aliasDomain}`,
+        );
+      }
+
+      return;
+    }
   }
 
   selectBookEntry(account) {
