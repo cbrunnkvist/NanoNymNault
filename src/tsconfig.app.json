@@ -3,6 +3,17 @@
   "compilerOptions": {
     "outDir": "../out-tsc/app",
     "baseUrl": "./",
+    "paths": {
+      "@nanomyms/protocol": [
+        "../packages/protocol/src/index.ts"
+      ],
+      "@nanomyms/crypto": [
+        "../packages/crypto/src/index.ts"
+      ],
+      "@nanomyms/core": [
+        "../packages/core/src/index.ts"
+      ]
+    },
     "allowJs": false,
     "types": ["custom", "node"],
     "lib": ["dom", "es7", "scripthost"]

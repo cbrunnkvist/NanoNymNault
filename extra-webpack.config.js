@@ -1,3 +1,4 @@
+const path = require('path');
 const webpack = require('webpack');
 
 module.exports = {
@@ -8,6 +9,9 @@ module.exports = {
     },
     alias: {
       "node:stream": require.resolve("stream-browserify"),
+      "@nanomyms/protocol": path.resolve(__dirname, "packages/protocol/src/index.ts"),
+      "@nanomyms/crypto": path.resolve(__dirname, "packages/crypto/src/index.ts"),
+      "@nanomyms/core": path.resolve(__dirname, "packages/core/src/index.ts"),
     }
   },
   plugins: [

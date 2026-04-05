@@ -3,6 +3,17 @@
   "compilerOptions": {
     "outDir": "../out-tsc/spec",
     "baseUrl": "./",
+    "paths": {
+      "@nanomyms/protocol": [
+        "../packages/protocol/src/index.ts"
+      ],
+      "@nanomyms/crypto": [
+        "../packages/crypto/src/index.ts"
+      ],
+      "@nanomyms/core": [
+        "../packages/core/src/index.ts"
+      ]
+    },
     "types": ["jasmine", "node"]
   },
   "files": ["test.ts", "polyfills.ts"],

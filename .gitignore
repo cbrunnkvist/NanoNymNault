@@ -7,6 +7,8 @@
 /out-tsc
 /desktop-app/dist
 /desktop-app/build
+/packages/*/dist
+/packages/*/tsconfig.tsbuildinfo
 
 # dependencies
 /node_modules

@@ -26,7 +26,8 @@ const nacl = window["nacl"];
 
 import { AppSettingsService } from "./app-settings.service";
 import { OrbitdbNotificationService } from "./orbitdb-notification.service";
-import { nip59 } from "nostr-tools";
+import { nip19, nip59 } from "nostr-tools";
+import { createNanoNymIdentity, recoverStealthPayment } from "@nanomyms/core";
 
 @Injectable({
   providedIn: "root",
@@ -219,30 +220,26 @@ export class NanoNymManagerService implements OnDestroy {
     // Get next index
     const index = this.storage.getNextIndex();
 
-    // Derive keys
-    const keys = this.crypto.deriveNanoNymKeys(seed, index);
-
-    // Encode nnym_ address
-    const nnymAddress = this.crypto.encodeNanoNymAddress(
-      keys.spend.public,
-      keys.view.public,
-      keys.nostr.public,
-    );
+    const provisionalKeys = this.crypto.deriveNanoNymKeys(seed, index);
+    const notificationUri = `nostr:${nip19.npubEncode(
+      this.bytesToHex(provisionalKeys.nostr.public),
+    )}`;
+    const identity = createNanoNymIdentity(seed, index, notificationUri);
 
     // Create NanoNym object
     const nanoNym: NanoNym = {
       index,
       label: label || `NanoNym ${index}`,
-      nnymAddress,
+      nnymAddress: identity.address,
       status: "active",
       createdAt: Date.now(),
       keys: {
-        spendPublic: keys.spend.public,
-        spendPrivate: keys.spend.private,
-        viewPublic: keys.view.public,
-        viewPrivate: keys.view.private,
-        nostrPublic: keys.nostr.public,
-        nostrPrivate: keys.nostr.private,
+        spendPublic: identity.keys.spend.publicKey,
+        spendPrivate: identity.keys.spend.privateKey,
+        viewPublic: identity.keys.view.publicKey,
+        viewPrivate: identity.keys.view.privateKey,
+        nostrPublic: identity.keys.nostr.publicKey,
+        nostrPrivate: identity.keys.nostr.privateKey,
       },
       balance: new BigNumber(0),
       paymentCount: 0,
@@ -468,26 +465,25 @@ export class NanoNymManagerService implements OnDestroy {
       console.log('[Manager] Recipient B_spend:', this.util.hex.fromUint8(nanoNym.keys.spendPublic));
       console.log('[Manager] Recipient B_view:', this.util.hex.fromUint8(nanoNym.keys.viewPublic));
 
-      // 2. Generate shared secret using view key
-      const sharedSecret = this.crypto.generateSharedSecret(
-        nanoNym.keys.viewPrivate,
-        R,
+      const recovered = recoverStealthPayment(
+        {
+          spend: {
+            privateKey: nanoNym.keys.spendPrivate,
+            publicKey: nanoNym.keys.spendPublic,
+          },
+          view: {
+            privateKey: nanoNym.keys.viewPrivate,
+            publicKey: nanoNym.keys.viewPublic,
+          },
+        },
+        notification,
       );
-      console.debug(`[Manager] Shared secret generated`);
-      console.log('[Manager] Shared secret:', this.util.hex.fromUint8(sharedSecret));
-
-      // 3. Derive expected stealth address
-      const stealth = this.crypto.deriveStealthAddress(
-        sharedSecret,
-        R,
-        nanoNym.keys.spendPublic,
-      );
-      console.debug(`[Manager] Stealth address: ${stealth.address}`);
-      console.log('[Manager] Stealth address:', stealth.address);
-      console.log('[Manager] Stealth public key:', this.util.hex.fromUint8(stealth.publicKey));
+      console.debug(`[Manager] Stealth address: ${recovered.stealth.address}`);
+      console.log('[Manager] Stealth address:', recovered.stealth.address);
+      console.log('[Manager] Stealth public key:', this.util.hex.fromUint8(recovered.stealth.publicKey));
 
       // 4. Verify transaction exists on blockchain (account may not be opened yet)
-      const accountInfo = await this.api.accountInfo(stealth.address);
+      const accountInfo = await this.api.accountInfo(recovered.stealth.address);
 
       // Handle unopened accounts (normal for fresh stealth addresses)
       let accountBalance = "0";
@@ -508,22 +504,15 @@ export class NanoNymManagerService implements OnDestroy {
         console.debug(`[Manager] On-chain balance: ${accountBalance} raw`);
       }
 
-      // 5. Derive private key for spending
-      const privateKeyBytes = this.crypto.deriveStealthPrivateKey(
-        nanoNym.keys.spendPrivate,
-        sharedSecret,
-        R,
-        nanoNym.keys.spendPublic,
-      );
       console.debug(`[Manager] Private key derived`);
 
       // 6. Create stealth account object
       // Determine on-chain verification status based on accountInfo result
       const verifiedOnChain = accountInfo && !accountInfo.error && !!accountInfo.balance;
       const stealthAccount: StealthAccount = {
-        address: stealth.address,
-        publicKey: stealth.publicKey,
-        privateKey: privateKeyBytes,
+        address: recovered.stealth.address,
+        publicKey: recovered.stealth.publicKey,
+        privateKey: recovered.privateKeyScalar,
         ephemeralPublicKey: this.util.hex.toUint8(notification.R),
         txHash: notification.tx_hash,
         amountRaw: notification.amount_raw || "0",
@@ -536,7 +525,7 @@ export class NanoNymManagerService implements OnDestroy {
 
       // 7. Store stealth account
       this.storage.addStealthAccount(nanoNymIndex, stealthAccount);
-      console.log(`[Manager] ✅ Stealth account created: ${stealth.address}`);
+      console.log(`[Manager] ✅ Stealth account created: ${recovered.stealth.address}`);
 
       // 7.5. Show incoming payment notification
       const incomingAmount = this.util.nano.rawToMnano(stealthAccount.balance);
@@ -554,7 +543,7 @@ export class NanoNymManagerService implements OnDestroy {
         nanoNymIndex,
         nanoNymLabel: nanoNym.label,
         amount: this.formatAmount(stealthAccount.balance),
-        stealthAddress: stealth.address,
+        stealthAddress: recovered.stealth.address,
         txHash: notification.tx_hash,
       });
 

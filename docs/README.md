@@ -2,11 +2,20 @@
 
 This is your guide to the NanoNymNault documentation structure.
 
+The current source of truth for NanoNym semantics is:
+
+- the v2 RFC
+- the protocol specification
+- the key derivation architecture
+
+Some older research and spike documents are preserved for context and may describe superseded ideas.
+
 ---
 
 ## Start Here
 
 - **[README.md](../README.md)** - Project overview and getting started
+- **[rfcs/0001-generic-tier1-notification-uri.md](rfcs/0001-generic-tier1-notification-uri.md)** - Current NanoNym v2 draft spec and `nnym_` byte layout
 - **[AGENTS.md](../AGENTS.md)** - Agent instructions (Prime Directives, build environment, commit format)
 
 ---
@@ -26,6 +35,7 @@ This is your guide to the NanoNymNault documentation structure.
 
 **[protocol-specification.md](protocol-specification.md)** - Protocol specification
 - NanoNym address format (`nnym_`)
+- v2-only URI-based address semantics
 - Send and receive workflows
 - Stealth account selection algorithm
 - Account management and UI requirements
@@ -35,7 +45,7 @@ This is your guide to the NanoNymNault documentation structure.
 
 **[implementation-notes.md](implementation-notes.md)** - Technical implementation
 - Key derivation paths and seed format detection
-- Cryptography (Ed25519, Secp256k1, BLAKE2b)
+- Package boundaries, cryptography, and adapter split
 - Nostr integration details
 - Three-phase stealth account opening strategy
 - Performance and security considerations
@@ -65,7 +75,7 @@ This is your guide to the NanoNymNault documentation structure.
 ### Design Analysis
 
 - **[ANALYSIS-CAMONANO-ALTERNATIVES.md](ANALYSIS-CAMONANO-ALTERNATIVES.md)** - Deep dive into alternative approaches (IPFS, Ceramic, etc.)
-- **[KEY-DERIVATION.md](KEY-DERIVATION.md)** - Cryptographic key derivation architecture
+- **[KEY-DERIVATION.md](KEY-DERIVATION.md)** - v2-only cryptographic key derivation architecture
 
 ### Planning & Research
 
@@ -105,7 +115,7 @@ This is your guide to the NanoNymNault documentation structure.
 **I need to understand...**
 - **Why we chose Nostr instead of on-chain notifications** → project-context.md
 - **How to derive keys from a seed** → implementation-notes.md (Section 1)
-- **What the `nnym_` address format looks like** → protocol-specification.md (Section 2)
+- **What the `nnym_` address format looks like** → rfcs/0001-generic-tier1-notification-uri.md
 - **How to handle stealth account opening** → implementation-notes.md (Section 4)
 - **When to warn users about privacy impact** → protocol-specification.md (Section 7)
 - **What the current implementation status is** → roadmap.md

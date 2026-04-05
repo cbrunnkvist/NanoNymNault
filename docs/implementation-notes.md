@@ -1,6 +1,6 @@
 # NanoNymNault: Implementation Notes
 
-This document contains **HOW** to implement the NanoNym protocol. For **WHAT** the protocol does, see [protocol-specification.md](protocol-specification.md).
+This document contains **HOW** to implement the NanoNym protocol and its wallet adapters. For **WHAT** the protocol does, see [protocol-specification.md](protocol-specification.md).
 
 ---
 
@@ -15,7 +15,7 @@ This document contains **HOW** to implement the NanoNym protocol. For **WHAT** t
   - `m/44'/165'/0'/1000'/<account_index>'`
     - `/0` → spend keypair: `b_spend`, `B_spend`
     - `/1` → view keypair: `b_view`, `B_view`
-    - `/2` → Nostr keypair: `nostr_private`, `nostr_public`
+    - `/2` → NanoNymNault's current notification-adapter key material (used today for `nostr:` routing)
 
 Where `account_index = 0, 1, 2, ...` (unbounded).
 
@@ -47,28 +47,43 @@ Wallet stores seeds as **64-character hex strings** (32 bytes), NOT BIP-39 mnemo
 
 ---
 
-## 2. Cryptography
+## 2. Package and Cryptography Boundaries
+
+The extracted packages are intentionally split:
+
+- `@nanomyms/protocol`: address codecs, checksum logic, URI-oriented protocol types
+- `@nanomyms/crypto`: deterministic derivation, shared-secret and stealth math, signing helpers
+- `@nanomyms/core`: pure use-case orchestration without transport or storage
+
+NanoNymNault-specific infrastructure remains in the app:
+
+- Nostr relay clients
+- Nano node RPC
+- persistence
+- Angular DI and UI state
 
 ### Curves
 
 - **Nano keys:** Ed25519 (as in Nano)
 - **Nostr keys:** Secp256k1
 - **Hashing:** BLAKE2b for tweaks and checksums
-- **ECDH:** Standard implementations (Ed25519, Secp256k1)
+- **ECDH / shared secret derivation:** implemented in the extracted crypto package
 
 **Use well-audited libraries; do NOT reimplement primitives.**
 
 ### Libraries
 
-- Ed25519: Use `@noble/ed25519` or similar
+- Ed25519: Use `@noble/curves`
 - Secp256k1: Use `@noble/secp256k1` or similar
 - BLAKE2b: Use `blakejs` or similar
 
 ---
 
-## 3. Nostr Integration
+## 3. Tier 1 Adapter Integration
 
-### Client Library
+The protocol now stores a generic `notificationUri`. Scheme-specific handling belongs in the adapter layer.
+
+### Current NanoNymNault Adapter
 
 - Use mature client library (e.g. `nostr-tools` for JS/TS)
 - Support multiple relays by default (3–5 recommended)
@@ -78,6 +93,12 @@ Wallet stores seeds as **64-character hex strings** (32 bytes), NOT BIP-39 mnemo
 - **Publish:** Send notifications to ALL configured relays
 - **Subscribe:** Listen to ALL relays for recovery and real-time monitoring
 - **Auto-reconnect:** Reconnect on failures (exponential backoff recommended)
+
+### Boundary Rule
+
+- packages should accept and emit `notificationUri`
+- only adapters should interpret `nostr:...`
+- no relay client code belongs in `@nanomyms/*`
 
 ### Performance Expectations (Rough Targets)
 

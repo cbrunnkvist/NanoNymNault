@@ -2,7 +2,6 @@ import { Injectable } from "@angular/core";
 import { SimplePool, nip59, nip19 } from "nostr-tools";
 import type { Event } from "nostr-tools/lib/types/core";
 import * as Rx from "rxjs";
-import { NanoNymCryptoService } from "./nanonym-crypto.service";
 import { NostrSyncStateService } from "./nostr-sync-state.service";
 
 export interface NanoNymNotification {
@@ -75,7 +74,6 @@ export class NostrNotificationService {
   private readonly RECONNECT_THRESHOLD_MS = 30000;
 
   constructor(
-    private nanoNymCrypto: NanoNymCryptoService,
     private syncStateService: NostrSyncStateService,
   ) {
     this.pool = this.createPool();
@@ -86,15 +84,7 @@ export class NostrNotificationService {
   private createPool(): SimplePool {
     return new SimplePool({
       enablePing: true,
-      enableReconnect: (filters) => {
-        const lastSeen = this.getLastSeenTimestamp();
-        const SIX_DAYS = 6 * 86400;
-        const FOUR_DAYS = 4 * 86400;
-        const now = Math.floor(Date.now() / 1000);
-        const fallback = now - FOUR_DAYS;
-        const since = lastSeen ? Math.max(lastSeen - SIX_DAYS, fallback) : fallback;
-        return filters.map((f) => ({ ...f, since }));
-      },
+      enableReconnect: true,
     });
   }
 
@@ -293,6 +283,42 @@ export class NostrNotificationService {
       console.error("Error sending Nostr notification:", error);
       throw error;
     }
+  }
+
+  async sendNotificationToUri(
+    notification: NanoNymNotification,
+    senderNostrPrivate: Uint8Array,
+    notificationUri: string,
+  ): Promise<string[]> {
+    return this.sendNotification(
+      notification,
+      senderNostrPrivate,
+      this.resolveNotificationUriToPublicKey(notificationUri),
+    );
+  }
+
+  resolveNotificationUriToPublicKey(notificationUri: string): Uint8Array {
+    const trimmed = notificationUri.trim();
+    if (!trimmed.toLowerCase().startsWith("nostr:")) {
+      throw new Error(`Unsupported notification URI scheme: ${notificationUri}`);
+    }
+
+    const identifier = trimmed.slice("nostr:".length);
+
+    if (/^[0-9a-fA-F]{64}$/.test(identifier)) {
+      return this.hexToBytes(identifier);
+    }
+
+    const decoded = nip19.decode(identifier);
+    if (decoded.type === "npub") {
+      return this.hexToBytes(decoded.data);
+    }
+
+    if (decoded.type === "nprofile") {
+      return this.hexToBytes(decoded.data.pubkey);
+    }
+
+    throw new Error(`Unsupported nostr identifier type: ${decoded.type}`);
   }
 
   /**

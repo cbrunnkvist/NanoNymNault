@@ -100,7 +100,7 @@ export class SendComponent implements OnInit {
     version: number;
     spendPublic: Uint8Array;
     viewPublic: Uint8Array;
-    nostrPublic: Uint8Array;
+    notificationUri: string;
   } | null = null;
   stealthAddress = "";
   ephemeralPublicKey: Uint8Array | null = null;
@@ -539,9 +539,7 @@ export class SendComponent implements OnInit {
     if (this.toAccountID.startsWith("nnym_")) {
       this.isNanoNymAddress = true;
       try {
-        this.nanoNymParsedKeys = this.nanoNymCrypto.decodeNanoNymAddress(
-          this.toAccountID,
-        );
+        this.nanoNymParsedKeys = this.nanoNymCrypto.decodeNanoNymAddress(this.toAccountID);
         this.toAccountStatus = 2; // Valid NanoNym address
       } catch (error) {
         this.toAccountStatus = 0; // Invalid NanoNym address
@@ -1289,16 +1287,14 @@ export class SendComponent implements OnInit {
       console.log("[Send] Preparing Nostr notification:", {
         tx_hash: txHash,
         ephemeralPublicKey_hex: this.bytesToHex(this.ephemeralPublicKey),
-        receiverNostrPublic_hex: this.bytesToHex(
-          this.nanoNymParsedKeys.nostrPublic,
-        ),
+        receiver_notification_uri: this.nanoNymParsedKeys.notificationUri,
         notification: notification,
       });
 
-      const acceptedRelays = await this.nostrService.sendNotification(
+      const acceptedRelays = await this.nostrService.sendNotificationToUri(
         notification,
         senderNostrKey.private,
-        this.nanoNymParsedKeys.nostrPublic,
+        this.nanoNymParsedKeys.notificationUri,
       );
       console.log(
         `[Send] Nostr notification sent to ${acceptedRelays.length} relays:`,
@@ -1314,7 +1310,9 @@ export class SendComponent implements OnInit {
         const orbitHash = await this.orbitdbService.sendNotification(
           notification,
           senderNostrKey.private,
-          this.nanoNymParsedKeys.nostrPublic
+          this.nostrService.resolveNotificationUriToPublicKey(
+            this.nanoNymParsedKeys.notificationUri,
+          )
         );
         if (orbitHash) {
           console.log(`[Send] ✅ OrbitDB notification sent: ${orbitHash}`);

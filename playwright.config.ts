@@ -14,11 +14,16 @@ export default defineConfig({
   projects: [
     {
       name: 'Chromium',
-      use: { ...devices['Desktop Chrome'] },
+      use: {
+        ...devices['Desktop Chrome'],
+        launchOptions: {
+          executablePath: '/Applications/Brave Browser.app/Contents/MacOS/Brave Browser',
+        },
+      },
     },
   ],
   webServer: {
-    command: 'npm start',
+    command: '/bin/zsh -lc "source ~/.nvm/nvm.sh && nvm exec npm start"',
     url: 'http://localhost:4200',
     reuseExistingServer: !process.env.CI,
     timeout: 180000,

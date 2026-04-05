@@ -1,13 +1,22 @@
 # NanoNyms
 
-**Privacy-preserving, reusable, payments codes for [Nano](https://www.nano.org/) using stealth addresses and off-chain coordination**
+**Privacy-preserving, reusable payment codes for [Nano](https://www.nano.org/) using stealth addresses and off-chain coordination**
+
+## Start Here
+
+- **[RFC: NanoNym v2 Generic Tier 1 Notification URI](docs/rfcs/0001-generic-tier1-notification-uri.md)** - The current draft spec for what a `nnym_` contains and how v2 works
+- **[Key Derivation Architecture](docs/KEY-DERIVATION.md)** - The current v2-only derivation model and package boundaries
+- **[Documentation Index](docs/README.md)** - Full map of NanoNymNault docs
+- **[Protocol Specification](docs/protocol-specification.md)** - End-to-end send, receive, and stealth-account workflow
 
 
 ---
 
 ## Elevator Pitch
 
-NanoNymNault is a fork of **[Nault](https://github.com/Nault/Nault)** (the popular web-based Nano wallet) integrating a lightweight **Nostr client** that enables **private, unlinkable payments** over the regular Nano blockchain, using a new type of reusable pseudonym called a **NanoNym** (address prefix: `nnym_`).
+NanoNymNault is a fork of **[Nault](https://github.com/Nault/Nault)** (the popular web-based Nano wallet) that enables **private, unlinkable payments** over the regular Nano blockchain using a reusable pseudonym called a **NanoNym** (address prefix: `nnym_`).
+
+The NanoNym protocol is now **v2-only**. A `nnym_` embeds two public keys plus a generic Tier 1 notification URI. NanoNymNault currently uses `nostr:...` URIs, but the protocol itself is no longer Nostr-specific.
 
 ### What does it do for users?
 
@@ -26,7 +35,7 @@ NanoNymNault is a fork of **[Nault](https://github.com/Nault/Nault)** (the popul
 3. Behind the scenes:
    - Wallet derives a unique stealth address for this payment
    - Sends XNO on Nano blockchain (looks like any other transaction)
-   - Sends encrypted notification via Nostr (free, instant, private)
+   - Sends an encrypted Tier 1 notification via Nostr (free, instant, private in NanoNymNault)
 4. Recipient automatically receives and can spend funds
 
 It's a true _win-win_ for both senders and receivers: both gain significantly enhanced privacy protection, without any involvement of third-party payment processors or fees.
@@ -38,7 +47,7 @@ It's a true _win-win_ for both senders and receivers: both gain significantly en
 ✅ **Privacy:** No one can link multiple payments to the same recipient <br/>
 ✅ **Simplicity:** Recipients share ONE NanoNym (not a new address for each payment) <br/>
 ✅ **Multiple NanoNyms:** Generate as many as needed from a single seed <br/>
-✅ **Free notifications:** No blockchain bloat or notification transaction costs <br/>
+✅ **Off-chain notifications:** No blockchain bloat or notification transaction costs <br/>
 ✅ **Compatibility:** Falls back to regular `nano_` addresses for non-compliant wallets <br/>
 ✅ **Web-based:** Works in browser, no installation needed (just like Nault) <br/>
 
@@ -55,7 +64,7 @@ A NanoNym is a **reusable pseudonym** for receiving payments privately. Think of
 
 **Technical details:**
 - Encoded as `nnym_` addresses (~160 characters)
-- Contains three public keys (spend, view, Nostr notification)
+- Contains two public keys (spend, view) plus a Tier 1 notification URI
 - All NanoNyms are structurally identical and infinitely reusable
 - Multiple NanoNyms can be derived from a single seed
 
@@ -92,10 +101,11 @@ Use for: Accounting categorization and revenue tracking
 
 ## How It Works (High Level)
 
-```
+```text
 Nault Wallet (existing web wallet)
-  + Nostr client (lightweight messaging, runs in browser)
-  + CamoNano cryptography (proven stealth address math)
+  + NanoNym v2 protocol (`nnym_` with notification URI)
+  + Tier 1 adapter (`nostr:...` in NanoNymNault today)
+  + stealth-address cryptography
   = NanoNymNault (private payment wallet)
 ```
 
@@ -127,7 +137,7 @@ Nault Wallet (existing web wallet)
 NanoNymNault combines three proven technologies:
 
 1. **CamoNano Protocol:** Battle-tested cryptography for stealth addresses (Monero-inspired, adapted for Nano)
-2. **Nostr (NIP-17):** Decentralized, encrypted messaging for payment notifications
+2. **Tier 1 notification routing:** NanoNym v2 stores a generic URI; NanoNymNault currently uses Nostr (NIP-17)
 3. **Nault Wallet:** Mature, trusted web-based Nano wallet
 
 **Key Innovation:** By moving notifications off-chain (via Nostr), we solve CamoNano's timing correlation vulnerability while eliminating notification transaction costs.
@@ -140,29 +150,29 @@ NanoNymNault combines three proven technologies:
 
 NanoNymNault is designed so you only need to manage one secret: **your 24-word Nano seed phrase**.
 
-From this single seed, the wallet securely generates all the necessary components for both your Nano funds and your private Nostr notifications.
+From this single seed, the wallet securely generates all the necessary components for both your Nano funds and your private notification routing.
 
 ```
 Your Nano Seed (24 words)
     ↓
     ├─→ All your Nano accounts & funds
-    └─→ All your private Nostr notifications
+    └─→ All your private notification routes
 ```
 
-Think of your seed as a master key. It can create a perfectly matched, but separate, set of keys for different systems (one for Nano, one for Nostr). This means you get the convenience of a single backup without compromising on security.
+Think of your seed as a master key. It can create a perfectly matched, but separate, set of keys for different systems. NanoNymNault currently uses that to derive a Nostr destination, while the protocol itself only requires a notification URI. This means you get the convenience of a single backup without compromising on security.
 
 **Bottom line: Back up your one Nano seed, and you can always recover everything.**
 
-### For Advanced Nostr Users (Future Feature)
+### For Advanced Notification Integrations (Future Feature)
 
-We plan to support users who want to connect an existing Nostr identity (an `nsec` key) to the wallet.
+We may support users who want to connect an existing external notification identity instead of using the wallet-derived default.
 
-Because Nano and Nostr use different cryptographic systems, the wallet can't guess your existing Nostr key from your Nano seed. In this specific, advanced scenario, you would need to provide both your Nano seed and your Nostr key. For the vast majority of users, this won't be necessary.
+Because Nano and external notification systems use different cryptographic systems and identity models, the wallet cannot generally infer an external notification secret from your Nano seed. In that advanced scenario, you would need to provide the external notification secret separately. For most users, this will not be necessary.
 
 ### Current Status
 
 **Phase 1 (Implemented):** Simple, one-seed-only model.
-**Phase 2 (Planned):** Optional support for linking an existing Nostr key.
+**Phase 2 (Planned):** Optional support for linking an existing external notification route.
 
 ---
 
@@ -172,8 +182,11 @@ Because Nano and Nostr use different cryptographic systems, the wallet can't gue
 
 ### Documentation
 
+- **[docs/rfcs/0001-generic-tier1-notification-uri.md](docs/rfcs/0001-generic-tier1-notification-uri.md)** - Current NanoNym v2 draft spec with the `nnym_` binary layout
+- **[docs/KEY-DERIVATION.md](docs/KEY-DERIVATION.md)** - Current v2-only derivation architecture
 - **[AGENTS.md](AGENTS.md)** - Agent instructions and Prime Directives
 - **[docs/README.md](docs/README.md)** - Complete documentation index
+- **[docs/protocol-specification.md](docs/protocol-specification.md)** - v2-only protocol workflows and address semantics
 - **[docs/ANALYSIS-CAMONANO-ALTERNATIVES.md](docs/ANALYSIS-CAMONANO-ALTERNATIVES.md)** - Deep dive into CamoNano, BIP protocols, and off-chain notification alternatives
 
 ---
@@ -266,12 +279,12 @@ npm start
 - `npm_config_arch=x64` - Electron 9.4.4 doesn't have ARM64 builds, use Rosetta emulation
 - `PYTHON=/opt/homebrew/opt/python@3.11/bin/python3.11` - Python 3.14 removed `distutils` which node-gyp requires
 - `npm ci` - Uses exact versions from package-lock.json (not `npm install`)
-- `nvm use` - Node v20 required for Angular and native module compatibility
+- `nvm use` - Node v22 required for Angular and native module compatibility
 
 **Troubleshooting:**
 - If port 4200 is in use: `lsof -ti:4200 | xargs kill -9`
 - If Python error: Install Python 3.11 via `brew install python@3.11`
-- If Node version error: Install via `nvm install 20`
+- If Node version error: Install via `nvm install 22`
 
 #### Testing
 
