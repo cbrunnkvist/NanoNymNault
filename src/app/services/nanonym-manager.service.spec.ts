@@ -9,6 +9,7 @@ import { WebsocketService } from './websocket.service';
 import { NanoBlockService } from './nano-block.service';
 import { UtilService } from './util.service';
 import { BehaviorSubject, of } from 'rxjs';
+import { firstValueFrom } from 'rxjs';
 import BigNumber from 'bignumber.js';
 import { NotificationService } from './notification.service';
 import { NoPaddingZerosPipe } from 'app/pipes/no-padding-zeros.pipe';
@@ -79,7 +80,7 @@ class MockNostrNotificationService {
 }
 
 class MockApiService {
-  accountInfo = jasmine.createSpy('accountInfo').and.returnValue(of({ balance: '0', error: 'Account not found' }).toPromise());
+  accountInfo = jasmine.createSpy('accountInfo').and.returnValue(firstValueFrom(of({ balance: '0', error: 'Account not found' })));
 }
 
 class MockWalletService {

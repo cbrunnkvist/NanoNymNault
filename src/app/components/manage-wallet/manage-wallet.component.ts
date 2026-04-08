@@ -1,4 +1,4 @@
-import { Component, OnInit } from '@angular/core';
+import { Component, OnInit, DestroyRef } from '@angular/core';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {ApiService} from '../../services/api.service';
@@ -7,6 +7,7 @@ import {AppSettingsService} from '../../services/app-settings.service';
 import * as QRCode from 'qrcode';
 import * as bip from 'bip39';
 import {formatDate} from '@angular/common';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 
 @Component({
   selector: 'app-manage-wallet',
@@ -43,17 +44,18 @@ export class ManageWalletComponent implements OnInit {
   exportEnabled = true;
 
   constructor(
-    public walletService: WalletService,
-    public notifications: NotificationService,
-    private api: ApiService,
-    private util: UtilService,
-    public settings: AppSettingsService) { }
+      public walletService: WalletService,
+      public notifications: NotificationService,
+      private api: ApiService,
+      private util: UtilService,
+      public settings: AppSettingsService,
+      private destroyRef: DestroyRef) { }
 
   async ngOnInit() {
     this.wallet = this.walletService.wallet;
 
     // Update selected account if changed in the sidebar
-    this.walletService.wallet.selectedAccount$.subscribe(async acc => {
+    this.walletService.wallet.selectedAccount$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async acc => {
       if (this.selAccountInit) {
         this.csvAccount = acc ? acc.id : (this.accounts.length > 0 ? this.accounts[0].id : '0');
       }

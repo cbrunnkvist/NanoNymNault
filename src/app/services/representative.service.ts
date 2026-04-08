@@ -54,7 +54,7 @@ export interface FullRepresentativeOverview extends RepresentativeApiOverview {
 }
 
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class RepresentativeService {
   storeKey = `nanovault-representatives`;
 

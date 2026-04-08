@@ -12,7 +12,7 @@ import { BehaviorSubject } from "rxjs";
 import { tools as nanocurrencyWebTools } from "nanocurrency-web";
 const nacl = window["nacl"];
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class NanoBlockService {
   representativeAccounts = [
     "nano_1x7biz69cem95oo7gxkrw6kzhfywq4x5dupw4z1bdzkb74dk9kpxwzjbdhhs", // NanoCrawler

@@ -1,4 +1,6 @@
 import { Component, ElementRef, OnInit, ViewChild } from '@angular/core';
+import { DestroyRef } from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {WalletService} from '../../services/wallet.service';
 import {NotificationService} from '../../services/notification.service';
 import {LedgerService, LedgerStatus} from '../../services/ledger.service';
@@ -30,7 +32,8 @@ export class WalletWidgetComponent implements OnInit {
     private notificationService: NotificationService,
     public ledgerService: LedgerService,
     public settings: AppSettingsService,
-    private powService: PowService) { }
+    private powService: PowService,
+    private destroyRef: DestroyRef) { }
 
   @ViewChild('passwordInput') passwordInput: ElementRef;
 
@@ -42,12 +45,12 @@ export class WalletWidgetComponent implements OnInit {
     });
     this.modal = modal;
 
-    this.ledgerService.ledgerStatus$.subscribe((ledgerStatus) => {
+    this.ledgerService.ledgerStatus$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe((ledgerStatus) => {
       this.ledgerStatus = ledgerStatus;
     });
 
     // Detect if a PoW is taking too long and alert
-    this.powService.powAlert$.subscribe(async shouldAlert => {
+    this.powService.powAlert$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async shouldAlert => {
       if (shouldAlert) {
         this.powAlert = true;
       } else {
@@ -55,7 +58,7 @@ export class WalletWidgetComponent implements OnInit {
       }
     });
 
-    this.walletService.wallet.unlockModalRequested$.subscribe(async wasRequested => {
+    this.walletService.wallet.unlockModalRequested$.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(async wasRequested => {
       if (wasRequested === true) {
         this.showModal();
       }

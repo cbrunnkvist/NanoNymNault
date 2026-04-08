@@ -25,7 +25,7 @@ export enum TxType {
   "change",
 }
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class UtilService {
   constructor() {}
 

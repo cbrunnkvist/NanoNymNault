@@ -1,4 +1,5 @@
-import {Component, ElementRef, HostListener, OnInit, ViewChild, Renderer2} from '@angular/core';
+import {Component, DestroyRef, ElementRef, HostListener, OnInit, ViewChild, Renderer2} from '@angular/core';
+import { takeUntilDestroyed } from '@angular/core/rxjs-interop';
 import {WalletService} from './services/wallet.service';
 import {AddressBookService} from './services/address-book.service';
 import {AppSettingsService} from './services/app-settings.service';
@@ -45,8 +46,8 @@ export class AppComponent implements OnInit {
     private renderer: Renderer2,
     private deeplinkService: DeeplinkService,
     private translate: TranslocoService,
-    private nanoNymManager: NanoNymManagerService) {
-      router.events.subscribe(() => {
+    private nanoNymManager: NanoNymManagerService, private destroyRef: DestroyRef) {
+      router.events.pipe(takeUntilDestroyed(this.destroyRef)).subscribe(() => {
         this.closeNav();
       });
     }
@@ -187,7 +188,8 @@ export class AppComponent implements OnInit {
 
     // Notify user if service worker update is available (Angular 17+ API)
     this.updates.versionUpdates.pipe(
-      filter((evt): evt is VersionReadyEvent => evt.type === 'VERSION_READY')
+      filter((evt): evt is VersionReadyEvent => evt.type === 'VERSION_READY'),
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe((event) => {
       console.log(`SW update available. Current: ${event.currentVersion.hash}. New: ${event.latestVersion.hash}`);
       this.notifications.sendInfo(
@@ -198,7 +200,8 @@ export class AppComponent implements OnInit {
 
     // Notify user if service worker update failed
     this.updates.versionUpdates.pipe(
-      filter((evt): evt is VersionInstallationFailedEvent => evt.type === 'VERSION_INSTALLATION_FAILED')
+      filter((evt): evt is VersionInstallationFailedEvent => evt.type === 'VERSION_INSTALLATION_FAILED'),
+      takeUntilDestroyed(this.destroyRef)
     ).subscribe((event) => {
       console.error(`SW update failed: ${event.error}`);
     });

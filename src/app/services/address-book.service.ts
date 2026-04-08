@@ -10,7 +10,7 @@ interface AddressBookEntry {
 }
 
 
-@Injectable()
+@Injectable({ providedIn: 'root' })
 export class AddressBookService {
   storeKey = `nanovault-addressbook`;
 

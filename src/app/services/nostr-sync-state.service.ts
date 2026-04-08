@@ -27,8 +27,10 @@ export class NostrSyncStateService {
   constructor() {
     this.persistSubject
       .pipe(debounceTime(DEBOUNCE_MS))
-      .subscribe((nanoNymIndex) => {
-        this.persistState(nanoNymIndex);
+      .subscribe({
+        next: (nanoNymIndex) => this.persistState(nanoNymIndex),
+        error: (err) => console.error('[NostrSyncState] debounce persist error', err),
+        complete: () => {},
       });
   }
 
