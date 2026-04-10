@@ -11,7 +11,7 @@ NanoNyms are **v2-only**:
 - NanoNymNault currently uses `nostr:...` as its Tier 1 notification route
 - there is no dual v1/v2 support path in the wallet or packages
 
-For the exact `nnym_` byte layout, see [rfcs/0001-generic-tier1-notification-uri.md](rfcs/0001-generic-tier1-notification-uri.md).
+For the exact `nnym_` byte layout, see [rfcs/0001-nanonym-v2-address-format.md](rfcs/0001-nanonym-v2-address-format.md).
 
 ## Deterministic Seed Model
 

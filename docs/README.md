@@ -15,8 +15,15 @@ Some older research and spike documents are preserved for context and may descri
 ## Start Here
 
 - **[README.md](../README.md)** - Project overview and getting started
-- **[rfcs/0001-generic-tier1-notification-uri.md](rfcs/0001-generic-tier1-notification-uri.md)** - Current NanoNym v2 draft spec and `nnym_` byte layout
+- **[rfcs/0001-nanonym-v2-address-format.md](rfcs/0001-nanonym-v2-address-format.md)** - Current NanoNym v2 address format and `nnym_` byte layout
 - **[AGENTS.md](../AGENTS.md)** - Agent instructions (Prime Directives, build environment, commit format)
+
+## RFCs
+
+- **[rfcs/0001-nanonym-v2-address-format.md](rfcs/0001-nanonym-v2-address-format.md)** - Transport-agnostic NanoNym address layout and notification URI slot
+- **[rfcs/0002-nanonym-payment-event-schema.md](rfcs/0002-nanonym-payment-event-schema.md)** - Base payment event schema shared across transports and profiles
+- **[rfcs/0003-nostr-notification-transport-profile.md](rfcs/0003-nostr-notification-transport-profile.md)** - Nostr NIP-59/NIP-44 delivery profile for RFC 0002 payloads
+- **[rfcs/0004-x402-nanosession-payment-verification-profile.md](rfcs/0004-x402-nanosession-payment-verification-profile.md)** - HTTP 402 proof-of-payment profile using RFC 0002 plus `r`
 
 ---
 
@@ -115,7 +122,7 @@ Some older research and spike documents are preserved for context and may descri
 **I need to understand...**
 - **Why we chose Nostr instead of on-chain notifications** → project-context.md
 - **How to derive keys from a seed** → implementation-notes.md (Section 1)
-- **What the `nnym_` address format looks like** → rfcs/0001-generic-tier1-notification-uri.md
+- **What the `nnym_` address format looks like** → rfcs/0001-nanonym-v2-address-format.md
 - **How to handle stealth account opening** → implementation-notes.md (Section 4)
 - **When to warn users about privacy impact** → protocol-specification.md (Section 7)
 - **What the current implementation status is** → roadmap.md
